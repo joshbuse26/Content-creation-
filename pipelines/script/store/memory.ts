@@ -51,10 +51,15 @@ import type {
   SectionPatch,
 } from "./types";
 
+const clone = <T,>(value: T): T => structuredClone(value);
+const cloneOrNull = <T,>(value: T | undefined): T | null =>
+  value === undefined ? null : structuredClone(value);
+
 /**
  * In-memory EngineStore — fixture mode and tests. Seeded with the shared
  * fixtures so a zero-env boot has a workspace, project, chosen frame,
  * research, a script with sections, a pending revision, and credits.
+ * Reads return CLONES so callers can never mutate store state in place.
  */
 export class InMemoryEngineStore implements EngineStore {
   private plans = new Map<string, Plan>();
@@ -115,7 +120,7 @@ export class InMemoryEngineStore implements EngineStore {
 
   getProject(workspaceId: WorkspaceId, projectId: ProjectId): Promise<Project | null> {
     return Promise.resolve(
-      this.projects.find((p) => p.id === projectId && p.workspaceId === workspaceId) ?? null,
+      cloneOrNull(this.projects.find((p) => p.id === projectId && p.workspaceId === workspaceId)),
     );
   }
 
@@ -135,7 +140,7 @@ export class InMemoryEngineStore implements EngineStore {
   }
 
   getAvatarForChannel(channelId: ChannelId): Promise<AudienceAvatar | null> {
-    return Promise.resolve(this.avatars.find((a) => a.channelId === channelId) ?? null);
+    return Promise.resolve(cloneOrNull(this.avatars.find((a) => a.channelId === channelId)));
   }
 
   getVoiceProfile(
@@ -143,8 +148,9 @@ export class InMemoryEngineStore implements EngineStore {
     voiceProfileId: VoiceProfileId,
   ): Promise<VoiceProfile | null> {
     return Promise.resolve(
-      this.voiceProfiles.find((v) => v.id === voiceProfileId && v.workspaceId === workspaceId) ??
-        null,
+      cloneOrNull(
+        this.voiceProfiles.find((v) => v.id === voiceProfileId && v.workspaceId === workspaceId),
+      ),
     );
   }
 
@@ -152,8 +158,8 @@ export class InMemoryEngineStore implements EngineStore {
 
   listResearchDocs(workspaceId: WorkspaceId, projectId: ProjectId): Promise<ResearchDoc[]> {
     return Promise.resolve(
-      this.researchDocs.filter(
-        (d) => d.projectId === projectId && d.workspaceId === workspaceId,
+      clone(
+        this.researchDocs.filter((d) => d.projectId === projectId && d.workspaceId === workspaceId),
       ),
     );
   }
@@ -163,8 +169,9 @@ export class InMemoryEngineStore implements EngineStore {
     researchDocId: ResearchDocId,
   ): Promise<ResearchDoc | null> {
     return Promise.resolve(
-      this.researchDocs.find((d) => d.id === researchDocId && d.workspaceId === workspaceId) ??
-        null,
+      cloneOrNull(
+        this.researchDocs.find((d) => d.id === researchDocId && d.workspaceId === workspaceId),
+      ),
     );
   }
 
@@ -178,7 +185,7 @@ export class InMemoryEngineStore implements EngineStore {
       updatedAt: now,
     };
     this.researchDocs.push(row);
-    return Promise.resolve(row);
+    return Promise.resolve(clone(row));
   }
 
   removeResearchDoc(workspaceId: WorkspaceId, researchDocId: ResearchDocId): Promise<boolean> {
@@ -193,13 +200,13 @@ export class InMemoryEngineStore implements EngineStore {
 
   listFrames(workspaceId: WorkspaceId, projectId: ProjectId): Promise<Frame[]> {
     return Promise.resolve(
-      this.frames.filter((f) => f.projectId === projectId && f.workspaceId === workspaceId),
+      clone(this.frames.filter((f) => f.projectId === projectId && f.workspaceId === workspaceId)),
     );
   }
 
   getFrame(workspaceId: WorkspaceId, frameId: FrameId): Promise<Frame | null> {
     return Promise.resolve(
-      this.frames.find((f) => f.id === frameId && f.workspaceId === workspaceId) ?? null,
+      cloneOrNull(this.frames.find((f) => f.id === frameId && f.workspaceId === workspaceId)),
     );
   }
 
@@ -214,7 +221,7 @@ export class InMemoryEngineStore implements EngineStore {
       };
     });
     this.frames.push(...rows);
-    return Promise.resolve(rows);
+    return Promise.resolve(clone(rows));
   }
 
   chooseFrame(workspaceId: WorkspaceId, frameId: FrameId): Promise<Frame | null> {
@@ -226,7 +233,7 @@ export class InMemoryEngineStore implements EngineStore {
         sibling.updatedAt = new Date();
       }
     }
-    return Promise.resolve(frame);
+    return Promise.resolve(clone(frame));
   }
 
   updateFrame(
@@ -243,7 +250,7 @@ export class InMemoryEngineStore implements EngineStore {
     if (frame === undefined) return Promise.resolve(null);
     Object.assign(frame, fields);
     frame.updatedAt = new Date();
-    return Promise.resolve(frame);
+    return Promise.resolve(clone(frame));
   }
 
   // -- scripts + sections ---------------------------------------------------
@@ -269,20 +276,22 @@ export class InMemoryEngineStore implements EngineStore {
       updatedAt: now,
     };
     this.scripts.push(row);
-    return Promise.resolve(row);
+    return Promise.resolve(clone(row));
   }
 
   getScript(workspaceId: WorkspaceId, scriptId: ScriptId): Promise<Script | null> {
     return Promise.resolve(
-      this.scripts.find((s) => s.id === scriptId && s.workspaceId === workspaceId) ?? null,
+      cloneOrNull(this.scripts.find((s) => s.id === scriptId && s.workspaceId === workspaceId)),
     );
   }
 
   listScriptVersions(workspaceId: WorkspaceId, projectId: ProjectId): Promise<Script[]> {
     return Promise.resolve(
-      this.scripts
-        .filter((s) => s.projectId === projectId && s.workspaceId === workspaceId)
-        .sort((a, b) => b.version - a.version),
+      clone(
+        this.scripts
+          .filter((s) => s.projectId === projectId && s.workspaceId === workspaceId)
+          .sort((a, b) => b.version - a.version),
+      ),
     );
   }
 
@@ -327,20 +336,22 @@ export class InMemoryEngineStore implements EngineStore {
       }),
     );
     this.sections.push(...rows);
-    return Promise.resolve(rows);
+    return Promise.resolve(clone(rows));
   }
 
   listSections(workspaceId: WorkspaceId, scriptId: ScriptId): Promise<ScriptSection[]> {
     return Promise.resolve(
-      this.sections
-        .filter((s) => s.scriptId === scriptId && s.workspaceId === workspaceId)
-        .sort((a, b) => a.position - b.position),
+      clone(
+        this.sections
+          .filter((s) => s.scriptId === scriptId && s.workspaceId === workspaceId)
+          .sort((a, b) => a.position - b.position),
+      ),
     );
   }
 
   getSection(workspaceId: WorkspaceId, sectionId: ScriptSectionId): Promise<ScriptSection | null> {
     return Promise.resolve(
-      this.sections.find((s) => s.id === sectionId && s.workspaceId === workspaceId) ?? null,
+      cloneOrNull(this.sections.find((s) => s.id === sectionId && s.workspaceId === workspaceId)),
     );
   }
 
@@ -360,7 +371,7 @@ export class InMemoryEngineStore implements EngineStore {
     if (patch.retentionNote !== undefined) section.retentionNote = patch.retentionNote;
     if (patch.factRefs !== undefined) section.factRefs = patch.factRefs;
     section.updatedAt = new Date();
-    return Promise.resolve(section);
+    return Promise.resolve(clone(section));
   }
 
   // -- revisions ------------------------------------------------------------
@@ -377,18 +388,18 @@ export class InMemoryEngineStore implements EngineStore {
       }),
     );
     this.revisions.push(...rows);
-    return Promise.resolve(rows);
+    return Promise.resolve(clone(rows));
   }
 
   listRevisions(workspaceId: WorkspaceId, scriptId: ScriptId): Promise<Revision[]> {
     return Promise.resolve(
-      this.revisions.filter((r) => r.scriptId === scriptId && r.workspaceId === workspaceId),
+      clone(this.revisions.filter((r) => r.scriptId === scriptId && r.workspaceId === workspaceId)),
     );
   }
 
   getRevision(workspaceId: WorkspaceId, revisionId: RevisionId): Promise<Revision | null> {
     return Promise.resolve(
-      this.revisions.find((r) => r.id === revisionId && r.workspaceId === workspaceId) ?? null,
+      cloneOrNull(this.revisions.find((r) => r.id === revisionId && r.workspaceId === workspaceId)),
     );
   }
 
@@ -417,7 +428,7 @@ export class InMemoryEngineStore implements EngineStore {
     script.stats = params.newStats;
     script.status = "revising";
     script.updatedAt = now;
-    return Promise.resolve({ revision, section });
+    return Promise.resolve({ revision: clone(revision), section: clone(section) });
   }
 
   rejectRevision(workspaceId: WorkspaceId, revisionId: RevisionId): Promise<Revision | null> {
@@ -427,7 +438,7 @@ export class InMemoryEngineStore implements EngineStore {
     if (revision === undefined) return Promise.resolve(null);
     revision.status = "rejected";
     revision.updatedAt = new Date();
-    return Promise.resolve(revision);
+    return Promise.resolve(clone(revision));
   }
 
   // -- titles ---------------------------------------------------------------
@@ -447,14 +458,14 @@ export class InMemoryEngineStore implements EngineStore {
       updatedAt: now,
     };
     this.titleSets.push(row);
-    return Promise.resolve(row);
+    return Promise.resolve(clone(row));
   }
 
   latestTitleSet(workspaceId: WorkspaceId, projectId: ProjectId): Promise<TitleSet | null> {
     const rows = this.titleSets.filter(
       (t) => t.projectId === projectId && t.workspaceId === workspaceId,
     );
-    return Promise.resolve(rows.at(-1) ?? null);
+    return Promise.resolve(cloneOrNull(rows.at(-1)));
   }
 
   // -- quality reports ------------------------------------------------------
