@@ -20,6 +20,7 @@ export {
 } from "./sections";
 export { retentionPrompt, type RetentionPromptInput } from "./retention";
 export { voicePrompt, type VoicePromptInput } from "./voice";
+export { dedupeRewritePrompt, type DedupeRewriteInput } from "./dedupe";
 export { factCheckPrompt, type FactCheckPromptInput } from "./fact-check";
 export { qualityFixPrompt, type QualityFixPromptInput } from "./quality-fix";
 export { revisionPrompt, type RevisionPromptInput } from "./revision";

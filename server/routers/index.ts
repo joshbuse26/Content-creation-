@@ -18,6 +18,7 @@ import {
   templatesRouter,
   thumbnailsRouter,
   titlesRouter,
+  voiceProfileRouter,
   workspaceRouter,
 } from "./_contracts";
 
@@ -32,6 +33,7 @@ export const appRouter = router({
   research: researchRouter,
   frame: frameRouter,
   script: scriptRouter,
+  voiceProfile: voiceProfileRouter,
   revision: revisionRouter,
   titles: titlesRouter,
   thumbnails: thumbnailsRouter,

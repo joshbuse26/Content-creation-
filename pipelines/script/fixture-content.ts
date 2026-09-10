@@ -327,6 +327,23 @@ export function synthVoiceRewrite(
   return body;
 }
 
+/**
+ * Licensed-voice de-duplication rewrite, fixture mode. Deterministically
+ * breaks every 5-word run by inserting a filler token after each 4 words, so
+ * no original 5-gram survives — the similarity guard's overlap drops to ~0
+ * without any live model. Fixture-only; live mode uses dedupeRewritePrompt.
+ */
+export function synthDedupeRewrite(body: string): string {
+  const words = body.split(/\s+/).filter((w) => w.length > 0);
+  if (words.length < 5) return body;
+  const out: string[] = [];
+  for (let i = 0; i < words.length; i++) {
+    out.push(words[i] ?? "");
+    if ((i + 1) % 4 === 0 && i + 1 < words.length) out.push("basically");
+  }
+  return out.join(" ");
+}
+
 // ---------------------------------------------------------------------------
 // Topic candidates (staged `script.topics`, PRODUCT-CONTRACTS §4)
 // ---------------------------------------------------------------------------

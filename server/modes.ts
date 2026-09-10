@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { getConfig } from "@/lib/config";
-import type { GenerationTarget } from "@/lib/types/entities";
+import type { GenerationTarget, VoiceProfile } from "@/lib/types/entities";
 import type { GenerationMode } from "@/lib/types/enums";
 
 /**
@@ -43,4 +43,25 @@ export function assertGenerationModeAllowed(mode: GenerationMode): void {
 export function assertGenerationTargetAllowed(generation: GenerationTarget | null): void {
   if (generation === null) return;
   assertGenerationModeAllowed(generation.mode);
+}
+
+/**
+ * A licensed voice profile is USABLE only with a signed license on file
+ * (PRODUCT-CONTRACTS §7). The DB CHECK and voiceProfileSchema already forbid
+ * PERSISTING a licensed profile without both license fields; this is the
+ * dispatch-time gate that additionally refuses to GENERATE with one that
+ * somehow lacks recorded consent (defense in depth, and the seam where a
+ * future "guard disabled" state would also be rejected). Non-licensed
+ * profiles and the card-less path pass untouched.
+ */
+export function assertLicensedVoiceUsable(profile: VoiceProfile | null): void {
+  if (profile === null || profile.source !== "licensed") return;
+  if (profile.licenseSignedAt === null || profile.licenseDocUrl === null) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message:
+        "This licensed voice can't be used until its signed license is on file. " +
+        "Add the license document and consent, then try again.",
+    });
+  }
 }

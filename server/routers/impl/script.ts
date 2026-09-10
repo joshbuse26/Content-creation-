@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { LLM_MODELS } from "@/lib/config";
+import { getConfig, LLM_MODELS } from "@/lib/config";
 import { generationTargetColumns } from "@/lib/generation-target";
 import type { scriptContracts } from "@/lib/types/api";
 import { generationTargetSchema, type GenerationTarget } from "@/lib/types/entities";
@@ -11,6 +11,7 @@ import { getEngineDeps, type EngineDeps } from "@/pipelines/script/deps";
 import { dispatchPipelineJob } from "@/pipelines/script/execute";
 import { synthSectionBody } from "@/pipelines/script/fixture-content";
 import { handleGenerateScriptJob } from "@/pipelines/script/jobs";
+import { runLicensedGuard, LicensedGuardBlockedError } from "@/pipelines/script/licensed-guard";
 import { generateJson } from "@/pipelines/script/llm-json";
 import { computeQualityReport } from "@/pipelines/script/quality-gate";
 import {
@@ -22,10 +23,10 @@ import {
 import { regenerateSectionPrompt } from "@/prompts";
 import { assertWorkspaceNotReadOnly, requireCreditsWithOverage } from "@/server/billing";
 import { CREDIT_COSTS } from "@/server/credits";
-import { assertGenerationTargetAllowed } from "@/server/modes";
+import { assertGenerationTargetAllowed, assertLicensedVoiceUsable } from "@/server/modes";
 import { exportScript } from "@/server/export";
 import { JOB_NAMES, QUEUE_NAMES } from "@/queue/queues";
-import { badRequest, jobAccepted, notFound, type HandlerOpts } from "./_shared";
+import { badRequest, jobAccepted, notFound, preconditionFailed, type HandlerOpts } from "./_shared";
 
 type GenerateInput = z.output<typeof scriptContracts.generate.input>;
 type GetInput = z.output<typeof scriptContracts.get.input>;
@@ -33,6 +34,7 @@ type ListVersionsInput = z.output<typeof scriptContracts.listVersions.input>;
 type UpdateSectionInput = z.output<typeof scriptContracts.updateSection.input>;
 type RegenerateSectionInput = z.output<typeof scriptContracts.regenerateSection.input>;
 type SetSectionLockInput = z.output<typeof scriptContracts.setSectionLock.input>;
+type SetSectionVoiceInput = z.output<typeof scriptContracts.setSectionVoice.input>;
 type ReorderSectionsInput = z.output<typeof scriptContracts.reorderSections.input>;
 type ExportInput = z.output<typeof scriptContracts.export.input>;
 type ExportOutput = z.output<typeof scriptContracts.export.output>;
@@ -126,6 +128,8 @@ export const scriptImpl = {
         ? null
         : await deps.store.getVoiceProfile(ctx.workspaceId, input.voiceProfileId);
     if (input.voiceProfileId !== null && profile === null) notFound("voice profile");
+    // A licensed script-level voice must have its signed license on file.
+    assertLicensedVoiceUsable(profile);
     // Resolve the card now so mode errors (unknown archetype, unlicensed
     // partner) surface at dispatch, before any charge or script row.
     await resolveStyleCard(input.generation, profile);
@@ -210,14 +214,27 @@ export const scriptImpl = {
     const frames = await deps.store.listFrames(ctx.workspaceId, script.projectId);
     const frame = frames.find((f) => f.chosen) ?? frames[0];
     if (frame === undefined) badRequest("project has no frame — propose and choose one first");
-    const [researchDocs, avatar, voiceProfile] = await Promise.all([
+    // Multi-voice (PRODUCT-CONTRACTS §7): the section's EFFECTIVE voice is its
+    // own override when set, else the script-level voice. Regeneration writes
+    // the section in that voice — the concrete multi-voice write path.
+    const [researchDocs, avatar, scriptProfile, overrideProfile] = await Promise.all([
       deps.store.listResearchDocs(ctx.workspaceId, script.projectId),
       deps.store.getAvatarForChannel(project.channelId),
       script.voiceProfileId === null
         ? Promise.resolve(null)
         : deps.store.getVoiceProfile(ctx.workspaceId, script.voiceProfileId),
+      section.voiceProfileId === null
+        ? Promise.resolve(null)
+        : deps.store.getVoiceProfile(ctx.workspaceId, section.voiceProfileId),
     ]);
-    const context = assembleContext({ frame, researchDocs, avatar, voiceProfile });
+    const effectiveProfile = overrideProfile ?? scriptProfile;
+    assertLicensedVoiceUsable(effectiveProfile);
+    const context = assembleContext({
+      frame,
+      researchDocs,
+      avatar,
+      voiceProfile: effectiveProfile,
+    });
     const sections = await deps.store.listSections(ctx.workspaceId, section.scriptId);
     const index = sections.findIndex((s) => s.id === section.id);
     const guidance = input.guidance ?? null;
@@ -262,9 +279,31 @@ export const scriptImpl = {
         ),
       }),
     });
+
+    // Licensed-voice similarity guard (PRODUCT-CONTRACTS §7): a section
+    // regenerated in a licensed voice is checked against the licensed source,
+    // auto-rewritten once if over the line, and hard-failed (never emitted) if
+    // still over — same gate the draft pipeline runs, on the single-section
+    // path.
+    let finalBody = result.body;
+    if (effectiveProfile !== null && effectiveProfile.source === "licensed") {
+      try {
+        const guard = await runLicensedGuard({
+          mode: deps.mode,
+          llm: deps.llm,
+          threshold: getConfig().LICENSED_SIMILARITY_MAX_OVERLAP,
+          sections: [{ position: 0, body: result.body, licensedProfile: effectiveProfile }],
+        });
+        if (guard !== null) finalBody = guard.rewrites.get(0) ?? result.body;
+      } catch (err) {
+        if (err instanceof LicensedGuardBlockedError) preconditionFailed(err.message);
+        throw err;
+      }
+    }
+
     await deps.store.updateSection(ctx.workspaceId, section.id, {
-      body: result.body,
-      estSeconds: estimateSecondsForText(result.body),
+      body: finalBody,
+      estSeconds: estimateSecondsForText(finalBody),
     });
     await refreshScriptStats(deps, ctx.workspaceId, section.scriptId);
     return jobAccepted();
@@ -274,6 +313,29 @@ export const scriptImpl = {
     const deps = await getEngineDeps();
     const section = await deps.store.updateSection(ctx.workspaceId, input.sectionId, {
       locked: input.locked,
+    });
+    if (section === null) notFound("section");
+    return section;
+  },
+
+  /**
+   * Multi-voice (PRODUCT-CONTRACTS §7): set or clear a section's voice
+   * override. Config, not generation — no credit charge. Tenancy: both the
+   * section and the assigned voice profile are read workspace-scoped, so a
+   * cross-tenant section or voice id is NOT_FOUND. A licensed voice must have
+   * a signed license on file to be assignable (assertLicensedVoiceUsable).
+   */
+  async setSectionVoice({ ctx, input }: HandlerOpts<SetSectionVoiceInput>): Promise<ScriptSection> {
+    const deps = await getEngineDeps();
+    const existing = await deps.store.getSection(ctx.workspaceId, input.sectionId);
+    if (existing === null) notFound("section");
+    if (input.voiceProfileId !== null) {
+      const profile = await deps.store.getVoiceProfile(ctx.workspaceId, input.voiceProfileId);
+      if (profile === null) notFound("voice profile");
+      assertLicensedVoiceUsable(profile);
+    }
+    const section = await deps.store.updateSection(ctx.workspaceId, input.sectionId, {
+      voiceProfileId: input.voiceProfileId,
     });
     if (section === null) notFound("section");
     return section;

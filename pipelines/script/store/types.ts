@@ -76,6 +76,8 @@ export interface NewSection {
   estSeconds: number;
   retentionNote: string | null;
   factRefs: FactRef[];
+  /** Multi-voice override (v1.1) — undefined ⇒ null (no override). */
+  voiceProfileId?: VoiceProfileId | null;
 }
 
 export interface SectionPatch {
@@ -85,6 +87,8 @@ export interface SectionPatch {
   estSeconds?: number;
   retentionNote?: string | null;
   factRefs?: FactRef[];
+  /** Multi-voice override (v1.1) — undefined ⇒ unchanged, null ⇒ cleared. */
+  voiceProfileId?: VoiceProfileId | null;
 }
 
 export interface NewRevision {
@@ -182,6 +186,8 @@ export interface EngineStore {
     workspaceId: WorkspaceId,
     voiceProfileId: VoiceProfileId,
   ): Promise<VoiceProfile | null>;
+  /** All voice profiles in the workspace (for the editor's section-voice picker). */
+  listVoiceProfiles(workspaceId: WorkspaceId): Promise<VoiceProfile[]>;
 
   // Research docs
   listResearchDocs(workspaceId: WorkspaceId, projectId: ProjectId): Promise<ResearchDoc[]>;

@@ -74,6 +74,17 @@ const envSchema = z
       .preprocess(emptyToUndefined, z.enum(["true", "false", "1", "0"]).default("false"))
       .transform((v) => v === "true" || v === "1"),
 
+    /**
+     * Licensed-voice similarity guard threshold (PRODUCT-CONTRACTS §7): the
+     * maximum allowed 5-gram overlap ratio in any 200-word window between a
+     * licensed-voice section and its source snippets. Above this, the section
+     * is auto-rewritten once and then hard-failed. Default 0.08 (8%).
+     */
+    LICENSED_SIMILARITY_MAX_OVERLAP: z.preprocess(
+      emptyToUndefined,
+      z.coerce.number().gt(0).max(1).default(0.08),
+    ),
+
     RESEND_API_KEY: optionalString,
     EMAIL_FROM: z.preprocess(emptyToUndefined, z.string().default("Gin Rummy <login@localhost>")),
 

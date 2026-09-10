@@ -49,6 +49,7 @@ import {
   thumbnailConceptSchema,
   titleSetSchema,
   userSchema,
+  voiceProfileSchema,
   workspaceSchema,
 } from "./entities";
 import {
@@ -484,6 +485,20 @@ export const scriptContracts = {
     }),
     output: z.array(scriptSectionSchema),
   },
+  /**
+   * Multi-voice (PRODUCT-CONTRACTS §7 / spec §5.7): assign a per-section
+   * voice profile that overrides the script-level voice for that one section.
+   * voiceProfileId null clears the override (section falls back to the script
+   * voice). Config, not generation — no credit charge. The new voice takes
+   * effect the next time the section is (re)generated.
+   */
+  setSectionVoice: {
+    input: workspaceScopedSchema.extend({
+      sectionId: scriptSectionIdSchema,
+      voiceProfileId: voiceProfileIdSchema.nullable(),
+    }),
+    output: scriptSectionSchema,
+  },
   export: {
     input: workspaceScopedSchema.extend({
       scriptId: scriptIdSchema,
@@ -496,6 +511,18 @@ export const scriptContracts = {
       content: z.string(),
       encoding: z.enum(["utf8", "base64"]),
     }),
+  },
+} as const;
+
+// --------------------------------------------------------------------------
+// voiceProfile (read-only list — powers the editor's section-voice picker)
+// --------------------------------------------------------------------------
+
+export const voiceProfileContracts = {
+  /** All voice profiles in the workspace. No credits; every member may read. */
+  list: {
+    input: workspaceScopedSchema,
+    output: z.array(voiceProfileSchema),
   },
 } as const;
 

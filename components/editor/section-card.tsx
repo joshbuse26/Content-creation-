@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import type { ScriptSection } from "@/lib/types/entities";
+import type { ScriptSection, VoiceProfile } from "@/lib/types/entities";
+import type { VoiceProfileId } from "@/lib/types/ids";
 import { Badge } from "@/components/ui/badge";
 import { Button, IconButton } from "@/components/ui/button";
 import { TextArea, TextInput } from "@/components/ui/field";
@@ -31,6 +32,10 @@ export interface SectionCardProps {
   onToggleLock: () => void;
   onSaveEdit: (fields: { heading?: string; body?: string }) => void;
   onRegenerate: (guidance?: string) => void;
+  /** Multi-voice: workspace voice profiles for the per-section voice picker. */
+  voiceProfiles?: VoiceProfile[];
+  /** Multi-voice: assign (or clear, with null) this section's voice override. */
+  onSetVoice?: (voiceProfileId: VoiceProfileId | null) => void;
   /** Rendered above the body for hook sections (the candidate switcher). */
   hookSlot?: ReactNode;
 }
@@ -49,6 +54,8 @@ export function SectionCard({
   onToggleLock,
   onSaveEdit,
   onRegenerate,
+  voiceProfiles,
+  onSetVoice,
   hookSlot,
 }: SectionCardProps) {
   const [editing, setEditing] = useState(false);
@@ -143,6 +150,30 @@ export function SectionCard({
           {words}w · {fmtDuration(computedSeconds)}
           <span> / ~{fmtDuration(section.estSeconds)}</span>
         </span>
+
+        {voiceProfiles !== undefined && onSetVoice !== undefined ? (
+          <label className="flex items-center gap-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+            <span className="sr-only">Section voice</span>
+            <select
+              aria-label={`Voice for ${section.heading}`}
+              title="Voice for this section — overrides the script voice"
+              disabled={locked}
+              className="h-6 max-w-[9rem] rounded border border-zinc-200 bg-white px-1 text-[11px] text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+              value={section.voiceProfileId ?? ""}
+              onChange={(e) => {
+                const value = e.target.value;
+                onSetVoice(value === "" ? null : (value as VoiceProfileId));
+              }}
+            >
+              <option value="">Script voice</option>
+              {voiceProfiles.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
 
         <div className="flex items-center gap-0.5">
           <IconButton

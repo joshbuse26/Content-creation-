@@ -1,6 +1,7 @@
 import { z } from "zod";
-import { LLM_MODELS } from "@/lib/config";
-import type { FactRef, StyleCard } from "@/lib/types/entities";
+import { getConfig, LLM_MODELS } from "@/lib/config";
+import { licensedGuardProfile } from "@/lib/multi-voice";
+import type { FactRef, StyleCard, VoiceProfile } from "@/lib/types/entities";
 import type { HookStyle } from "@/lib/types/enums";
 import {
   SCRIPT_STAGES,
@@ -40,6 +41,12 @@ import {
 } from "./fixture-content";
 import { matchClaims } from "./fact-match";
 import { stageInputHash } from "./hash";
+import {
+  runLicensedGuard,
+  LicensedGuardBlockedError,
+  type GuardInputSection,
+  type LicensedGuardLog,
+} from "./licensed-guard";
 import { generateJson } from "./llm-json";
 import { computeQualityReport, gateViolations } from "./quality-gate";
 import {
@@ -86,6 +93,8 @@ interface ScriptRunState {
   pickedHookStyle?: HookStyle;
   sections?: WorkingSection[];
   report?: QualityGateReport;
+  /** Licensed-voice similarity guard result, logged onto the voice_pass run. */
+  guardLog?: LicensedGuardLog;
 }
 
 /** How this run is metered (see module docs). */
@@ -180,6 +189,78 @@ export async function runScriptPipeline(
       factRefs: factRefs?.get(position) ?? [],
     }));
     await deps.store.replaceSections(input.workspaceId, scriptId, rows);
+  };
+
+  /**
+   * Licensed-voice similarity guard over the just-persisted sections. Loads
+   * the script-level voice profile and any per-section voice overrides,
+   * resolves the licensed profile each section is checked against, runs the
+   * guard, applies its single auto-rewrites in place (via updateSection, so
+   * voice overrides and any other columns survive), and records the check
+   * result in state.guardLog for the pipeline_run. Hard-fails (throws) when a
+   * section is still over the line after its rewrite.
+   */
+  const runVoicePassGuard = async (): Promise<void> => {
+    const scriptProfile: VoiceProfile | null =
+      input.voiceProfileId === null
+        ? null
+        : await deps.store.getVoiceProfile(input.workspaceId, input.voiceProfileId);
+    const persisted = await deps.store.listSections(input.workspaceId, scriptId);
+    const overrideCache = new Map<string, VoiceProfile | null>();
+    const guardSections: GuardInputSection[] = [];
+    for (const row of persisted) {
+      let override: VoiceProfile | null = null;
+      if (row.voiceProfileId !== null) {
+        const key = row.voiceProfileId as string;
+        if (!overrideCache.has(key)) {
+          overrideCache.set(
+            key,
+            await deps.store.getVoiceProfile(input.workspaceId, row.voiceProfileId),
+          );
+        }
+        override = overrideCache.get(key) ?? null;
+      }
+      guardSections.push({
+        position: row.position,
+        body: row.body,
+        licensedProfile: licensedGuardProfile(override, scriptProfile),
+      });
+    }
+
+    let result;
+    try {
+      result = await runLicensedGuard({
+        mode: deps.mode,
+        llm: deps.llm,
+        threshold: getConfig().LICENSED_SIMILARITY_MAX_OVERLAP,
+        sections: guardSections,
+      });
+    } catch (err) {
+      if (err instanceof LicensedGuardBlockedError) {
+        // Record the check (incl. the blocked section) before failing the run.
+        state.guardLog = err.log;
+        throw new Error(err.message);
+      }
+      throw err;
+    }
+    if (result === null) return; // no licensed voice in play — nothing to log
+    state.guardLog = result.log;
+    if (result.rewrites.size === 0) return;
+
+    // Apply de-dup rewrites in place: targeted updates preserve each section's
+    // voice override and everything else the batch re-persist would reset.
+    const byPosition = new Map(persisted.map((row) => [row.position, row]));
+    for (const [position, body] of result.rewrites) {
+      const row = byPosition.get(position);
+      if (row === undefined) continue;
+      const estSeconds = estimateSecondsForText(body);
+      await deps.store.updateSection(input.workspaceId, row.id, { body, estSeconds });
+      const working = state.sections?.[position];
+      if (working !== undefined) {
+        working.body = body;
+        working.estSeconds = estSeconds;
+      }
+    }
   };
 
   /** Rewrite stages must not change section count/kinds — validate + carry. */
@@ -355,8 +436,18 @@ export async function runScriptPipeline(
       });
       state.sections = acceptRewrite(sections, rewritten.sections, "voice_pass");
       await persistSections(state.sections);
+
+      // Licensed-voice similarity guard (PRODUCT-CONTRACTS §7): after voicing,
+      // any section whose EFFECTIVE voice is licensed is checked against the
+      // licensed source snippets. Over-similar sections are auto-rewritten
+      // once and re-checked; a section still over the line HARD-FAILS the run
+      // (never emitted). A script-level licensed voice guards every section; a
+      // per-section voice override guards (or lifts) that one section. Scripts
+      // with no licensed voice are untouched and unlogged.
+      await runVoicePassGuard();
+
       await deps.store.updateScript(input.workspaceId, scriptId, {
-        stats: scriptStats(state.sections),
+        stats: scriptStats(state.sections ?? []),
       });
     },
 
@@ -513,6 +604,23 @@ export async function runScriptPipeline(
     input: params,
     inputHash,
   });
+
+  // Log the licensed-voice guard result on the voice_pass run (spec §5.7:
+  // "log check result on pipeline_run"). Set whenever the guard ran this
+  // invocation — on success and on hard-fail alike; skipped when voice_pass
+  // resumed from a prior done run (the log persisted there already).
+  if (state.guardLog !== undefined) {
+    const runRow = await deps.runs.find({
+      workspaceId: input.workspaceId,
+      projectId: input.projectId,
+      kind: "script",
+      stage: "voice_pass",
+      inputHash,
+    });
+    if (runRow !== null) {
+      await deps.runs.update(runRow.id, { output: { licensedGuard: state.guardLog } });
+    }
+  }
 
   if (result.status === "done") {
     // Completion charge (spec §7) — never on failure, never twice: the

@@ -186,6 +186,15 @@ export class DrizzleEngineStore implements EngineStore {
     return row === undefined ? null : voiceProfileSchema.parse(row);
   }
 
+  async listVoiceProfiles(workspaceId: WorkspaceId): Promise<VoiceProfile[]> {
+    const rows = await getDb()
+      .select()
+      .from(schema.voiceProfiles)
+      .where(eq(schema.voiceProfiles.workspaceId, workspaceId))
+      .orderBy(schema.voiceProfiles.name);
+    return rows.map((r) => voiceProfileSchema.parse(r));
+  }
+
   // -- research -------------------------------------------------------------
 
   async listResearchDocs(workspaceId: WorkspaceId, projectId: ProjectId): Promise<ResearchDoc[]> {
@@ -407,6 +416,7 @@ export class DrizzleEngineStore implements EngineStore {
             kind: s.kind,
             heading: s.heading,
             body: s.body,
+            voiceProfileId: s.voiceProfileId ?? null,
             estSeconds: s.estSeconds,
             retentionNote: s.retentionNote,
             factRefs: s.factRefs,

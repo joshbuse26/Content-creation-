@@ -23,7 +23,7 @@ import { resolveStyleCard } from "@/pipelines/stages/style-resolver";
 import { topicsPrompt } from "@/prompts";
 import { requireCreditsWithOverage } from "@/server/billing";
 import { CREDIT_COSTS } from "@/server/credits";
-import { assertGenerationTargetAllowed } from "@/server/modes";
+import { assertGenerationTargetAllowed, assertLicensedVoiceUsable } from "@/server/modes";
 import { JOB_NAMES, QUEUE_NAMES } from "@/queue/queues";
 import {
   badRequest,
@@ -282,6 +282,8 @@ export const scriptStagesImpl = {
         ? null
         : await store.getVoiceProfile(ctx.workspaceId, input.voiceProfileId);
     if (input.voiceProfileId !== null && voiceProfile === null) notFound("voice profile");
+    // A licensed script-level voice must have its signed license on file.
+    assertLicensedVoiceUsable(voiceProfile);
     // Resolve the card NOW so mode errors (unknown archetype, unlicensed
     // partner) surface at dispatch, before any charge or job.
     const styleCard = await resolveStyleCard(input.generation, voiceProfile, deps.partners);

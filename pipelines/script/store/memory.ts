@@ -221,6 +221,16 @@ export class InMemoryEngineStore implements EngineStore {
     );
   }
 
+  listVoiceProfiles(workspaceId: WorkspaceId): Promise<VoiceProfile[]> {
+    return Promise.resolve(
+      clone(
+        this.voiceProfiles
+          .filter((v) => v.workspaceId === workspaceId)
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      ),
+    );
+  }
+
   // -- research -------------------------------------------------------------
 
   listResearchDocs(workspaceId: WorkspaceId, projectId: ProjectId): Promise<ResearchDoc[]> {
@@ -398,7 +408,7 @@ export class InMemoryEngineStore implements EngineStore {
       kind: s.kind,
       heading: s.heading,
       body: s.body,
-      voiceProfileId: null,
+      voiceProfileId: s.voiceProfileId ?? null,
       locked: false,
       estSeconds: s.estSeconds,
       retentionNote: s.retentionNote,
@@ -439,6 +449,7 @@ export class InMemoryEngineStore implements EngineStore {
     if (patch.estSeconds !== undefined) section.estSeconds = patch.estSeconds;
     if (patch.retentionNote !== undefined) section.retentionNote = patch.retentionNote;
     if (patch.factRefs !== undefined) section.factRefs = patch.factRefs;
+    if (patch.voiceProfileId !== undefined) section.voiceProfileId = patch.voiceProfileId;
     section.updatedAt = new Date();
     return Promise.resolve(clone(section));
   }

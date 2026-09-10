@@ -52,6 +52,11 @@ export function EditorScreen() {
     () => [...(versionsQuery.data ?? [])].sort((a, b) => b.version - a.version),
     [versionsQuery.data],
   );
+  // Multi-voice: the workspace's voice profiles power the per-section picker.
+  const voiceProfilesQuery = trpc.voiceProfile.list.useQuery(
+    workspaceId !== null ? { workspaceId } : skipToken,
+  );
+  const voiceProfiles = useMemo(() => voiceProfilesQuery.data ?? [], [voiceProfilesQuery.data]);
   const [pickedScriptId, setPickedScriptId] = useState<ScriptId | null>(null);
   // A picked version belongs to one project — reset it when the project
   // changes so another project never renders a stale script.
@@ -151,6 +156,13 @@ export function EditorScreen() {
     onError: () => {
       rollbackSections();
       toast("Could not save the new section order — reverted.");
+    },
+  });
+  const setVoiceMutation = trpc.script.setSectionVoice.useMutation({
+    onSuccess: invalidateScript,
+    onError: () => {
+      rollbackSections();
+      toast("Could not change the section voice — reverted.");
     },
   });
   const regenMutation = trpc.script.regenerateSection.useMutation({
@@ -499,6 +511,13 @@ export function EditorScreen() {
                   sectionId: section.id,
                   ...(guidance !== undefined ? { guidance } : {}),
                 });
+              }}
+              voiceProfiles={voiceProfiles}
+              onSetVoice={(voiceProfileId) => {
+                setSections((prev) =>
+                  prev.map((s) => (s.id === section.id ? { ...s, voiceProfileId } : s)),
+                );
+                setVoiceMutation.mutate({ workspaceId, sectionId: section.id, voiceProfileId });
               }}
               hookSlot={
                 section.kind === "hook" ? (

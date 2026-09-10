@@ -17,6 +17,7 @@ import {
   templatesContracts,
   thumbnailsContracts,
   titlesContracts,
+  voiceProfileContracts,
   workspaceContracts,
 } from "@/lib/types/api";
 import { rateLimitMiddleware } from "@/server/ratelimit";
@@ -39,6 +40,7 @@ import { tagsHandlers } from "@/server/routers/impl/tags";
 import { templatesImpl } from "@/server/routers/impl/templates";
 import { thumbnailsImpl } from "@/server/routers/impl/thumbnails";
 import { titlesImpl } from "@/server/routers/impl/titles";
+import { voiceProfileImpl } from "@/server/routers/impl/voiceProfile";
 import { workspaceHandlers } from "@/server/routers/impl/workspace";
 import { protectedProcedure, router, workspaceProcedure } from "@/server/trpc";
 
@@ -157,6 +159,16 @@ export const avatarRouter = router({
     .input(avatarContracts.regenerate.input)
     .output(avatarContracts.regenerate.output)
     .mutation(({ ctx, input }) => avatarHandlers.regenerate({ ctx, input })),
+});
+
+// voiceProfile — read-only list for the editor's per-section voice picker
+// (multi-voice, PRODUCT-CONTRACTS §7).
+export const voiceProfileRouter = router({
+  list: workspaceProcedure("voiceProfile", "read")
+    .use(general)
+    .input(voiceProfileContracts.list.input)
+    .output(voiceProfileContracts.list.output)
+    .query((opts) => voiceProfileImpl.list(opts)),
 });
 
 // ideas — B1 (server/routers/impl/ideas.ts): outlier index §5.3 + daily feed §5.4
@@ -346,6 +358,11 @@ export const scriptRouter = router({
     .input(scriptContracts.setSectionLock.input)
     .output(scriptContracts.setSectionLock.output)
     .mutation((opts) => scriptImpl.setSectionLock(opts)),
+  setSectionVoice: workspaceProcedure("script", "update")
+    .use(general)
+    .input(scriptContracts.setSectionVoice.input)
+    .output(scriptContracts.setSectionVoice.output)
+    .mutation((opts) => scriptImpl.setSectionVoice(opts)),
   reorderSections: workspaceProcedure("script", "update")
     .use(general)
     .input(scriptContracts.reorderSections.input)
