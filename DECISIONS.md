@@ -282,3 +282,63 @@ in `tests/copy-lint.allowlist.json` (empty today — current copy is clean), wit
 **Migration 0005 verified against a live Postgres 16**: full migrate from zero, seed (12
 archetypes upserted), legacy style-card transform (only legacy rows touched), mode CHECKs and the
 partner license CHECK all exercised.
+
+## 2026-09-10 — Wave C staged pipeline (C1)
+
+**The four staged procedures are real** (`server/routers/impl/script-stages.ts` +
+`pipelines/stages/**`): mode-guarded (`assertGenerationTargetAllowed`), tenant-validated BEFORE
+`requireCreditsWithOverage` (a cross-workspace probe is NOT_FOUND and never charges), executed
+through the PipelineRunner (kind `script`, stage names `topics`/`outline`/`hooks` + the seven
+frozen draft stages), and completion-charged with idempotency key `<stage>:<input hash>` —
+identical re-submits re-serve the (deterministic-in-fixture) result and the ledger dedupes, so
+each stage charges exactly once per distinct input. `topics` validates channel ownership, then
+feeds niche keywords + fresh ideation-store outliers + the resolved style card into the prompt;
+`outline` honors `pacing.sectionSeconds` (chapter norm) and the ±10% target-length rule;
+`hooks` yields 3 tagged candidates CONSTRAINED to the card's hookPatterns (repeats get distinct
+bodies when a card allows < 3 techniques), auto-picked by the card's preference order; `draft`
+reuses the whole 7-stage engine with the approved outline/hook adopted verbatim — SSE section
+streaming, retention/voice/fact-check/quality passes and resume come for free, and the frozen
+`ScriptStreamEvent` union is untouched.
+
+**`script.generate` is the orchestrator.** Same job name (frozen queue contract), new
+discriminator on the payload (`dispatch: legacy | draft | generate` — pre-deploy queued jobs
+parse as `legacy` and keep the single −6 charge). The orchestrator runs outline → hooks → draft
+as one pipeline over ONE SSE stream and writes ITEMIZED ledger entries per stage — outline (−1)
+when the outline stage completes, hooks (−1) when candidates are produced, draft (−4) on
+completion — summing to `CREDIT_COSTS.scriptGeneration` (6), each keyed `<stage>:<hash>`; MCP's
+`generate_script` rides the same path, so nothing bypasses stage metering
+(tests/c1-staged-pipeline.test.ts pins the ledger shape; the b2 MCP charge test was updated to
+the itemized shape). Direct `runScriptPipeline` callers default to the legacy composite charge.
+
+**Crossover merge rules (deterministic, documented in `pipelines/stages/crossover.ts`):**
+(1) the heavier archetype is DOMINANT (ties at weightA = 0.5 go to A) and supplies the surface
+voice verbatim — `voice`, `tone`, `ctaHabits`, `readingLevel`, `exampleSnippets`,
+`thumbnailPresetId`; (2) pacing numbers (`wpmTarget`/`sectionSeconds`/`rehookSeconds`) blend
+linearly by weight; (3) hookPatterns = dominant's patterns first (preference order preserved),
+then union by technique, capped at the schema's 4; (4) bannedClaims = union (strictest of both —
+a crossover is never a loophole); (5) energy = weighted round, clamped 1–5. Result re-parsed
+through the frozen `styleCardSchema`.
+
+**Partner resolution** (`pipelines/stages/partners.ts`): flag enforced upstream by
+`server/modes.ts`; the resolver then requires the row to exist (NOT_FOUND), be `enabled`
+(FORBIDDEN — the DB CHECK ties enabled to signed license fields) and carry a card
+(PRECONDITION_FAILED). Production reads the `partners` table; keyless/fixture mode has an
+in-memory registry that is EMPTY by default, so a flag-on fixture boot still cannot generate as
+a named partner.
+
+**Style gates completed.** `hookPatternOk` = chosen hook's technique ∈ card.hookPatterns —
+evaluated whenever the pipeline knows the technique (always, in-run; recomputes recover it from
+the hook-candidate cache, else null = "not evaluated"); hooks generation is constrained and
+`script.draft` rejects a user-chosen off-card hook at dispatch (BAD_REQUEST, no charge), and a
+false value fails the gate but is deliberately NOT an auto-fix violation (a section rewrite
+cannot change a technique tag). Per-card `readingLevel`: Flesch–Kincaid grade
+(`fleschKincaidGrade`, pipelines/script/readability.ts) REPLACES the global Flesch ≥ 60 gate
+whenever a card is present (`readabilityOk` reflects it). The band check is ONE-SIDED: grade >
+maxGrade fails (too complex for the audience); grade < minGrade warns but passes — simpler-than-
+target spoken prose never hurts retention, and the global gate it replaces was also one-sided.
+
+**Legacy null-generation path unchanged.** `generation: null` still resolves the voice profile's
+card through the same seam; archetype/crossover/partner cards flow through the identical
+`styleCard` injection (prompts, voice pass, gates) as channel-learned cards. `PROMPT_VERSION`
+bumped to `2026-09-10.2` (outline prompt now renders the style card + pacing rule; hook prompt
+gained the allowed-techniques constraint; new topics prompt).
