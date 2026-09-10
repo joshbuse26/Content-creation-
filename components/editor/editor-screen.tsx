@@ -22,6 +22,7 @@ import { ExportMenu } from "./export-menu";
 import { HookSwitcher } from "./hook-switcher";
 import { RevisionCard } from "./revision-card";
 import { SectionCard } from "./section-card";
+import { StyleGatesPanel } from "./style-gates-panel";
 import { moveSection } from "./logic/reorder";
 import {
   initReviewState,
@@ -393,6 +394,12 @@ export function EditorScreen() {
             </ul>
           </div>
         </div>
+      ) : null}
+
+      {/* Style gates (wave C): rendered whenever the script was generated
+          against a style card — null sub-fields show "Not evaluated". */}
+      {qualityReport !== null && qualityReport.styleGates !== null ? (
+        <StyleGatesPanel report={qualityReport.styleGates} />
       ) : null}
 
       {mode === "review" ? (
