@@ -3,19 +3,28 @@
 import type { Revision } from "@/lib/types/entities";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { IconCheck, IconX } from "@/components/ui/icons";
-import { revisionDiffRows } from "./logic/diff";
+import { IconCheck, IconWarning, IconX } from "@/components/ui/icons";
+import { applyDiffOps, computeLineDiff } from "./logic/diff";
 import type { Decision } from "./logic/revision-state";
 
 /**
  * One revision suggestion: rationale, red/green line diff against the
  * current section body, per-suggestion accept/reject.
+ *
+ * `revisedBody` is the preview target — the section body with this
+ * suggestion applied on top of any already-accepted ones (rebased by the
+ * caller). Without it, the diff falls back to applying the ops directly to
+ * `sectionBody`, which is only correct when nothing else was accepted.
+ * `stale` marks a suggestion that no longer applies cleanly (its lines were
+ * changed by an accepted suggestion): actions are disabled except reject.
  */
 export function RevisionCard({
   revision,
   sectionHeading,
   sectionBody,
+  revisedBody,
   decision,
+  stale = false,
   busy = false,
   onAccept,
   onReject,
@@ -23,12 +32,16 @@ export function RevisionCard({
   revision: Revision;
   sectionHeading: string;
   sectionBody: string;
+  revisedBody?: string;
   decision: Decision;
+  stale?: boolean;
   busy?: boolean;
   onAccept: () => void;
   onReject: () => void;
 }) {
-  const rows = revisionDiffRows(sectionBody, revision.diff);
+  const rows = stale
+    ? []
+    : computeLineDiff(sectionBody, revisedBody ?? applyDiffOps(sectionBody, revision.diff));
 
   return (
     <div
@@ -50,6 +63,12 @@ export function RevisionCard({
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400" title={revision.rationale}>
             Why: {revision.rationale}
           </p>
+          {stale && decision === "pending" ? (
+            <p className="mt-1.5 flex items-center gap-1 text-xs text-amber-700 dark:text-amber-400">
+              <IconWarning size={12} /> Outdated — an accepted suggestion changed these lines, so
+              this one no longer applies cleanly.
+            </p>
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {decision === "pending" ? (
@@ -58,6 +77,7 @@ export function RevisionCard({
                 size="sm"
                 variant="primary"
                 busy={busy}
+                disabled={stale}
                 onClick={onAccept}
                 aria-label="Accept suggestion"
               >
@@ -72,7 +92,7 @@ export function RevisionCard({
           )}
         </div>
       </div>
-      {decision !== "accepted" ? (
+      {decision !== "accepted" && rows.length > 0 ? (
         <div className="border-t border-zinc-100 font-mono text-[13px] leading-relaxed dark:border-zinc-800/60">
           {rows.map((row, i) => (
             <div

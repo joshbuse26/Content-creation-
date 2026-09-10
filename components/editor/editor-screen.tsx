@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { skipToken } from "@tanstack/react-query";
 import type { Revision, ScriptSection } from "@/lib/types/entities";
 import type { ScriptId } from "@/lib/types/ids";
@@ -20,13 +20,15 @@ import { ExportMenu } from "./export-menu";
 import { HookSwitcher } from "./hook-switcher";
 import { RevisionCard } from "./revision-card";
 import { SectionCard } from "./section-card";
-import { applyDiffOps } from "./logic/diff";
 import { moveSection } from "./logic/reorder";
 import {
   initReviewState,
+  isRevisionStale,
   pendingCount,
+  previewBodyFor,
   reviewReducer,
   type Decision,
+  type RevisionLite,
   type RevisionReviewState,
 } from "./logic/revision-state";
 import { totalsFor } from "./logic/stats";
@@ -67,24 +69,32 @@ export function EditorScreen() {
   );
   const revisions = useMemo(() => revisionsQuery.data ?? [], [revisionsQuery.data]);
   const [review, setReview] = useState<RevisionReviewState | null>(null);
+  // Latest review state for mutation callbacks (avoids side effects inside
+  // setState updaters and stale closures across sequential accepts).
+  const reviewRef = useRef<RevisionReviewState | null>(null);
   useEffect(() => {
-    if (revisions.length === 0) {
+    reviewRef.current = review;
+  }, [review]);
+  useEffect(() => {
+    if (revisions.length === 0 || scriptQuery.data === undefined) {
       setReview(null);
       return;
     }
-    setSections((current) => {
-      const bodies = Object.fromEntries(current.map((s) => [s.id as string, s.body]));
-      const serverDecisions = Object.fromEntries(revisions.map((r) => [r.id as string, r.status]));
-      setReview(
-        initReviewState(
-          revisions.map((r) => ({ id: r.id, sectionId: r.sectionId, diff: r.diff })),
-          bodies,
-          serverDecisions,
-        ),
-      );
-      return current;
-    });
-  }, [revisions]);
+    // Baseline bodies come from the server payload: revision diff ops target
+    // the persisted section bodies, and already-accepted revisions are baked
+    // into them server-side.
+    const bodies = Object.fromEntries(
+      scriptQuery.data.sections.map((s) => [s.id as string, s.body]),
+    );
+    const serverDecisions = Object.fromEntries(revisions.map((r) => [r.id as string, r.status]));
+    setReview(
+      initReviewState(
+        revisions.map((r) => ({ id: r.id, sectionId: r.sectionId, diff: r.diff })),
+        bodies,
+        serverDecisions,
+      ),
+    );
+  }, [revisions, scriptQuery.data]);
 
   // ---- mutations ----------------------------------------------------------
   const updateSectionMutation = trpc.script.updateSection.useMutation({
@@ -158,26 +168,31 @@ export function EditorScreen() {
   };
 
   const decide = (revision: Revision, decision: "accepted" | "rejected") => {
-    const lite = {
-      id: revision.id as string,
-      sectionId: revision.sectionId as string,
+    const lite: RevisionLite = {
+      id: revision.id,
+      sectionId: revision.sectionId,
       diff: revision.diff,
     };
     if (decision === "accepted") {
+      // Never send an accept for a suggestion that no longer applies cleanly.
+      if (reviewRef.current !== null && isRevisionStale(reviewRef.current, lite)) return;
       acceptMutation.mutate(
         { workspaceId, revisionId: revision.id },
         {
           onSuccess: () => {
-            setReview((s) =>
-              s !== null ? reviewReducer(s, { type: "accept", revision: lite }) : s,
-            );
-            setSections((prev) =>
-              prev.map((s) =>
-                s.id === revision.sectionId
-                  ? { ...s, body: applyDiffOps(s.body, revision.diff) }
-                  : s,
-              ),
-            );
+            const current = reviewRef.current;
+            if (current === null) return;
+            // The reducer rebases: it reapplies all accepted ops (original
+            // line coordinates) against the original body, so earlier
+            // accepts never shift this one's line numbers.
+            const next = reviewReducer(current, { type: "accept", revision: lite });
+            setReview(next);
+            const body = next.bodies[lite.sectionId];
+            if (body !== undefined) {
+              setSections((prev) =>
+                prev.map((s) => (s.id === revision.sectionId ? { ...s, body } : s)),
+              );
+            }
           },
         },
       );
@@ -324,9 +339,16 @@ export function EditorScreen() {
             />
           ) : (
             revisions.map((rev) => {
+              const lite: RevisionLite = {
+                id: rev.id,
+                sectionId: rev.sectionId,
+                diff: rev.diff,
+              };
               const section = sections.find((s) => s.id === rev.sectionId);
               const body = review?.bodies[rev.sectionId as string] ?? section?.body ?? "";
               const decision: Decision = review?.decisions[rev.id as string] ?? "pending";
+              const stale =
+                decision === "pending" && review !== null && isRevisionStale(review, lite);
               const busy =
                 (acceptMutation.isPending && acceptMutation.variables.revisionId === rev.id) ||
                 (rejectMutation.isPending && rejectMutation.variables.revisionId === rev.id);
@@ -336,7 +358,9 @@ export function EditorScreen() {
                   revision={rev}
                   sectionHeading={section?.heading ?? "Section"}
                   sectionBody={body}
+                  revisedBody={review !== null && !stale ? previewBodyFor(review, lite) : undefined}
                   decision={decision}
+                  stale={stale}
                   busy={busy}
                   onAccept={() => {
                     decide(rev, "accepted");
