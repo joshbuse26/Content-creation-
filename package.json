@@ -25,7 +25,6 @@
     "@anthropic-ai/sdk": "^0.124.0",
     "@auth/drizzle-adapter": "^1.11.3",
     "@sentry/node": "^8.55.0",
-    "lucide-react": "^0.545.0",
     "@tanstack/react-query": "^5.102.8",
     "@trpc/client": "^11.18.0",
     "@trpc/react-query": "^11.18.0",
@@ -35,6 +34,7 @@
     "docx": "^9.7.1",
     "drizzle-orm": "^0.45.2",
     "ioredis": "^6.0.0",
+    "lucide-react": "^0.545.0",
     "nanoid": "^6.0.1",
     "next": "^15.5.25",
     "next-auth": "5.0.0-beta.32",
@@ -44,6 +44,7 @@
     "react-dom": "^19.3.0",
     "stripe": "^22.6.2",
     "superjson": "^2.2.6",
+    "undici": "^8.10.2",
     "zod": "^4.6.1"
   },
   "devDependencies": {

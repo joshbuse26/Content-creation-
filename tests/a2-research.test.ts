@@ -4,12 +4,17 @@ import { fixtureProject, fixtureWorkspace } from "@/lib/fixtures";
 import { runResearchPipeline } from "@/pipelines/research/pipeline";
 import {
   assertPublicUrl,
+  createPinnedDispatcher,
   guardedFetch,
   htmlToText,
   isPrivateIp,
   SsrfBlockedError,
+  vetUrl,
   type DnsLookupFn,
+  type GuardedFetchImpl,
+  type PinnedConnection,
 } from "@/pipelines/research/ssrf";
+import type { Dispatcher } from "undici";
 import {
   importTranscript,
   parseYoutubeVideoId,
@@ -76,6 +81,75 @@ describe("SSRF guard", () => {
     await expect(
       guardedFetch("https://example.com/start", { lookup: publicLookup, fetchImpl }),
     ).rejects.toThrow(SsrfBlockedError);
+  });
+
+  it("resolves DNS exactly once per hop and pins the fetch to the vetted address", async () => {
+    const lookupCalls: string[] = [];
+    const countingLookup: DnsLookupFn = (host) => {
+      lookupCalls.push(host);
+      return Promise.resolve([{ address: "93.184.216.34" }]);
+    };
+    interface FakeDispatcher {
+      hostname: string;
+      address: string;
+      closed: boolean;
+    }
+    const created: FakeDispatcher[] = [];
+    const seenByFetch: unknown[] = [];
+    const createDispatcher = (hostname: string, address: string): PinnedConnection => {
+      const record: FakeDispatcher = { hostname, address, closed: false };
+      created.push(record);
+      return {
+        dispatcher: record as unknown as Dispatcher,
+        close: () => {
+          record.closed = true;
+        },
+      };
+    };
+    const fetchImpl: GuardedFetchImpl = (url, init) => {
+      seenByFetch.push(init.dispatcher);
+      if (url === "https://example.com/start") {
+        return Promise.resolve(
+          new Response(null, {
+            status: 302,
+            headers: { location: "https://other.example.com/next" },
+          }),
+        );
+      }
+      return Promise.resolve(new Response("final page body", { status: 200 }));
+    };
+
+    const page = await guardedFetch("https://example.com/start", {
+      lookup: countingLookup,
+      fetchImpl,
+      createDispatcher,
+    });
+    expect(page.status).toBe(200);
+    // One resolution per hop — the vetted answer is the one the fetch uses.
+    expect(lookupCalls).toEqual(["example.com", "other.example.com"]);
+    expect(created.map((d) => ({ hostname: d.hostname, address: d.address }))).toEqual([
+      { hostname: "example.com", address: "93.184.216.34" },
+      { hostname: "other.example.com", address: "93.184.216.34" },
+    ]);
+    // fetch received exactly the pinned dispatcher for each hop, and every
+    // dispatcher was closed afterwards.
+    expect(seenByFetch).toEqual(created);
+    expect(created.every((d) => d.closed)).toBe(true);
+  });
+
+  it("vetUrl returns the pinned address (IP literals included)", async () => {
+    await expect(vetUrl("https://example.com/x", publicLookup)).resolves.toMatchObject({
+      address: "93.184.216.34",
+    });
+    await expect(vetUrl("http://8.8.8.8/x", publicLookup)).resolves.toMatchObject({
+      address: "8.8.8.8",
+    });
+  });
+
+  it("createPinnedDispatcher builds a closable undici agent", async () => {
+    const pinned = createPinnedDispatcher("example.com", "93.184.216.34");
+    expect(pinned.dispatcher).toBeDefined();
+    await pinned.close();
   });
 
   it("caps the response at maxBytes", async () => {

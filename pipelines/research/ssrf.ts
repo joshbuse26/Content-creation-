@@ -1,4 +1,5 @@
 import { lookup as dnsLookup } from "node:dns/promises";
+import { Agent, fetch as undiciFetch, type Dispatcher } from "undici";
 
 /**
  * SSRF guard for the research fetcher (build spec §9): the server fetches
@@ -6,7 +7,11 @@ import { lookup as dnsLookup } from "node:dns/promises";
  * public hosts:
  * - http/https only, default ports semantics left to fetch
  * - hostname resolved first; EVERY resolved address must be public
- * - redirects followed manually (max 5) and re-checked hop by hop
+ * - the connection is PINNED to the vetted address: the actual fetch uses a
+ *   dispatcher whose connect() lookup returns the pre-validated IP, so a
+ *   DNS-rebinding TOCTOU (guard resolves A, fetch re-resolves B) is
+ *   impossible. TLS SNI/verification still use the original hostname.
+ * - redirects followed manually (max 5), vetted AND pinned hop by hop
  * - 10s total timeout, 500KB response cap
  */
 
@@ -73,11 +78,16 @@ export class SsrfBlockedError extends Error {
   }
 }
 
-/** Throws SsrfBlockedError unless the URL points at a public host. */
-export async function assertPublicUrl(
+/**
+ * Vets a URL (throws SsrfBlockedError unless it points at a public host)
+ * and returns the validated address the connection must be pinned to.
+ * The hostname is resolved EXACTLY ONCE — the returned address is what
+ * guardedFetch actually connects to.
+ */
+export async function vetUrl(
   rawUrl: string,
   lookup: DnsLookupFn = defaultLookup,
-): Promise<URL> {
+): Promise<{ url: URL; address: string }> {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -97,8 +107,9 @@ export async function assertPublicUrl(
     throw new SsrfBlockedError(`blocked host: ${host}`);
   }
   if (IP_LITERAL.test(host)) {
-    if (isPrivateIp(host)) throw new SsrfBlockedError(`blocked private address: ${host}`);
-    return url;
+    const literal = host.replace(/^\[|\]$/g, "");
+    if (isPrivateIp(literal)) throw new SsrfBlockedError(`blocked private address: ${host}`);
+    return { url, address: literal };
   }
   let addresses: { address: string }[];
   try {
@@ -114,12 +125,69 @@ export async function assertPublicUrl(
       throw new SsrfBlockedError(`blocked: ${host} resolves to private address ${address}`);
     }
   }
+  const first = addresses[0];
+  if (first === undefined) throw new SsrfBlockedError(`DNS returned no addresses for ${host}`);
+  return { url, address: first.address };
+}
+
+/** Throws SsrfBlockedError unless the URL points at a public host. */
+export async function assertPublicUrl(
+  rawUrl: string,
+  lookup: DnsLookupFn = defaultLookup,
+): Promise<URL> {
+  const { url } = await vetUrl(rawUrl, lookup);
   return url;
+}
+
+/**
+ * fetch-compatible callable that additionally receives the pinned
+ * dispatcher (undici Agent) for the hop. The global-fetch signature is a
+ * structural subset, so tests can keep injecting a plain fake fetch.
+ */
+export type GuardedFetchImpl = (
+  url: string,
+  init: RequestInit & { dispatcher?: Dispatcher },
+) => Promise<Response>;
+
+export interface PinnedConnection {
+  dispatcher: Dispatcher | undefined;
+  close(): Promise<void> | void;
+}
+
+/**
+ * Default pinning: an undici Agent whose connector resolves the hostname to
+ * the pre-validated address — TLS servername/cert checks still run against
+ * the real hostname, only the socket target is fixed.
+ */
+export function createPinnedDispatcher(_hostname: string, address: string): PinnedConnection {
+  const family = address.includes(":") ? 6 : 4;
+  const lookup = (
+    _host: string,
+    options: { all?: boolean },
+    callback: (
+      err: NodeJS.ErrnoException | null,
+      address: string | { address: string; family: number }[],
+      family?: number,
+    ) => void,
+  ) => {
+    if (options.all === true) {
+      callback(null, [{ address, family }]);
+    } else {
+      callback(null, address, family);
+    }
+  };
+  // Cast: undici forwards connect options (including `lookup`) to
+  // net/tls connect; its typings only enumerate the common subset.
+  const agent = new Agent({ connect: { lookup } as Agent.Options["connect"] });
+  return { dispatcher: agent, close: () => agent.close() };
 }
 
 export interface GuardedFetchOptions {
   lookup?: DnsLookupFn;
-  fetchImpl?: typeof fetch;
+  fetchImpl?: GuardedFetchImpl;
+  /** Seam for tests: how a vetted (hostname, address) pair becomes the
+   *  connection the fetch uses. Defaults to the pinned undici Agent. */
+  createDispatcher?: (hostname: string, address: string) => PinnedConnection;
   timeoutMs?: number;
   maxBytes?: number;
 }
@@ -131,16 +199,22 @@ export interface FetchedPage {
   body: string;
 }
 
+const defaultFetchImpl: GuardedFetchImpl = (url, init) =>
+  undiciFetch(url, init as Parameters<typeof undiciFetch>[1]) as unknown as Promise<Response>;
+
 /**
  * Fetch with the SSRF guard applied to the initial URL and EVERY redirect
- * hop, a hard timeout, and a byte cap enforced while streaming.
+ * hop, a hard timeout, and a byte cap enforced while streaming. Each hop
+ * resolves DNS exactly once (vetUrl) and connects to that vetted address
+ * via a pinned dispatcher, closing the DNS-rebinding TOCTOU window.
  */
 export async function guardedFetch(
   rawUrl: string,
   options: GuardedFetchOptions = {},
 ): Promise<FetchedPage> {
   const lookup = options.lookup ?? defaultLookup;
-  const fetchImpl = options.fetchImpl ?? fetch;
+  const fetchImpl = options.fetchImpl ?? defaultFetchImpl;
+  const createDispatcher = options.createDispatcher ?? createPinnedDispatcher;
   const timeoutMs = options.timeoutMs ?? FETCH_TIMEOUT_MS;
   const maxBytes = options.maxBytes ?? FETCH_MAX_BYTES;
   const controller = new AbortController();
@@ -150,41 +224,48 @@ export async function guardedFetch(
   try {
     let current = rawUrl;
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-      const url = await assertPublicUrl(current, lookup);
-      const response = await fetchImpl(url.toString(), {
-        redirect: "manual",
-        signal: controller.signal,
-        headers: {
-          "user-agent": "GinRummyResearch/1.0 (+research-agent)",
-          accept: "text/html,text/plain,*/*",
-        },
-      });
-      if (response.status >= 300 && response.status < 400) {
-        const location = response.headers.get("location");
-        if (location === null) throw new Error(`redirect without location from ${current}`);
-        current = new URL(location, url).toString();
-        // Body of a redirect response is irrelevant; loop re-checks the hop.
-        continue;
-      }
-      const reader = response.body?.getReader();
-      if (reader === undefined) {
-        return { finalUrl: url.toString(), status: response.status, body: "" };
-      }
-      const decoder = new TextDecoder("utf-8", { fatal: false });
-      let text = "";
-      let bytes = 0;
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        bytes += value.byteLength;
-        if (bytes > maxBytes) {
-          text += decoder.decode(value.subarray(0, value.byteLength - (bytes - maxBytes)));
-          await reader.cancel();
-          break;
+      const { url, address } = await vetUrl(current, lookup);
+      const pinned = createDispatcher(url.hostname, address);
+      try {
+        const response = await fetchImpl(url.toString(), {
+          redirect: "manual",
+          signal: controller.signal,
+          dispatcher: pinned.dispatcher,
+          headers: {
+            "user-agent": "GinRummyResearch/1.0 (+research-agent)",
+            accept: "text/html,text/plain,*/*",
+          },
+        });
+        if (response.status >= 300 && response.status < 400) {
+          const location = response.headers.get("location");
+          if (location === null) throw new Error(`redirect without location from ${current}`);
+          current = new URL(location, url).toString();
+          // Body of a redirect response is irrelevant; loop re-vets and
+          // re-pins the next hop.
+          continue;
         }
-        text += decoder.decode(value, { stream: true });
+        const reader = response.body?.getReader();
+        if (reader === undefined) {
+          return { finalUrl: url.toString(), status: response.status, body: "" };
+        }
+        const decoder = new TextDecoder("utf-8", { fatal: false });
+        let text = "";
+        let bytes = 0;
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          bytes += value.byteLength;
+          if (bytes > maxBytes) {
+            text += decoder.decode(value.subarray(0, value.byteLength - (bytes - maxBytes)));
+            await reader.cancel();
+            break;
+          }
+          text += decoder.decode(value, { stream: true });
+        }
+        return { finalUrl: url.toString(), status: response.status, body: text };
+      } finally {
+        await pinned.close();
       }
-      return { finalUrl: url.toString(), status: response.status, body: text };
     }
     throw new Error(`too many redirects fetching ${rawUrl}`);
   } finally {
