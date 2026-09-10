@@ -302,7 +302,7 @@ describe("tools/call", () => {
     expect(ok.isError).toBeUndefined();
   });
 
-  it("generate_script charges 6 credits through the shared pipeline (idempotency key set)", async () => {
+  it("generate_script charges 6 credits through the shared pipeline (idempotency keys set)", async () => {
     const { secret } = await mintKey();
     const result = await callTool(secret, "generate_script", {
       project_id: fixtureProject.id,
@@ -312,12 +312,17 @@ describe("tools/call", () => {
     const accepted = JSON.parse(result.content[0]?.text ?? "{}") as Record<string, unknown>;
     expect(accepted.status).toBe("queued");
     expect(typeof accepted.scriptId).toBe("string");
-    // Fixture mode runs the pipeline inline — the completion charge landed.
+    // Fixture mode runs the pipeline inline — the charges landed. Wave C
+    // (C1): `script.generate` is the staged ORCHESTRATOR, so MCP rides the
+    // same itemized per-stage metering (outline 1 + hooks 1 + draft 4 = 6,
+    // each idempotency-keyed) — no MCP bypass of stage metering.
     const charges = deps.store.creditEntries.filter((e) => e.reason === "script_generation");
-    expect(charges).toHaveLength(1);
-    expect(charges[0]?.delta).toBe(-6);
-    expect(charges[0]?.idempotencyKey).toMatch(/^script_generation:/);
-    expect(charges[0]?.actorUserId).toBe(FIXTURE_IDS.user);
+    expect(charges.map((e) => e.delta)).toEqual([-1, -1, -4]);
+    expect(charges.reduce((sum, e) => sum + e.delta, 0)).toBe(-6);
+    for (const charge of charges) {
+      expect(charge.idempotencyKey).toMatch(/^(outline|hooks|draft):/);
+      expect(charge.actorUserId).toBe(FIXTURE_IDS.user);
+    }
   });
 
   it("generate_script is refused with a domain error at 0 credits", async () => {
