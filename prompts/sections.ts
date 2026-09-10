@@ -1,3 +1,4 @@
+import type { HookStyle } from "@/lib/types/enums";
 import type { Outline, ScriptContext } from "@/lib/types/pipeline";
 import { bannedPhraseList } from "./banned-phrases";
 import { jsonOnly, renderFrame, renderResearch, renderStyleCard } from "./shared";
@@ -15,25 +16,47 @@ import type { PromptTemplate } from "./version";
 export interface HookPromptInput {
   context: ScriptContext;
   outline: Outline;
+  /**
+   * Wave C: when the style card constrains hooks, ONLY these technique tags
+   * may be used (candidates may repeat a technique with distinct bodies).
+   * null/omitted = the legacy one-per-technique instruction.
+   */
+  allowedTechniques?: readonly HookStyle[] | null;
 }
+
+const HOOK_TECHNIQUE_GUIDE: Record<HookStyle, string> = {
+  open_loop:
+    "open_loop — pose a specific question or withhold a specific result the video will resolve; name WHEN it resolves if you can ('by the end of round three'). The loop must be concrete enough to itch.",
+  bold_claim:
+    "bold_claim — lead with the video's most defensible surprising claim, stated plainly, no hedging. The body must actually back it.",
+  stakes:
+    "stakes — open on what the viewer stands to lose or gain in their own life: money wasted, time lost, an outcome they want. Make the cost concrete and personal.",
+  in_medias_res:
+    "in_medias_res — drop into the most dramatic moment of the video mid-action, then pull back. Present tense. No throat-clearing.",
+};
 
 export function hookPrompt(input: HookPromptInput): PromptTemplate {
   const { frame } = input.context;
+  const allowed = input.allowedTechniques ?? null;
+  const techniques: readonly HookStyle[] =
+    allowed !== null && allowed.length > 0
+      ? allowed
+      : ["open_loop", "bold_claim", "stakes", "in_medias_res"];
+  const constraint =
+    allowed !== null && allowed.length > 0
+      ? [
+          "This creator's style card allows ONLY these hook techniques —",
+          `${allowed.join(", ")} — in that preference order. Every candidate's`,
+          "style MUST be one of them; if fewer than three are allowed, reuse",
+          "techniques with genuinely different bodies.",
+        ].join(" ")
+      : "Write three candidates, one per technique.";
   return {
     system: [
       "You write YouTube hooks — the first 15-30 spoken seconds that decide",
-      "whether the video gets watched. Write three candidates, one per",
-      "technique:",
-      "open_loop — pose a specific question or withhold a specific result",
-      "the video will resolve; name WHEN it resolves if you can ('by the end",
-      "of round three'). The loop must be concrete enough to itch.",
-      "bold_claim — lead with the video's most defensible surprising claim,",
-      "stated plainly, no hedging. The body must actually back it.",
-      "stakes — open on what the viewer stands to lose or gain in their own",
-      "life: money wasted, time lost, an outcome they want. Make the cost",
-      "concrete and personal.",
-      "in_medias_res — drop into the most dramatic moment of the video",
-      "mid-action, then pull back. Present tense. No throat-clearing.",
+      "whether the video gets watched.",
+      constraint,
+      ...techniques.map((t) => HOOK_TECHNIQUE_GUIDE[t]),
       "All three: speak in the creator's voice, 40-75 words, no greeting, no",
       "channel-welcome, first sentence under 12 words. These phrases are",
       `banned:\n${bannedPhraseList()}`,
@@ -52,7 +75,9 @@ export function hookPrompt(input: HookPromptInput): PromptTemplate {
       input.context.avatarSummary,
       "",
       jsonOnly(
-        `{"candidates": [{"style": "open_loop", "body": "..."}, {"style": "bold_claim", "body": "..."}, {"style": "stakes", "body": "..."}]} — you may substitute "in_medias_res" for at most one of the three styles if the material demands it; exactly 3 candidates, 3 distinct styles`,
+        allowed !== null && allowed.length > 0
+          ? `{"candidates": [{"style": "<one of: ${allowed.join(" | ")}>", "body": "..."}]} — exactly 3 candidates, every style from the allowed list`
+          : `{"candidates": [{"style": "open_loop", "body": "..."}, {"style": "bold_claim", "body": "..."}, {"style": "stakes", "body": "..."}]} — you may substitute "in_medias_res" for at most one of the three styles if the material demands it; exactly 3 candidates, 3 distinct styles`,
       ),
     ].join("\n"),
   };
