@@ -1,8 +1,8 @@
 import { assertValidObjectKey, type ObjectStorage, type StoredObject } from "./types";
 
 /**
- * In-memory object storage — tests, fixture mode, and the interim default
- * until the S3 SDK dependency is added (REQUESTS-B4.md). Contents live for
+ * In-memory object storage — tests, fixture mode, and the fallback when the
+ * S3_* env quartet is not configured. Contents live for
  * the process lifetime only; every read returns a copy so callers can't
  * mutate the stored bytes.
  */

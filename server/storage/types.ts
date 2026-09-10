@@ -2,8 +2,8 @@
  * Object storage — the interface every storage backend implements (spec §1:
  * S3-compatible bucket for thumbnails, uploads, exports).
  *
- * Backends: `MemoryObjectStorage` (tests, fixture mode, and the interim
- * default until the S3 SDK dependency lands — see REQUESTS-B4.md) and
+ * Backends: `MemoryObjectStorage` (tests, fixture mode, and the fallback
+ * when the S3_* env quartet is not configured) and
  * `S3ObjectStorage` (server/storage/s3.ts), which is written against a thin
  * injectable client interface so it compiles and tests without
  * `@aws-sdk/client-s3` installed.

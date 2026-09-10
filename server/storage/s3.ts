@@ -4,8 +4,8 @@ import { assertValidObjectKey, type ObjectStorage, type StoredObject } from "./t
 /**
  * S3-compatible object storage (Railway Storage Bucket / R2 / Vultr — spec
  * §1) written against a THIN INJECTABLE CLIENT INTERFACE, not the AWS SDK
- * directly: `@aws-sdk/client-s3` is not installed yet (REQUESTS-B4.md), so
- * this module must compile, run, and be testable without it.
+ * directly, so this module compiles, runs, and is testable without it. The
+ * AWS-SDK-backed adapter is registered at startup (server/storage/register-s3.ts).
  *
  * Integrator wiring once the SDK lands (server/storage/index.ts):
  *

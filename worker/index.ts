@@ -13,7 +13,10 @@ import {
   handleTitlesJob,
 } from "@/pipelines/script/jobs";
 import { handlePackagingJob } from "@/pipelines/packaging";
+import { processIdeationJob, registerIdeationSchedules } from "@/pipelines/ideation";
+import { handleThumbnailsJob } from "@/pipelines/thumbnails";
 import { getErrorReporter, initErrorReporting, runCreditReconciliation } from "@/server/ops";
+import { registerS3StorageClient } from "@/server/storage/register-s3";
 
 /**
  * Worker entrypoint — `pnpm worker` / the Railway `worker` service.
@@ -22,12 +25,10 @@ import { getErrorReporter, initErrorReporting, runCreditReconciliation } from "@
  *   script queue:    generate-script → A2 · revision-pass → A2 ·
  *                    research → A2 · propose-frames → A2
  *   sync queue:      channel-sync / avatar-generate / post-publish-tracking
- *                    → A1's processSyncQueueJob · credit-reconcile → A4
- *   packaging queue: titles → A2 · description/tags/chapters → A4
- *
- * Not yet wired (cut features, see OPEN-ITEMS.md): daily-ideas,
- * outlier-refresh, thumbnails — acknowledged as no-ops so queued jobs never
- * poison the queues.
+ *                    → A1's processSyncQueueJob · credit-reconcile → A4 ·
+ *                    daily-ideas / outlier-refresh → B1's processIdeationJob
+ *   packaging queue: titles → A2 · description/tags/chapters → A4 ·
+ *                    thumbnails → B4's handleThumbnailsJob
  */
 
 /** Worker-local job + scheduler ids for the nightly credit reconciliation
@@ -50,6 +51,7 @@ async function registerCreditReconciliationSchedule(): Promise<void> {
 async function main(): Promise<void> {
   const config = getConfig();
   await initErrorReporting();
+  registerS3StorageClient();
   logger.info(
     { product: PRODUCT_NAME, providers: config.PROVIDERS, node: process.version },
     "worker starting",
@@ -105,8 +107,7 @@ async function main(): Promise<void> {
         }
         case JOB_NAMES.dailyIdeas:
         case JOB_NAMES.outlierRefresh:
-          // Cut features (v1.1) — acknowledge so queued jobs don't poison the queue.
-          logger.info({ job: job.name }, "job acknowledged (feature cut to v1.1)");
+          await processIdeationJob(job);
           return;
         default:
           throw new Error(`unknown job ${job.name} on queue ${QUEUE_NAMES.sync}`);
@@ -128,8 +129,7 @@ async function main(): Promise<void> {
           await handlePackagingJob(job.name, job.data);
           return;
         case JOB_NAMES.thumbnails:
-          // Image generation cut to v1.1 — acknowledge only.
-          logger.info({ job: job.name }, "job acknowledged (feature cut to v1.1)");
+          await handleThumbnailsJob(job.data);
           return;
         default:
           throw new Error(`unknown job ${job.name} on queue ${QUEUE_NAMES.packaging}`);
@@ -156,6 +156,7 @@ async function main(): Promise<void> {
   // Nightly repeatable jobs — schedules live in code, never platform cron
   // (spec §2.8). upsertJobScheduler is idempotent per boot.
   await registerSyncSchedules();
+  await registerIdeationSchedules();
   await registerCreditReconciliationSchedule();
 
   logger.info({ queues: Object.values(QUEUE_NAMES) }, "worker ready");
