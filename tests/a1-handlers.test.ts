@@ -310,7 +310,13 @@ describe("avatar handlers — field-level update semantics", () => {
     });
     expect(accepted.status).toBe("queued");
     expect(world.recorded.avatars).toEqual([
-      { workspaceId: wsA, channelId: channel.id, regenerateAll: true },
+      expect.objectContaining({
+        workspaceId: wsA,
+        channelId: channel.id,
+        regenerateAll: true,
+        // User-triggered regeneration carries the charge flag and actor.
+        chargeCredits: true,
+      }),
     ]);
   });
 });

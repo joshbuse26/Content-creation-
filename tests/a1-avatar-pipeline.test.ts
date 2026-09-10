@@ -62,6 +62,61 @@ const validAvatarJson = JSON.stringify({
   vocabularyNotes: "Uses extraction jargon freely.",
 });
 
+describe("avatar regeneration credits", () => {
+  it("charges 1 credit (idempotently) for a user-triggered regeneration", async () => {
+    const store = new InMemoryChannelStore();
+    const channel = await seedChannel(store);
+    const charges: { delta: number; reason: string; idempotencyKey?: string | null }[] = [];
+    const deps: AvatarDeps = {
+      ...makeDeps(store, llmReturning(validAvatarJson)),
+      recordCredits: (record) => {
+        charges.push(record);
+        return Promise.resolve();
+      },
+    };
+    const input = {
+      workspaceId,
+      channelId: channel.id,
+      regenerateAll: true,
+      chargeCredits: true,
+      actorUserId: userId,
+    };
+    await runAvatarGeneration(deps, input);
+    expect(charges).toEqual([
+      expect.objectContaining({
+        delta: -1,
+        reason: "avatar_regen",
+        actorUserId: userId,
+        idempotencyKey: expect.stringMatching(/^avatar_regen:/) as unknown,
+      }),
+    ]);
+
+    // Identical re-run against the same run store: all stages resumed as
+    // done, no new work — no second charge.
+    await runAvatarGeneration(deps, input);
+    expect(charges).toHaveLength(1);
+  });
+
+  it("does not charge for automatic generation (channel connect)", async () => {
+    const store = new InMemoryChannelStore();
+    const channel = await seedChannel(store);
+    const charges: unknown[] = [];
+    const deps: AvatarDeps = {
+      ...makeDeps(store, llmReturning(validAvatarJson)),
+      recordCredits: (record) => {
+        charges.push(record);
+        return Promise.resolve();
+      },
+    };
+    await runAvatarGeneration(deps, {
+      workspaceId,
+      channelId: channel.id,
+      regenerateAll: false,
+    });
+    expect(charges).toHaveLength(0);
+  });
+});
+
 describe("avatar pipeline (§5.2)", () => {
   it("writes a structured avatar to columns from an LLM JSON response", async () => {
     const store = new InMemoryChannelStore();

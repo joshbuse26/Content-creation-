@@ -11,12 +11,15 @@ import {
   type GeneratedAvatar,
 } from "@/lib/types/pipeline";
 import {
+  hashInput,
   InMemoryPipelineRunStore,
   PipelineRunner,
   type PipelineDefinition,
   type PipelineRunStore,
 } from "@/queue/pipeline-runner";
 import { DrizzlePipelineRunStore } from "@/queue/store";
+import { getEngineStore } from "@/pipelines/script/store";
+import type { CreditRecord } from "@/pipelines/script/store";
 import type { AvatarRepo, ChannelRepo } from "@/server/channel/repo";
 import { mergeGeneratedAvatar } from "./merge";
 import { buildAvatarPrompt, type AvatarPromptInput } from "./prompt";
@@ -48,6 +51,9 @@ export interface AvatarDeps {
   llm: LlmProvider;
   quota: QuotaTracker;
   runStore?: PipelineRunStore;
+  /** Ledger writer for charged (user-triggered) regenerations — defaults
+   *  to the shared EngineStore. Injectable for tests. */
+  recordCredits?: (record: CreditRecord) => Promise<void>;
   now?: () => Date;
 }
 
@@ -223,6 +229,23 @@ export async function runAvatarGeneration(
       "avatar generation failed",
     );
     throw new Error(`avatar generation failed at ${result.stage}: ${result.error}`);
+  }
+
+  // User-triggered regeneration: 1 credit on completion (spec §7) — never
+  // on failure, never twice (idempotent per input hash, same mechanism as
+  // the script/research/revision/titles charges), and not when every stage
+  // was resumed/skipped (no new work). Automatic generation on channel
+  // connect sets chargeCredits=false and is free.
+  if (input.chargeCredits === true && result.skippedStages.length !== AVATAR_STAGES.length) {
+    const record = deps.recordCredits ?? ((r: CreditRecord) => getEngineStore().recordCredits(r));
+    await record({
+      workspaceId: input.workspaceId,
+      delta: -1,
+      reason: "avatar_regen",
+      actorUserId: input.actorUserId ?? null,
+      projectId: null,
+      idempotencyKey: `avatar_regen:${hashInput(input)}`,
+    });
   }
 
   const written = ctx.written;

@@ -74,6 +74,11 @@ export const avatarJobInputSchema = z.object({
   channelId: channelIdSchema,
   /** true = overwrite user-edited fields too ("regenerate all"). */
   regenerateAll: z.boolean().default(false),
+  /** User-triggered regeneration: charge 1 credit on completion (spec §7).
+   *  Automatic generation (channel connect) leaves this unset. */
+  chargeCredits: z.boolean().optional(),
+  /** Who triggered the run — recorded on the credit ledger entry. */
+  actorUserId: z.string().nullable().optional(),
 });
 export type AvatarJobInput = z.infer<typeof avatarJobInputSchema>;
 
