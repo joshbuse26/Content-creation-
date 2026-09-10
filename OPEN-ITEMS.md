@@ -62,9 +62,15 @@ deferred, cut, or knowingly imperfect.
   dead code.
 - **Avatar prompt lives at `pipelines/avatar/prompt.ts`**, not `prompts/*`
   (spec §5 letter). Versioned + typed either way; move when convenient.
-- **`/channels` does not yet surface the `connectError` query flag** set by
-  the OAuth callback redirect (one banner to add in
-  `components/channels/*`).
+- ~~`/channels` does not yet surface the `connectError` query flag~~ —
+  done: `ChannelListScreen` renders a dismissible banner with per-code copy
+  and strips the flag from the URL.
+- **Golden-output title truncation artifact** — fixture title seeds embed
+  `projectTitle.slice(0, 40)` (`pipelines/script/fixture-content.ts`,
+  `buildTitles`), which chops mid-word ("what ac", "followin" in
+  `docs/golden-baseline.md`). Pipeline-owned, not a UI display bug — truncate
+  at a word boundary (or drop the cap) next time that file is touched.
+  Fixture-only cosmetic; live titles come from the LLM.
 - **Dashboard `tracking.actualViews` stays null** until the §5.12 read path
   (niche_videos ↔ projects.published_video_id join) is wired into
   `dashboardHandlers.tracking`; the nightly tracking sweep itself runs (A1).

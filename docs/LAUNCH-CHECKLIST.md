@@ -4,7 +4,7 @@ The code side is done and green. Each step below is human-only. Steps 1–4 get 
 
 ## 1. Push the repo (5 min)
 
-The repo on GitHub is `joshbuse26`'s "Content creation" (already connected to Railway project *content creation*). From wherever you extract `gin-rummy-repo.tar.gz` (or on the cloud session's copy once GitHub is connected to it):
+The repo on GitHub is `joshbuse26`'s "Content creation" (already connected to Railway project _content creation_). From wherever you extract `gin-rummy-repo.tar.gz` (or on the cloud session's copy once GitHub is connected to it):
 
 ```bash
 cd content-creation
@@ -27,22 +27,22 @@ The project needs TWO services from this one repo plus data stores:
 
 Set on BOTH web and worker unless noted:
 
-| Var | Value | Notes |
-|---|---|---|
-| `DATABASE_URL` | ref → Postgres service | Railway reference variable |
-| `REDIS_URL` | ref → Redis service | |
-| `AUTH_SECRET` | `openssl rand -base64 33` | web only; required to boot |
-| `CHANNEL_TOKEN_SECRET` | `openssl rand -base64 33` | encrypts YouTube refresh tokens |
-| `PROVIDERS` | `fixture` for first boot → `live` when keys are in | prod + fixture is allowed only with NODE_ENV unset to production... it isn't: **production requires `live`** once you flip; app fail-fasts on prod+fixture by design |
-| `NEXT_PUBLIC_FIXTURE_UI` | `1` only while PROVIDERS=fixture | web only, build-time |
-| `ANTHROPIC_API_KEY` | console.anthropic.com | required for live |
-| `RESEND_API_KEY` | resend.com | **required in production** — sign-in fails loudly without it |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | GCP OAuth client | login + channel connect |
-| `GOOGLE_API_KEY` | GCP, YouTube Data API v3 enabled | public channel mode |
-| `TRANSCRIPT_API_KEY` | Supadata (or compatible) | competitor/public transcripts |
-| `SEARCH_API_KEY` | Brave Search | research agent |
-| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | Stripe | checkout stub until live billing ships |
-| `SENTRY_DSN` | sentry.io | optional but do it |
+| Var                                           | Value                                              | Notes                                                                                                                                                                |
+| --------------------------------------------- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                | ref → Postgres service                             | Railway reference variable                                                                                                                                           |
+| `REDIS_URL`                                   | ref → Redis service                                |                                                                                                                                                                      |
+| `AUTH_SECRET`                                 | `openssl rand -base64 33`                          | web only; required to boot                                                                                                                                           |
+| `CHANNEL_TOKEN_SECRET`                        | `openssl rand -base64 33`                          | encrypts YouTube refresh tokens                                                                                                                                      |
+| `PROVIDERS`                                   | `fixture` for first boot → `live` when keys are in | prod + fixture is allowed only with NODE_ENV unset to production... it isn't: **production requires `live`** once you flip; app fail-fasts on prod+fixture by design |
+| `NEXT_PUBLIC_FIXTURE_UI`                      | `1` only while PROVIDERS=fixture                   | web only, build-time                                                                                                                                                 |
+| `ANTHROPIC_API_KEY`                           | console.anthropic.com                              | required for live                                                                                                                                                    |
+| `RESEND_API_KEY`                              | resend.com                                         | **required in production** — sign-in fails loudly without it                                                                                                         |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`   | GCP OAuth client                                   | login + channel connect                                                                                                                                              |
+| `GOOGLE_API_KEY`                              | GCP, YouTube Data API v3 enabled                   | public channel mode                                                                                                                                                  |
+| `TRANSCRIPT_API_KEY`                          | Supadata (or compatible)                           | competitor/public transcripts                                                                                                                                        |
+| `SEARCH_API_KEY`                              | Brave Search                                       | research agent                                                                                                                                                       |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | Stripe                                             | checkout stub until live billing ships                                                                                                                               |
+| `SENTRY_DSN`                                  | sentry.io                                          | optional but do it                                                                                                                                                   |
 
 After DB is up, run migrations + seed once (Railway shell on web service or locally against `DATABASE_URL`):
 `pnpm db:migrate && pnpm seed`

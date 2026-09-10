@@ -3,20 +3,21 @@
 > Generated 2026-09-10 via `PROVIDERS=fixture pnpm exec tsx scripts/golden-run.ts`. Fixture-mode output measures pipeline mechanics, not writing quality — regenerate with PROVIDERS=live once ANTHROPIC_API_KEY exists and score 1–5 per brief.
 
 golden-run: 3 briefs, providers=fixture
-  running budget-espresso…
-  running learn-piano-adult…
-  running meal-prep-myths…
+running budget-espresso…
+running learn-piano-adult…
+running meal-prep-myths…
+
 # Golden-set scoring sheet
 
 - Date: 2026-09-10T10:24:36.305Z
 - Providers: fixture · Prompt version: 2026-09-10.1
 - Scoring: 1 = unusable · 2 = heavy rewrite · 3 = usable with edits · 4 = light edits · 5 = shoot it as-is
 
-| Brief | Hook (style) | Words | Runtime | Gate | Flags | Wall clock | Score (1-5) |
-|---|---|---|---|---|---|---|---|
-| budget-espresso | There is one result in this test I still cannot fully explain. Budget … (open_loop) | 1849 | 12:20 | pass | 7 unsupported claim(s) | 0.1s |  |
-| learn-piano-adult | There is one result in this test I still cannot fully explain. Learnin… (open_loop) | 1542 | 10:17 | pass | 10 unsupported claim(s) | 0.0s |  |
-| meal-prep-myths | There is one result in this test I still cannot fully explain. Seven m… (open_loop) | 1248 | 8:19 | pass | 6 unsupported claim(s) | 0.0s |  |
+| Brief             | Hook (style)                                                                        | Words | Runtime | Gate | Flags                   | Wall clock | Score (1-5) |
+| ----------------- | ----------------------------------------------------------------------------------- | ----- | ------- | ---- | ----------------------- | ---------- | ----------- |
+| budget-espresso   | There is one result in this test I still cannot fully explain. Budget … (open_loop) | 1849  | 12:20   | pass | 7 unsupported claim(s)  | 0.1s       |             |
+| learn-piano-adult | There is one result in this test I still cannot fully explain. Learnin… (open_loop) | 1542  | 10:17   | pass | 10 unsupported claim(s) | 0.0s       |             |
+| meal-prep-myths   | There is one result in this test I still cannot fully explain. Seven m… (open_loop) | 1248  | 8:19    | pass | 6 unsupported claim(s)  | 0.0s       |             |
 
 ---
 
@@ -79,4 +80,3 @@ _(write here)_
 **Notes / score:**
 
 _(write here)_
-
