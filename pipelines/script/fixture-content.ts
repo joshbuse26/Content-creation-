@@ -157,22 +157,47 @@ export function synthOutline(context: ScriptContext): Outline {
       targetSeconds: seconds,
     });
   }
-  sections.push(
-    {
-      kind: "cta",
-      heading: "One ask",
-      purpose: "Convert the value just delivered into a subscribe.",
-      retentionNote: "Single ask tied to the result the viewer just saw.",
-      targetSeconds: ctaSeconds,
-    },
-    {
-      kind: "outro",
-      heading: "Wrap",
-      purpose: "Land the takeaway and bridge to the next video.",
-      retentionNote: "Bridge to a named follow-up question.",
-      targetSeconds: outroSeconds,
-    },
-  );
+  // CTA placement follows the card's ctaHabits (PRODUCT-CONTRACTS §1/§6):
+  // `timestamp_pct` cards get the CTA inserted at the section boundary
+  // closest to placementPct of total runtime (still directly after a
+  // chapter, so `after_payoff` semantics hold too); `end_only`/`after_payoff`
+  // and card-less scripts keep the legacy end position (last chapter → CTA →
+  // outro satisfies both).
+  const ctaSection: Outline["sections"][number] = {
+    kind: "cta",
+    heading: "One ask",
+    purpose: "Convert the value just delivered into a subscribe.",
+    retentionNote: "Single ask tied to the result the viewer just saw.",
+    targetSeconds: ctaSeconds,
+  };
+  const habits = context.styleCard?.ctaHabits ?? null;
+  if (habits !== null && habits.placement === "timestamp_pct" && habits.placementPct !== null) {
+    const targetBefore = (habits.placementPct / 100) * total;
+    let best = sections.length;
+    let bestDelta = Number.POSITIVE_INFINITY;
+    let cumulative = 0;
+    for (let i = 0; i < sections.length; i++) {
+      cumulative += sections[i]?.targetSeconds ?? 0;
+      // Only boundaries directly after a chapter — the CTA must follow a
+      // payoff beat, never interrupt hook/intro.
+      if (sections[i]?.kind !== "chapter") continue;
+      const delta = Math.abs(cumulative - targetBefore);
+      if (delta < bestDelta) {
+        bestDelta = delta;
+        best = i + 1;
+      }
+    }
+    sections.splice(best, 0, ctaSection);
+  } else {
+    sections.push(ctaSection);
+  }
+  sections.push({
+    kind: "outro",
+    heading: "Wrap",
+    purpose: "Land the takeaway and bridge to the next video.",
+    retentionNote: "Bridge to a named follow-up question.",
+    targetSeconds: outroSeconds,
+  });
   return { sections };
 }
 

@@ -9,6 +9,7 @@ import { asUserId, channelIdSchema, projectIdSchema, workspaceIdSchema } from "@
 import type { ScriptStreamEvent } from "@/lib/types/pipeline";
 import { runResearchPipeline } from "@/pipelines/research/pipeline";
 import { setEngineDepsForTests, type EngineDeps } from "@/pipelines/script/deps";
+import { setStageDepsForTests } from "@/pipelines/stages/deps";
 import { InProcessScriptEventBus } from "@/pipelines/script/events";
 import { runFramePipeline } from "@/pipelines/script/frames";
 import { runScriptPipeline } from "@/pipelines/script/pipeline";
@@ -152,9 +153,12 @@ async function runBrief(brief: GoldenBrief): Promise<GoldenBriefResult> {
     let scriptId;
     if (generation !== null) {
       const ctx: WorkspaceHandlerCtx = { userId: asUserId(FIXTURE_IDS.user), workspaceId };
-      // The stage handlers resolve deps through getEngineDeps(); point them
-      // at this brief's isolated store for the duration of the staged calls.
+      // The stage handlers resolve deps through getStageDeps() →
+      // getEngineDeps(); point the engine at this brief's isolated store and
+      // clear the stage-deps cache so it rebuilds around it (otherwise the
+      // first brief's store is captured for every later brief).
       setEngineDepsForTests(deps);
+      setStageDepsForTests(undefined);
       try {
         // topics SKIPPED — the brief IS the chosen topic.
         const { outline } = await scriptStagesImpl.outline({
@@ -192,6 +196,7 @@ async function runBrief(brief: GoldenBrief): Promise<GoldenBriefResult> {
         result.hookStyle = chosenHook?.style ?? "-";
       } finally {
         setEngineDepsForTests(undefined);
+        setStageDepsForTests(undefined);
       }
     } else {
       const script = await deps.store.createScript({
