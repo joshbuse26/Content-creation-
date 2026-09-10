@@ -39,7 +39,7 @@ export const thumbnailsImpl = {
       // Face photo upload is a follow-up slice — the frozen contract has no
       // face field, so the job always runs without a reference for now.
       faceImageKey: null,
-      actorUserId: ctx.userId as string,
+      actorUserId: ctx.userId,
     };
     await dispatchPipelineJob(QUEUE_NAMES.packaging, JOB_NAMES.thumbnails, payload, () =>
       handleThumbnailsJob(payload),

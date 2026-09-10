@@ -36,9 +36,9 @@ export interface ThumbnailPipelineDeps {
   storage: ObjectStorage;
   recordCredits(record: CreditRecord): Promise<void>;
   /** Injectable for tests; defaults to loadPackagingContext. */
-  loadContext?(workspaceId: string, projectId: string): Promise<PackagingContext>;
+  loadContext?: (workspaceId: string, projectId: string) => Promise<PackagingContext>;
   /** Injectable for tests; defaults to a timeout-guarded fetch. */
-  fetchBytes?(url: string): Promise<Uint8Array>;
+  fetchBytes?: (url: string) => Promise<Uint8Array>;
 }
 
 export interface ThumbnailPipelineParams {

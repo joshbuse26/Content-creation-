@@ -49,7 +49,13 @@ export async function GET(req: Request): Promise<Response> {
   const { workspaceId, conceptId } = parsed.data;
 
   try {
-    await assertAccess(asUserId(sessionUserId), workspaceId, "thumbnail", "read", getRoleResolver());
+    await assertAccess(
+      asUserId(sessionUserId),
+      workspaceId,
+      "thumbnail",
+      "read",
+      getRoleResolver(),
+    );
   } catch {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
