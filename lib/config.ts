@@ -103,6 +103,15 @@ const envSchema = z
         message: "AUTH_SECRET is required in production",
       });
     }
+    if (env.NODE_ENV === "production" && !isBuildPhase && env.RESEND_API_KEY === undefined) {
+      // Without Resend the email provider would fall back to logging magic
+      // links — a credential leak. Production must be able to send them.
+      ctx.addIssue({
+        code: "custom",
+        path: ["RESEND_API_KEY"],
+        message: "RESEND_API_KEY is required in production (magic links are never logged)",
+      });
+    }
   });
 
 export type AppConfig = z.infer<typeof envSchema>;

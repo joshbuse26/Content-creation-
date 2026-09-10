@@ -4,7 +4,7 @@ import type { EmailConfig } from "next-auth/providers";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { getConfig } from "@/lib/config";
 import { logger } from "@/lib/logger";
-import { PRODUCT_NAME } from "@/lib/branding";
+import { sendMagicLinkEmail } from "@/server/magic-link";
 import { getDb, hasDb, schema } from "@/db";
 
 /**
@@ -18,7 +18,7 @@ import { getDb, hasDb, schema } from "@/db";
  */
 
 function buildEmailProvider(): EmailConfig {
-  const { RESEND_API_KEY, EMAIL_FROM } = getConfig();
+  const { EMAIL_FROM } = getConfig();
   return {
     id: "email",
     type: "email",
@@ -27,27 +27,10 @@ function buildEmailProvider(): EmailConfig {
     maxAge: 24 * 60 * 60,
     options: {},
     async sendVerificationRequest({ identifier, url }) {
-      if (RESEND_API_KEY !== undefined) {
-        const res = await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${RESEND_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            from: EMAIL_FROM,
-            to: identifier,
-            subject: `Sign in to ${PRODUCT_NAME}`,
-            text: `Sign in to ${PRODUCT_NAME}:\n\n${url}\n\nThis link expires in 24 hours. If you did not request it, ignore this email.`,
-          }),
-        });
-        if (!res.ok) {
-          throw new Error(`Magic-link email failed with status ${res.status}`);
-        }
-        return;
-      }
-      // Dev transport: log the link. Identifier is intentionally not logged.
-      logger.info({ magicLink: url }, "DEV magic link (no RESEND_API_KEY set)");
+      // Delivery (Resend, or dev logging outside production) lives in
+      // server/magic-link.ts — production without RESEND_API_KEY fails
+      // loudly there instead of leaking the link into logs.
+      await sendMagicLinkEmail({ identifier, url });
     },
   };
 }

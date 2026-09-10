@@ -57,6 +57,12 @@ describe("config", () => {
     ).toBeTruthy();
   });
 
+  it("requires RESEND_API_KEY in production (magic links must be sent, not logged)", () => {
+    expect(() =>
+      parseEnv({ NODE_ENV: "production", AUTH_SECRET: "x".repeat(32), ...liveKeys }),
+    ).toThrow(/RESEND_API_KEY/);
+  });
+
   it("refuses PROVIDERS=fixture in production (fail-fast)", () => {
     expect(() => parseEnv({ NODE_ENV: "production", AUTH_SECRET: "x".repeat(32) })).toThrow(
       /PROVIDERS=fixture is not allowed/,
