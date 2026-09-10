@@ -82,6 +82,12 @@ reason for metered overage grants) and `CREDIT_COSTS.ideaBatch = 1` in `server/c
 B3's approved narrow-class migration 0003 added nullable Stripe billing columns on `workspaces`
 plus the `stripe_events` webhook-idempotency table.
 
+Wave C (C0 contracts pass, per docs/PRODUCT-CONTRACTS.md — see DECISIONS.md for the full list):
+StyleCard v2 (structured schema, migration 0005 transforms legacy cards), `archetypes` +
+`partners` tables, `generation_mode` enum + mode columns on projects/scripts, staged script
+procedures (`script.topics/outline/hooks/draft`) + `archetypes.list`, style-aware quality-gate
+extension (`styleGates`), `FEATURE_PARTNERED_NAMED` flag, and the named-creator copy-lint test.
+
 - `db/schema.ts` (+ `db/migrations/*`)
 - `lib/types/ids.ts` — branded ID types
 - `lib/types/enums.ts` — shared enums (feed both Zod and pgEnum)
@@ -142,8 +148,9 @@ worker/index.ts                       worker entrypoint: all queues wired, night
 db/                                   Drizzle schema + migrations           [FROZEN]
 lib/                                  config, authz, branded types, fixtures, providers, cache
 scripts/                              seed.ts (demo data) · golden-run.ts (quality eval)
-tests/                                498 tests: authz/tenancy, pipelines, exports, rate limits,
-                                      ideation, MCP, billing/webhooks, thumbnails, free tools…
+tests/                                544 tests: authz/tenancy, pipelines, exports, rate limits,
+                                      ideation, MCP, billing/webhooks, thumbnails, free tools,
+                                      style cards/gates, staged script stubs, copy-lint…
 ```
 
 ## Authorization
@@ -201,11 +208,12 @@ git push -u origin main
 CI (`.github/workflows/ci.yml`) runs typecheck, lint, format check, tests, build and
 `pnpm audit --audit-level=high` on every push/PR. Keep it green — no red code handed off.
 
-## Verification status (v1.1 integration handoff)
+## Verification status (wave-C C0 contracts handoff)
 
-`pnpm typecheck` ✓ · `pnpm lint` ✓ · `pnpm format:check` ✓ · `pnpm test` ✓ (498 tests) ·
-`pnpm build` ✓ · `pnpm audit --audit-level=high` ✓ · fixture-mode boot smoke ✓ (marketing +
-app pages incl. /ideas, /tools, /settings/api-keys; MCP `tools/list` with the fixture key;
-free-tool POST returns results).
+`pnpm typecheck` ✓ · `pnpm lint` ✓ · `pnpm format:check` ✓ · `pnpm test` ✓ (544 tests) ·
+`pnpm build` ✓ · migrations 0000–0005 + seed + legacy style-card transform verified against a
+live Postgres 16 · golden-run smoke ✓. (Previous v1.1 pass additionally verified
+`pnpm audit --audit-level=high` and the fixture-mode boot smoke — marketing + app pages, MCP
+`tools/list`, free-tool POST.)
 
 Remaining scope is tracked in `OPEN-ITEMS.md`; integration decisions in `DECISIONS.md`.

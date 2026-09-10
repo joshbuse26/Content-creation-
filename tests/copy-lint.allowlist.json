@@ -1,0 +1,5 @@
+{
+  "$comment": "Reviewed false positives for the named-creator copy-lint (tests/copy-lint.test.ts). Each entry is an EXACT matched substring the patterns may ignore. Add an entry only after confirming the phrase does not claim to sound/write like a real, named creator. partnerAllowlist entries additionally require FEATURE_PARTNERED_NAMED to be on and a signed partner license on file for that creator.",
+  "allowlist": [],
+  "partnerAllowlist": []
+}

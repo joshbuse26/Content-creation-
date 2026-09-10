@@ -217,3 +217,68 @@ sweep; daily ideas 06:00 America/New_York); packaging queue `thumbnails` → `ha
 and `.env.example`; `server/billing/checkout.ts` still reads them via its `priceEnvValue`
 accessor (`process.env`) — pointing it at `getConfig()` is a mechanical follow-up, left as-is to
 keep the billing files untouched in this pass.
+
+## 2026-09-10 — Wave C contracts pass (C0)
+
+**Frozen layers extended, not forked.** C0 is the wave-C contracts agent; the changes below ARE
+the approved frozen-layer deltas for the wave. Everything is additive except the StyleCard shape,
+which the wave-0 product contracts explicitly promote.
+
+**StyleCard v2 replaces the v1 blob** (`lib/types/entities.ts styleCardSchema`): structured
+`voice{pov,diction,rhythm}`, `tone{register,never}`, `pacing{wpmTarget,sectionSeconds,
+rehookSeconds}`, `hookPatterns[]` (frozen hook-technique enum + guidance, min 1),
+`ctaHabits{placement,placementPct,phrasingStyle,maxPerVideo}`, `bannedClaims[]` (machine-checkable
+enum `BANNED_CLAIM_TYPES`), `readingLevel{minGrade,maxGrade}`, `energy 1–5`, `exampleSnippets[]`
+(≤4; `TODO(seed-copy)` placeholders allowed), `thumbnailPresetId` (nullable). One shape for
+archetype and channel-learned cards; `voice_profiles.source` gained the value `"archetype"`.
+Migration `0005` transforms legacy rows in SQL; `lib/style-card.ts` is the in-memory twin
+(`upgradeLegacyStyleCard` / `parseStyleCard`) — keep the two mappings in sync. Catchphrases
+migrate into `exampleSnippets` (they are the creator's own words); taboos into `tone.never`.
+
+**Archetypes are a GLOBAL seeded table with slug PKs.** `archetypes` (id = one of the 12 frozen
+`ARCHETYPE_IDS` slugs, not a uuid) carries display name, pitch, StyleCard, structured
+`thumbnailPreset{compositionPatternId (from the existing 20-pattern library), maxOverlayWords,
+contrastRule, face, paletteTemperature}`, sort. `lib/archetypes.ts` is the single source of truth:
+`scripts/seed.ts` UPSERTS it (so card refinements reach existing DBs) and fixture mode serves it
+directly — `archetypes.list` is never empty, keyless included. Style-card values are authored
+generic archetype craft; `pitch` and `exampleSnippets` stay `TODO(seed-copy)` until Josh's copy
+pipeline delivers. No real creator's name/catchphrase/wording anywhere, enforced by review + the
+copy-lint test.
+
+**Modes ship as schema + guard, feature-gated.** `generation_mode` pgEnum
+(archetype/crossover/partnered_named/train_on_my_channel); projects AND scripts carry nullable
+`generation_mode`, `archetype_id`, `crossover jsonb {a,b,weightA}` (weightB = 1−weightA),
+`partner_id` — null means the legacy voice-profile flow, and DB CHECKs force the matching
+reference per mode. `partners` table stub reuses the licensed-voice constraint pattern
+(`enabled ⇒ both license fields non-null`). `FEATURE_PARTNERED_NAMED` (lib/config, default false)
+is enforced in `server/modes.ts` (`assertGenerationTargetAllowed`) — the ONE shared guard every
+dispatch site calls; `train_on_my_channel` is enum-only and always rejected this wave.
+
+**Script pipeline split into staged metered procedures** (`script.topics` 1cr, `script.outline`
+1cr, `script.hooks` 1cr, `script.draft` 4cr) with `CREDIT_COSTS` entries; outline+hooks+draft sum
+to the composite `scriptGeneration` (6) — a unit test pins that identity. `script.generate`
+keeps its frozen signature (plus additive `generation` param) and is CONTRACTED to become an
+orchestrator over the stages (C1); it may not bypass stage metering. Wave-C bodies are
+deterministic fixture-grade stubs in `server/routers/impl/script-stages.ts`: real credit gate at
+dispatch, one itemized ledger entry per stage (reason `script_generation` — the frozen enum has
+no per-stage members), contract-validated outputs, working end-to-end keyless. Stage charges in
+the stubs are synchronous-completion charges; C1 brings input-hash idempotency keys with the
+resumable pipeline.
+
+**Style-aware golden gates: types now, trivial checks now, LLM-adjacent checks C1.**
+`qualityGateReportSchema` gained `styleGates` (nullable, default null so old reports parse):
+bannedClaims scan (HARD FAIL) and CTA placement are implemented in `lib/style-gates.ts` (pure
+code, conservative high-precision regexes per claim type) and wired into
+`pipelines/script/quality-gate.ts`; `hookPatternOk` and per-card `readingLevel` are typed but
+null until C1 threads the chosen hook technique + per-card readability through (the per-card
+band then REPLACES the global Flesch ≥ 60 where a card is present).
+
+**Copy-lint guardrail is a test, with a reviewed allowlist.** `tests/copy-lint.test.ts` scans
+`app/(marketing)/**` + `components/**` for named-creator claim patterns ("sounds (exactly) like
+<ProperNoun>", "write(s) like <ProperNoun>", "in <ProperNoun>'s voice"); exact-match allowlist
+in `tests/copy-lint.allowlist.json` (empty today — current copy is clean), with a separate
+`partnerAllowlist` that only counts when `FEATURE_PARTNERED_NAMED=true`.
+
+**Migration 0005 verified against a live Postgres 16**: full migrate from zero, seed (12
+archetypes upserted), legacy style-card transform (only legacy rows touched), mode CHECKs and the
+partner license CHECK all exercised.

@@ -125,3 +125,48 @@ follows is deferred, cut, or knowingly imperfect.
 - S3-compatible bucket (Railway Storage Bucket / R2): set the `S3_*` quartet
   on BOTH web and worker — thumbnails persist to it now; without it the
   in-memory fallback logs a warning and images don't survive restarts.
+
+## Wave C contracts pass (C0, 2026-09-10) — handoff to C1/C2/C3
+
+- **C1 (staged pipeline)** replaces the stub bodies in
+  `server/routers/impl/script-stages.ts` with the real Grok-backed staged
+  pipeline: resumable stages, SSE section-streaming for `draft`,
+  idempotency-keyed completion charges (stubs charge synchronously with no
+  key), crossover style-card MERGE rules (stub picks the heavier archetype),
+  partner resolution for `partnered_named` (guard + flag already enforced in
+  `server/modes.ts`), channel-ownership validation + niche data in `topics`,
+  and the `script.generate` orchestrator over outline+hooks+draft (itemized
+  1+1+4; `CREDIT_COSTS.scriptGeneration` must stay the sum). C1 also fills
+  the two null style gates: `hookPatternOk` (chosen hook's technique ∈
+  card.hookPatterns) and per-card `readingLevel` — which then REPLACES the
+  global Flesch ≥ 60 gate whenever a card is present
+  (`pipelines/script/quality-gate.ts` documents the seam).
+- **C2 (frontend)** reads `archetypes.list` (12 rows, keyless-safe), sends
+  `generation` on script procedures (`generationTargetSchema` — per-mode
+  required refs are schema-enforced), hides `partnered_named` while
+  `FEATURE_PARTNERED_NAMED` is off and `train_on_my_channel` always (v1),
+  and renders `qualityReport.styleGates` (null = no card; null sub-fields =
+  "not evaluated", never "passed").
+- **C3 (thumbnails/golden/guardrails)** consumes
+  `archetype.thumbnailPreset` (compositionPatternId from the frozen
+  20-pattern library + maxOverlayWords/contrastRule/face/
+  paletteTemperature) in the image-prompt builder, extends the golden run's
+  scoring sheet with per-gate style columns (report shape is frozen in
+  `styleGateReportSchema`), and owns the adversarial pass over stage
+  metering/tenancy/modes.
+- **Per-stage credit reasons** — stages ledger under reason
+  `script_generation` (one entry per stage). If per-stage reasons are ever
+  wanted in the ledger UI, that is an `ALTER TYPE credit_reason ADD VALUE`
+  class change; the itemization already exists via separate entries.
+- **Seed copy** — `TODO(seed-copy)` markers in `lib/archetypes.ts`
+  (`pitch`, `exampleSnippets`) await original passages from Josh's content
+  pipeline; replace and delete the marker (tests assert the markers exist
+  today — update `tests/c0-style-card.test.ts` when real copy lands).
+  Never paste a real creator's words.
+- **Copy-lint allowlist** — `tests/copy-lint.allowlist.json` is empty;
+  marketing copy added by C2 must keep `tests/copy-lint.test.ts` green
+  (reviewed false positives go in `allowlist`; partner claims additionally
+  require the flag + `partnerAllowlist`).
+- **Partners table has no routers** — deliberately. Creating partner rows
+  (and any enable flow) is out of scope until the partnered launch; the DB
+  CHECK already blocks enabling without signed license fields.
