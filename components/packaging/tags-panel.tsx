@@ -90,7 +90,10 @@ export function TagsPanel() {
       </div>
 
       {tagSet === null ? (
-        <EmptyState title="No tags yet" />
+        <EmptyState
+          title="No tags yet"
+          hint="Generate a set from the script and your niche keywords, then prune or add by hand."
+        />
       ) : (
         <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
           <div className="flex flex-wrap gap-1.5">
@@ -103,7 +106,7 @@ export function TagsPanel() {
                 <button
                   type="button"
                   aria-label={`Remove tag ${tag}`}
-                  className="cursor-pointer rounded-full p-0.5 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+                  className="cursor-pointer rounded-full p-0.5 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
                   onClick={() => {
                     save(tagSet.tags.filter((t) => t !== tag));
                   }}

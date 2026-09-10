@@ -186,6 +186,7 @@ export function EditorScreen() {
   if (versionsQuery.isError) {
     return (
       <ErrorState
+        message="Couldn't load this project's script versions — retry in a moment."
         onRetry={() => {
           void versionsQuery.refetch();
         }}
@@ -322,7 +323,7 @@ export function EditorScreen() {
                   }}
                 >
                   <span>Version {v.version}</span>
-                  <span className="ml-auto text-[11px] text-zinc-400">
+                  <span className="ml-auto text-[11px] text-zinc-500 dark:text-zinc-400">
                     {v.status} · {fmtDate(v.updatedAt)}
                   </span>
                 </DropdownItem>
@@ -399,6 +400,13 @@ export function EditorScreen() {
         <div className="space-y-3">
           {revisionsQuery.isLoading ? (
             <LoadingState label="Loading suggestions…" />
+          ) : revisionsQuery.isError ? (
+            <ErrorState
+              message="Couldn't load the revision suggestions — retry in a moment."
+              onRetry={() => {
+                void revisionsQuery.refetch();
+              }}
+            />
           ) : revisions.length === 0 ? (
             <EmptyState
               title="No revision suggestions"
@@ -496,7 +504,7 @@ export function EditorScreen() {
                       }}
                     />
                   ) : (
-                    <p className="mb-3 text-xs text-zinc-400 dark:text-zinc-500">
+                    <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
                       Hook candidates unavailable for this script — they are captured during
                       generation and will appear after the next run.
                     </p>
@@ -505,7 +513,7 @@ export function EditorScreen() {
               }
             />
           ))}
-          <p className="pt-1 text-xs text-zinc-400 dark:text-zinc-500">
+          <p className="pt-1 text-xs text-zinc-500 dark:text-zinc-400">
             Locked sections are skipped by regeneration. Alt+↑/↓ reorders the focused section.{" "}
             <Badge tone="neutral">Tip</Badge> Cmd/Ctrl+Enter saves while editing.
           </p>

@@ -137,7 +137,10 @@ export function ThumbsPanel() {
       />
 
       {concepts.length === 0 ? (
-        <EmptyState title="No thumbnail briefs yet" />
+        <EmptyState
+          title="No thumbnail briefs yet"
+          hint="Pick a composition pattern, describe the subject, and draft a brief to hand your designer."
+        />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {concepts.map((c) => (

@@ -44,6 +44,7 @@ export function DescriptionsPanel() {
     onSuccess: () => {
       setDraft(null);
       invalidate();
+      toast("Description saved.", "success");
     },
     onError: () => {
       toast("Could not save the description — your draft is still in the editor.");
@@ -93,6 +94,7 @@ export function DescriptionsPanel() {
       ) : (
         <div className="space-y-3">
           <TextArea
+            aria-label={`${modeLabels[mode]} description`}
             className="min-h-56 font-mono text-[13px]"
             value={body}
             onChange={(e) => {

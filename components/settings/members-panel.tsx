@@ -57,6 +57,7 @@ export function MembersPanel() {
   if (membersQuery.isError) {
     return (
       <ErrorState
+        message="Couldn't load the member list — retry in a moment."
         onRetry={() => {
           void membersQuery.refetch();
         }}
@@ -159,7 +160,9 @@ export function MembersPanel() {
             <IconPlus size={13} /> Invite
           </Button>
           {inviteMutation.isError ? (
-            <p className="w-full text-xs text-red-600 dark:text-red-400">Invite failed.</p>
+            <p className="w-full text-xs text-red-600 dark:text-red-400">
+              Could not send the invite — check the address and try again.
+            </p>
           ) : null}
           {inviteMutation.isSuccess ? (
             <p className="w-full text-xs text-emerald-700 dark:text-emerald-400">
@@ -168,7 +171,9 @@ export function MembersPanel() {
           ) : null}
         </form>
       ) : (
-        <p className="text-xs text-zinc-400">Admins and owners manage members.</p>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          Only admins and owners can invite or manage members.
+        </p>
       )}
     </div>
   );

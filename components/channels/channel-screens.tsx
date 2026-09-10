@@ -33,7 +33,7 @@ const CONNECT_ERROR_COPY: Record<string, string> = {
 };
 
 export function ChannelListScreen() {
-  const { workspaceId, channels } = useWorkspace();
+  const { workspaceId, channels, channelsLoading, channelsError, refetchChannels } = useWorkspace();
   const utils = trpc.useUtils();
   const { toast } = useToast();
   const router = useRouter();
@@ -98,7 +98,14 @@ export function ChannelListScreen() {
           working="Sync queued — stats refresh when the pipeline finishes."
         />
       </div>
-      {channels.length === 0 ? (
+      {channelsLoading ? (
+        <LoadingState label="Loading channels…" />
+      ) : channelsError ? (
+        <ErrorState
+          message="Couldn't load your channels — check your connection and retry."
+          onRetry={refetchChannels}
+        />
+      ) : channels.length === 0 ? (
         <EmptyState
           title="No channels connected"
           hint="Connect your channel with Google, or track any public channel by URL."
@@ -160,7 +167,10 @@ export function ChannelDetailScreen({ channelId }: { channelId: ChannelId }) {
     },
   });
   const nicheMutation = trpc.channel.updateNiche.useMutation({
-    onSuccess: invalidateChannel,
+    onSuccess: () => {
+      invalidateChannel();
+      toast("Niche keywords saved — research and titles will use them.", "success");
+    },
     onError: () => {
       invalidateChannel();
       toast("Could not save the niche keywords — they were not changed.");
@@ -176,6 +186,7 @@ export function ChannelDetailScreen({ channelId }: { channelId: ChannelId }) {
   if (channelQuery.isError || channelQuery.data === undefined) {
     return (
       <ErrorState
+        message="Couldn't load this channel — it may have been disconnected, or the connection dropped."
         onRetry={() => {
           void channelQuery.refetch();
         }}
@@ -259,6 +270,8 @@ export function ChannelDetailScreen({ channelId }: { channelId: ChannelId }) {
             >
               <TextInput
                 autoFocus
+                aria-label="Niche keywords, comma-separated"
+                placeholder="e.g. home espresso, coffee gear"
                 value={nicheDraft}
                 onChange={(e) => {
                   setNicheDraft(e.target.value);
@@ -269,7 +282,9 @@ export function ChannelDetailScreen({ channelId }: { channelId: ChannelId }) {
               </Button>
             </form>
           ) : channel.nicheKeywords.length === 0 ? (
-            <p className="text-sm text-zinc-400 italic">No keywords yet.</p>
+            <p className="text-sm text-zinc-500 italic dark:text-zinc-400">
+              No keywords yet — add up to six to steer research and title patterns.
+            </p>
           ) : (
             <div className="flex flex-wrap gap-1.5">
               {channel.nicheKeywords.map((k) => (

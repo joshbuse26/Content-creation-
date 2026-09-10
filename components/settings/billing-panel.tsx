@@ -27,6 +27,7 @@ export function BillingPanel() {
   if (summaryQuery.isError || summaryQuery.data === undefined) {
     return (
       <ErrorState
+        message="Couldn't load your billing summary — retry in a moment."
         onRetry={() => {
           void summaryQuery.refetch();
         }}
@@ -86,7 +87,9 @@ export function BillingPanel() {
         <CardHeader title="Recent credit activity" />
         <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
           {ledger.length === 0 ? (
-            <li className="px-4 py-6 text-center text-sm text-zinc-400">No activity yet.</li>
+            <li className="px-4 py-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
+              No credit activity yet — charges and grants appear here as you generate.
+            </li>
           ) : (
             ledger.map((entry) => (
               <li key={entry.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
@@ -96,7 +99,9 @@ export function BillingPanel() {
                 <span className="flex-1 text-zinc-700 dark:text-zinc-300">
                   {entry.reason.replace(/_/g, " ")}
                 </span>
-                <span className="text-xs text-zinc-400">{fmtDateTime(entry.createdAt)}</span>
+                <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                  {fmtDateTime(entry.createdAt)}
+                </span>
               </li>
             ))
           )}

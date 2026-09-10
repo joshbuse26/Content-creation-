@@ -13,6 +13,7 @@ import { TextInput, Label } from "@/components/ui/field";
 import { IconDoc, IconLink, IconSearch, IconTrash, IconUpload } from "@/components/ui/icons";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
 import { PipelineStatusNote } from "@/components/ui/pipeline-note";
+import { useToast } from "@/components/ui/toast";
 import { fmtDateTime, fmtNumber } from "@/components/lib/format";
 import { usePipelinePoll } from "@/components/lib/use-pipeline-poll";
 
@@ -24,6 +25,7 @@ export function ResearchPanel() {
   const { workspaceId } = useWorkspace();
   const projectId = useProjectId();
   const utils = trpc.useUtils();
+  const { toast } = useToast();
 
   const listQuery = trpc.research.list.useQuery(
     workspaceId !== null ? { workspaceId, projectId } : skipToken,
@@ -45,7 +47,12 @@ export function ResearchPanel() {
   });
   const transcriptMutation = trpc.research.importTranscript.useMutation({ onSuccess: invalidate });
   const uploadMutation = trpc.research.upload.useMutation({ onSuccess: invalidate });
-  const removeMutation = trpc.research.remove.useMutation({ onSuccess: invalidate });
+  const removeMutation = trpc.research.remove.useMutation({
+    onSuccess: invalidate,
+    onError: () => {
+      toast("Could not remove the source — it is still in the list.");
+    },
+  });
 
   const [query, setQuery] = useState("");
   const [transcriptUrl, setTranscriptUrl] = useState("");
@@ -212,6 +219,7 @@ export function ResearchPanel() {
           <LoadingState label="Loading sources…" />
         ) : listQuery.isError ? (
           <ErrorState
+            message="Couldn't load your sources — check your connection and retry."
             onRetry={() => {
               void listQuery.refetch();
             }}
@@ -265,7 +273,7 @@ export function ResearchPanel() {
             ))}
           </ul>
         )}
-        <p className="mt-3 text-xs text-zinc-400 dark:text-zinc-500">
+        <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
           Done gathering?{" "}
           <Link
             href={`/projects/${projectId}/framing`}

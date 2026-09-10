@@ -7,6 +7,7 @@ import { skipToken } from "@tanstack/react-query";
 import type { ProjectId } from "@/lib/types/ids";
 import { trpc } from "@/components/providers/trpc";
 import { useWorkspace } from "@/components/providers/workspace-context";
+import { ErrorState } from "@/components/ui/state";
 import { ProjectStatusBadge } from "./status-badge";
 
 const stageTabs = [
@@ -38,15 +39,28 @@ export function ProjectFrame({ children }: { children: ReactNode }) {
       <div className="mb-1 text-xs">
         <Link
           href="/projects"
-          className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+          className="text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
         >
           Projects
         </Link>
         <span className="mx-1 text-zinc-300 dark:text-zinc-600">/</span>
       </div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-semibold tracking-tight">{project?.title ?? "…"}</h1>
-        {project !== undefined ? <ProjectStatusBadge status={project.status} /> : null}
+        {project !== undefined ? (
+          <>
+            <h1 className="text-xl font-semibold tracking-tight">{project.title}</h1>
+            <ProjectStatusBadge status={project.status} />
+          </>
+        ) : projectQuery.isError ? (
+          <h1 className="text-xl font-semibold tracking-tight text-zinc-500 dark:text-zinc-400">
+            Project unavailable
+          </h1>
+        ) : (
+          <span
+            aria-hidden="true"
+            className="h-6 w-56 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800"
+          />
+        )}
       </div>
       <nav className="mb-6 flex flex-wrap items-center gap-1 border-b border-zinc-200 dark:border-zinc-800">
         {stageTabs.map((tab) => {
@@ -68,7 +82,16 @@ export function ProjectFrame({ children }: { children: ReactNode }) {
           );
         })}
       </nav>
-      {children}
+      {projectQuery.isError ? (
+        <ErrorState
+          message="Couldn't load this project — it may have been deleted, or the connection dropped."
+          onRetry={() => {
+            void projectQuery.refetch();
+          }}
+        />
+      ) : (
+        children
+      )}
     </div>
   );
 }

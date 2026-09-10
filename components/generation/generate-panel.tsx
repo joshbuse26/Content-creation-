@@ -71,6 +71,7 @@ export function GeneratePanel() {
   if (framesQuery.isError) {
     return (
       <ErrorState
+        message="Couldn't load the chosen frame — the script engine needs it to start."
         onRetry={() => {
           void framesQuery.refetch();
         }}
@@ -153,7 +154,7 @@ export function GeneratePanel() {
         </p>
       ) : null}
       {simulated ? (
-        <p className="text-xs text-zinc-400 dark:text-zinc-500">
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
           Fixture replay — live stream endpoint not available in this environment.
         </p>
       ) : null}
@@ -258,7 +259,7 @@ export function GeneratePanel() {
                   <div className="mb-1.5 flex items-center gap-2">
                     <Badge tone="neutral">{s.kind}</Badge>
                     <h3 className="text-sm font-semibold">{s.heading}</h3>
-                    <span className="ml-auto text-xs text-zinc-400 tabular-nums">
+                    <span className="ml-auto text-xs text-zinc-500 tabular-nums dark:text-zinc-400">
                       ~{fmtDuration(s.estSeconds)}
                     </span>
                   </div>
@@ -332,7 +333,7 @@ function StageRow({ index, label, status }: { index: number; label: string; stat
             ? "text-zinc-700 dark:text-zinc-300"
             : status === "failed"
               ? "text-red-700 dark:text-red-400"
-              : "text-zinc-400 dark:text-zinc-500"
+              : "text-zinc-500 dark:text-zinc-400"
       }`}
     >
       <span className="flex h-4.5 w-4.5 shrink-0 items-center justify-center">

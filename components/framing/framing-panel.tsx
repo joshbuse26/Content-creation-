@@ -56,6 +56,7 @@ export function FramingPanel() {
   if (listQuery.isError) {
     return (
       <ErrorState
+        message="Couldn't load the frames for this project — retry in a moment."
         onRetry={() => {
           void listQuery.refetch();
         }}
@@ -295,7 +296,9 @@ function FrameForm({ frame, onSaved }: { frame: Frame; onSaved: () => void }) {
           Save frame
         </Button>
         {updateMutation.isError ? (
-          <p className="text-xs text-red-600 dark:text-red-400">Save failed.</p>
+          <p className="text-xs text-red-600 dark:text-red-400">
+            Could not save the frame — your edits are still here, try again.
+          </p>
         ) : null}
       </div>
     </form>

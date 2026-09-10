@@ -41,6 +41,7 @@ export function ChaptersPanel() {
     onSuccess: () => {
       setDraft(null);
       invalidate();
+      toast("Chapters saved.", "success");
     },
     onError: () => {
       toast("Could not save the chapters — your edits are still in the editor.");

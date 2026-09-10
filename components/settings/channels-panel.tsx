@@ -7,14 +7,15 @@ import { ConnectChannel } from "@/components/channels/connect-channel";
 import { SyncStatusBadge } from "@/components/projects/status-badge";
 import { Button } from "@/components/ui/button";
 import { IconRefresh, IconTrash } from "@/components/ui/icons";
-import { LoadingState } from "@/components/ui/state";
+import { ErrorState, LoadingState } from "@/components/ui/state";
 import { PipelineStatusNote } from "@/components/ui/pipeline-note";
 import { useToast } from "@/components/ui/toast";
 import { fmtDateTime } from "@/components/lib/format";
 import { usePipelinePoll } from "@/components/lib/use-pipeline-poll";
 
 export function ChannelsSettingsPanel() {
-  const { workspaceId, channels, selectChannel } = useWorkspace();
+  const { workspaceId, channels, channelsLoading, channelsError, refetchChannels, selectChannel } =
+    useWorkspace();
   const utils = trpc.useUtils();
   const { toast } = useToast();
   const invalidate = () => {
@@ -41,7 +42,15 @@ export function ChannelsSettingsPanel() {
     },
   });
 
-  if (workspaceId === null) return <LoadingState />;
+  if (workspaceId === null || channelsLoading) return <LoadingState label="Loading channels…" />;
+  if (channelsError) {
+    return (
+      <ErrorState
+        message="Couldn't load your channels — check your connection and retry."
+        onRetry={refetchChannels}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -51,7 +60,9 @@ export function ChannelsSettingsPanel() {
       />
       <ul className="divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200 bg-white dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">
         {channels.length === 0 ? (
-          <li className="px-4 py-6 text-center text-sm text-zinc-400">No channels connected.</li>
+          <li className="px-4 py-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
+            No channels connected yet — add one below to unlock research and avatars.
+          </li>
         ) : (
           channels.map((c) => (
             <li key={c.id} className="flex items-center gap-3 px-4 py-3">

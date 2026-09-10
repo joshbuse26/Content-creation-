@@ -47,6 +47,9 @@ export interface WorkspaceContextValue {
   workspace: (Workspace & { role: Role }) | null;
   selectWorkspace: (id: WorkspaceId) => void;
   channels: Channel[];
+  channelsLoading: boolean;
+  channelsError: boolean;
+  refetchChannels: () => void;
   /** null = "all channels". */
   channelId: ChannelId | null;
   channel: Channel | null;
@@ -127,6 +130,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         writeStored(CH_KEY, null);
       },
       channels,
+      channelsLoading: workspaceId !== null && channelsQuery.isLoading,
+      channelsError: channelsQuery.isError,
+      refetchChannels: () => {
+        void channelsQuery.refetch();
+      },
       channelId: channel?.id ?? null,
       channel,
       selectChannel: (id) => {
@@ -142,6 +150,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       workspaceId,
       workspace,
       channels,
+      channelsQuery.isLoading,
+      channelsQuery.isError,
+      channelsQuery.refetch,
       channel,
     ],
   );

@@ -16,7 +16,7 @@ import { fmtDate } from "@/components/lib/format";
 import { ProjectStatusBadge } from "./status-badge";
 
 export function ProjectListScreen() {
-  const { workspaceId, channelId, channels } = useWorkspace();
+  const { workspaceId, channelId, channels, channelsLoading } = useWorkspace();
   const router = useRouter();
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | "all">("all");
   const [creating, setCreating] = useState(false);
@@ -67,7 +67,12 @@ export function ProjectListScreen() {
         }
       />
 
-      {creating && channels.length === 0 ? (
+      {creating && channelsLoading ? (
+        <div className="mb-6">
+          <LoadingState label="Loading channels…" />
+        </div>
+      ) : null}
+      {creating && !channelsLoading && channels.length === 0 ? (
         <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
           Every project belongs to a channel — connect a channel first.{" "}
           <Link
@@ -156,6 +161,7 @@ export function ProjectListScreen() {
         <LoadingState label="Loading projects…" />
       ) : listQuery.isError ? (
         <ErrorState
+          message="Couldn't load your projects — check your connection and retry."
           onRetry={() => {
             void listQuery.refetch();
           }}
@@ -195,7 +201,7 @@ export function ProjectListScreen() {
                     </p>
                   </div>
                   <ProjectStatusBadge status={p.status} />
-                  <span className="w-24 text-right text-xs text-zinc-400">
+                  <span className="w-24 text-right text-xs text-zinc-500 dark:text-zinc-400">
                     {fmtDate(p.updatedAt)}
                   </span>
                 </Link>
