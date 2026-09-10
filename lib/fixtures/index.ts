@@ -377,7 +377,8 @@ export const fixtureRevision = revisionSchema.parse({
     },
   ],
   status: "pending",
-  rationale: "The current order buries the credibility signal; scorers should appear before the format.",
+  rationale:
+    "The current order buries the credibility signal; scorers should appear before the format.",
   ...stamps,
 });
 
@@ -387,9 +388,17 @@ export const fixtureTitleSet = titleSetSchema.parse({
   projectId: FIXTURE_IDS.project,
   options: [
     { text: "$200 Espresso vs My $2,000 Rig (Blind Test)", patternFamily: "versus", score: 91 },
-    { text: "The Cheap Espresso Setup That Fooled Everyone", patternFamily: "curiosity_gap", score: 88 },
+    {
+      text: "The Cheap Espresso Setup That Fooled Everyone",
+      patternFamily: "curiosity_gap",
+      score: 88,
+    },
     { text: "I Blind-Tested Budget Espresso. It Got Awkward.", patternFamily: "stakes", score: 84 },
-    { text: "Stop Overspending on Espresso — Test Results Inside", patternFamily: "negative_command", score: 79 },
+    {
+      text: "Stop Overspending on Espresso — Test Results Inside",
+      patternFamily: "negative_command",
+      score: 79,
+    },
     { text: "Where Your Espresso Money Actually Goes", patternFamily: "explainer", score: 74 },
   ],
   ...stamps,

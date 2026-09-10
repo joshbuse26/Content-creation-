@@ -81,12 +81,20 @@ describe("assertAccess", () => {
   });
 
   it("non-member and no-permission errors are indistinguishable", async () => {
-    const nonMember = await assertAccess(USER, OTHER_WS, "project", "read", resolverFor("owner")).catch(
-      (e: unknown) => e,
-    );
-    const noPermission = await assertAccess(USER, WS, "billing", "update", resolverFor("viewer")).catch(
-      (e: unknown) => e,
-    );
+    const nonMember = await assertAccess(
+      USER,
+      OTHER_WS,
+      "project",
+      "read",
+      resolverFor("owner"),
+    ).catch((e: unknown) => e);
+    const noPermission = await assertAccess(
+      USER,
+      WS,
+      "billing",
+      "update",
+      resolverFor("viewer"),
+    ).catch((e: unknown) => e);
     expect((nonMember as TRPCError).message).toBe((noPermission as TRPCError).message);
     expect((nonMember as TRPCError).code).toBe((noPermission as TRPCError).code);
   });

@@ -61,7 +61,12 @@ describe("fixture providers", () => {
 
   it("image provider returns the requested number of deterministic images", async () => {
     const { image } = createFixtureProviders();
-    const images = await image.generate({ prompt: "thumbnail", width: 1280, height: 720, count: 3 });
+    const images = await image.generate({
+      prompt: "thumbnail",
+      width: 1280,
+      height: 720,
+      count: 3,
+    });
     expect(images).toHaveLength(3);
     expect(images[0]?.base64Png).toBeTruthy();
     expect(images[0]?.url).toBeNull();

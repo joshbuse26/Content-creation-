@@ -76,7 +76,9 @@ export interface PipelineRunnerOptions {
 }
 
 export function hashInput(input: unknown): string {
-  return createHash("sha256").update(JSON.stringify(input ?? null)).digest("hex");
+  return createHash("sha256")
+    .update(JSON.stringify(input ?? null))
+    .digest("hex");
 }
 
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -117,7 +119,15 @@ export class PipelineRunner {
         continue;
       }
 
-      const record = existing ?? (await this.store.create({ ...key, status: "queued", attempt: 0, error: null, creditsCharged: 0 }));
+      const record =
+        existing ??
+        (await this.store.create({
+          ...key,
+          status: "queued",
+          attempt: 0,
+          error: null,
+          creditsCharged: 0,
+        }));
 
       const outcome = await this.runStageWithRetries(stage, params.input, record);
       if (outcome !== null) {

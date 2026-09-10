@@ -78,16 +78,18 @@ export const avatarJobInputSchema = z.object({
 export type AvatarJobInput = z.infer<typeof avatarJobInputSchema>;
 
 /** The LLM's structured avatar output — parsed before writing columns. */
-export const generatedAvatarSchema = audienceAvatarSchema.pick({
-  ageRange: true,
-  genderSplit: true,
-  geo: true,
-  sophistication: true,
-  vocabularyNotes: true,
-}).extend({
-  pains: z.array(avatarPainSchema).min(1).max(10),
-  motivations: z.array(avatarMotivationSchema).min(1).max(10),
-});
+export const generatedAvatarSchema = audienceAvatarSchema
+  .pick({
+    ageRange: true,
+    genderSplit: true,
+    geo: true,
+    sophistication: true,
+    vocabularyNotes: true,
+  })
+  .extend({
+    pains: z.array(avatarPainSchema).min(1).max(10),
+    motivations: z.array(avatarMotivationSchema).min(1).max(10),
+  });
 export type GeneratedAvatar = z.infer<typeof generatedAvatarSchema>;
 
 // ---------------------------------------------------------------------------
@@ -308,7 +310,11 @@ export const scriptStreamEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("stage_started"), stage: z.enum(SCRIPT_STAGES) }),
   z.object({ type: z.literal("stage_done"), stage: z.enum(SCRIPT_STAGES) }),
   z.object({ type: z.literal("outline"), outline: outlineSchema }),
-  z.object({ type: z.literal("section"), section: draftedSectionSchema, position: z.number().int() }),
+  z.object({
+    type: z.literal("section"),
+    section: draftedSectionSchema,
+    position: z.number().int(),
+  }),
   z.object({ type: z.literal("hooks"), candidates: z.array(hookCandidateSchema) }),
   z.object({ type: z.literal("quality_report"), report: qualityGateReportSchema }),
   z.object({ type: z.literal("failed"), stage: z.enum(SCRIPT_STAGES), message: z.string() }),

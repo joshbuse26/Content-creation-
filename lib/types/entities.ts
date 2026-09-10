@@ -157,9 +157,12 @@ export const voiceProfileSchema = z
     licenseSignedAt: z.date().nullable(),
     ...timestamps,
   })
-  .refine((v) => v.source !== "licensed" || (v.licenseDocUrl !== null && v.licenseSignedAt !== null), {
-    message: "licensed voices require licenseDocUrl and licenseSignedAt",
-  });
+  .refine(
+    (v) => v.source !== "licensed" || (v.licenseDocUrl !== null && v.licenseSignedAt !== null),
+    {
+      message: "licensed voices require licenseDocUrl and licenseSignedAt",
+    },
+  );
 export type VoiceProfile = z.infer<typeof voiceProfileSchema>;
 
 export const nicheVideoSchema = z.object({

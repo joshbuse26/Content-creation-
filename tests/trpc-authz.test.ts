@@ -15,7 +15,10 @@ import type { RoleResolver } from "@/lib/authz";
 
 const createCaller = createCallerFactory(appRouter);
 
-function ctxFor(userId: string | null, resolveRole: RoleResolver = fixtureRoleResolver): TrpcContext {
+function ctxFor(
+  userId: string | null,
+  resolveRole: RoleResolver = fixtureRoleResolver,
+): TrpcContext {
   const session: Session | null =
     userId === null
       ? null

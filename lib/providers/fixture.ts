@@ -107,7 +107,10 @@ class FixtureYoutube implements YoutubeProvider {
     const seed = fnv1a(uploadsPlaylistId);
     const n = Math.min(max, 50);
     return Promise.resolve(
-      Array.from({ length: n }, (_, i) => `fx${((seed + i * 7919) >>> 0).toString(36).padStart(9, "0")}`),
+      Array.from(
+        { length: n },
+        (_, i) => `fx${((seed + i * 7919) >>> 0).toString(36).padStart(9, "0")}`,
+      ),
     );
   }
 
@@ -218,10 +221,10 @@ const ONE_PX_PNG =
 class FixtureImage implements ImageProvider {
   generate(req: ImageRequest): Promise<GeneratedImage[]> {
     return Promise.resolve(
-      Array.from(
-        { length: req.count },
-        (): GeneratedImage => ({ url: null, base64Png: ONE_PX_PNG }),
-      ),
+      Array.from({ length: req.count }, (): GeneratedImage => ({
+        url: null,
+        base64Png: ONE_PX_PNG,
+      })),
     );
   }
 }

@@ -53,9 +53,7 @@ const videoListSchema = z.object({
           title: z.string(),
           publishedAt: z.string(),
           channelId: z.string(),
-          thumbnails: z
-            .object({ high: z.object({ url: z.string() }).optional() })
-            .optional(),
+          thumbnails: z.object({ high: z.object({ url: z.string() }).optional() }).optional(),
         }),
         statistics: z.object({
           viewCount: z.string().optional(),
@@ -77,9 +75,7 @@ const searchListSchema = z.object({
           title: z.string(),
           publishedAt: z.string(),
           channelId: z.string(),
-          thumbnails: z
-            .object({ high: z.object({ url: z.string() }).optional() })
-            .optional(),
+          thumbnails: z.object({ high: z.object({ url: z.string() }).optional() }).optional(),
         }),
       }),
     )
@@ -156,9 +152,12 @@ export class LiveYoutube implements YoutubeProvider {
           title: item.snippet.title,
           publishedAt: item.snippet.publishedAt,
           viewCount: Number(item.statistics.viewCount ?? 0),
-          likeCount: item.statistics.likeCount !== undefined ? Number(item.statistics.likeCount) : null,
+          likeCount:
+            item.statistics.likeCount !== undefined ? Number(item.statistics.likeCount) : null,
           commentCount:
-            item.statistics.commentCount !== undefined ? Number(item.statistics.commentCount) : null,
+            item.statistics.commentCount !== undefined
+              ? Number(item.statistics.commentCount)
+              : null,
           durationSeconds: parseIsoDuration(item.contentDetails.duration),
           thumbnailUrl: item.snippet.thumbnails?.high?.url ?? null,
           channelYtid: item.snippet.channelId,

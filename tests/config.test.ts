@@ -38,7 +38,9 @@ describe("config", () => {
 
   it("requires AUTH_SECRET in production", () => {
     expect(() => parseEnv({ NODE_ENV: "production" })).toThrow(/AUTH_SECRET/);
-    expect(parseEnv({ NODE_ENV: "production", AUTH_SECRET: "x".repeat(32) }).AUTH_SECRET).toBeTruthy();
+    expect(
+      parseEnv({ NODE_ENV: "production", AUTH_SECRET: "x".repeat(32) }).AUTH_SECRET,
+    ).toBeTruthy();
   });
 
   it("rejects invalid enum values instead of defaulting", () => {

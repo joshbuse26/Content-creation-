@@ -299,7 +299,10 @@ export const scriptRouter = router({
     .output(scriptContracts.export.output)
     .query(({ input }) => ({
       filename: `script-v${fixtureScript.version}.${input.format === "teleprompter" ? "txt" : input.format}`,
-      mimeType: input.format === "docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : "text/plain",
+      mimeType:
+        input.format === "docx"
+          ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          : "text/plain",
       content: fixtureSections.map((s) => `${s.heading}\n\n${s.body}`).join("\n\n---\n\n"),
       encoding: "utf8" as const,
     })),
@@ -407,7 +410,11 @@ export const templatesRouter = router({
   create: workspaceProcedure("template", "create")
     .input(templatesContracts.create.input)
     .output(templatesContracts.create.output)
-    .mutation(({ input }) => ({ ...fixtureDescriptionTemplate, name: input.name, body: input.body })),
+    .mutation(({ input }) => ({
+      ...fixtureDescriptionTemplate,
+      name: input.name,
+      body: input.body,
+    })),
   update: workspaceProcedure("template", "update")
     .input(templatesContracts.update.input)
     .output(templatesContracts.update.output)

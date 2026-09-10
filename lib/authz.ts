@@ -59,7 +59,13 @@ const WRITER_RESOURCES: readonly Resource[] = [
 ];
 
 /** Admin adds channel management, members, templates, workspace settings. */
-const ADMIN_RESOURCES: readonly Resource[] = [...WRITER_RESOURCES, "channel", "member", "template", "workspace"];
+const ADMIN_RESOURCES: readonly Resource[] = [
+  ...WRITER_RESOURCES,
+  "channel",
+  "member",
+  "template",
+  "workspace",
+];
 
 /** Owner adds billing and API keys. */
 const OWNER_RESOURCES: readonly Resource[] = [...ADMIN_RESOURCES, "billing", "apiKey"];

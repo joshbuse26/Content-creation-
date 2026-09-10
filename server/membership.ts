@@ -18,7 +18,9 @@ export const dbRoleResolver: RoleResolver = async (userId, workspaceId) => {
   const rows = await db
     .select({ role: schema.memberships.role })
     .from(schema.memberships)
-    .where(and(eq(schema.memberships.userId, userId), eq(schema.memberships.workspaceId, workspaceId)))
+    .where(
+      and(eq(schema.memberships.userId, userId), eq(schema.memberships.workspaceId, workspaceId)),
+    )
     .limit(1);
   return rows[0]?.role ?? null;
 };
