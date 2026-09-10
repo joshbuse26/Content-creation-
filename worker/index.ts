@@ -64,7 +64,7 @@ function makeStore(): PipelineRunStore {
   return new InMemoryPipelineRunStore();
 }
 
-async function main(): Promise<void> {
+function main(): void {
   const config = getConfig();
   logger.info(
     { product: PRODUCT_NAME, providers: config.PROVIDERS, node: process.version },
@@ -81,12 +81,12 @@ async function main(): Promise<void> {
   const store = makeStore();
   const runner = new PipelineRunner(store);
 
-  const runPipeline = async <TInput extends WorkspaceScopedJob>(
+  const runPipeline = async (
     kind: PipelineKind,
     stages: readonly string[],
-    input: TInput,
+    input: WorkspaceScopedJob,
   ) => {
-    const result = await runner.execute(placeholderPipeline<TInput>(kind, stages), {
+    const result = await runner.execute(placeholderPipeline<WorkspaceScopedJob>(kind, stages), {
       workspaceId: input.workspaceId,
       projectId: input.projectId ?? null,
       input,
@@ -202,7 +202,9 @@ async function main(): Promise<void> {
   });
 }
 
-main().catch((err: unknown) => {
+try {
+  main();
+} catch (err: unknown) {
   logger.fatal({ err }, "worker crashed on startup");
   process.exit(1);
-});
+}

@@ -47,7 +47,6 @@ import {
   thumbnailConceptSchema,
   titleSetSchema,
   userSchema,
-  voiceProfileSchema,
   workspaceSchema,
 } from "./entities";
 import { qualityGateReportSchema } from "./pipeline";

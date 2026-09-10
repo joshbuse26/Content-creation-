@@ -1,6 +1,6 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 import type { Session } from "next-auth";
 import { assertAccess, type Action, type Resource, type RoleResolver } from "@/lib/authz";
 import { asUserId, workspaceIdSchema } from "@/lib/types/ids";
@@ -44,7 +44,7 @@ const t = initTRPC.context<TrpcContext>().create({
       ...shape,
       data: {
         ...shape.data,
-        zodError: isZod ? (error.cause as ZodError).flatten() : null,
+        zodError: isZod ? z.treeifyError(error.cause) : null,
       },
     };
   },
@@ -53,6 +53,7 @@ const t = initTRPC.context<TrpcContext>().create({
 export const router = t.router;
 export const middleware = t.middleware;
 export const publicProcedure = t.procedure;
+export const createCallerFactory = t.createCallerFactory;
 
 export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
   if (ctx.session?.user.id === undefined || ctx.session.user.id === "") {

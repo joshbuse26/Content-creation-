@@ -24,6 +24,8 @@ const optionalString = z.preprocess(emptyToUndefined, z.string().min(1).optional
 const envSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+    /** Set by Next.js during `next build` — secrets are not required to compile. */
+    NEXT_PHASE: optionalString,
     /** fixture: deterministic local data, zero keys needed. live: real APIs. */
     PROVIDERS: z.enum(["fixture", "live"]).default("fixture"),
 
@@ -78,7 +80,8 @@ const envSchema = z
         }
       }
     }
-    if (env.NODE_ENV === "production" && env.AUTH_SECRET === undefined) {
+    const isBuildPhase = env.NEXT_PHASE === "phase-production-build";
+    if (env.NODE_ENV === "production" && !isBuildPhase && env.AUTH_SECRET === undefined) {
       ctx.addIssue({
         code: "custom",
         path: ["AUTH_SECRET"],
@@ -98,7 +101,7 @@ export function getConfig(): AppConfig {
 }
 
 /** Pure parse — used by getConfig and by tests. */
-export function parseEnv(env: NodeJS.ProcessEnv): AppConfig {
+export function parseEnv(env: Record<string, string | undefined>): AppConfig {
   const result = envSchema.safeParse(env);
   if (!result.success) {
     const details = result.error.issues
