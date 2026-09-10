@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import type { revisionContracts } from "@/lib/types/api";
 import type { Revision, ScriptSection } from "@/lib/types/entities";
-import { applyDiffOps, DiffApplyError } from "@/pipelines/revision/apply";
+import { applyDiffOps, DiffApplyError, rebaseDiffOps } from "@/pipelines/revision/apply";
 import { getEngineDeps } from "@/pipelines/script/deps";
 import { dispatchPipelineJob } from "@/pipelines/script/execute";
 import { handleRevisionPassJob } from "@/pipelines/script/jobs";
@@ -13,7 +13,7 @@ import {
 } from "@/pipelines/script/readability";
 import { JOB_NAMES, QUEUE_NAMES } from "@/queue/queues";
 import { CREDIT_COSTS, requireCredits } from "@/server/credits";
-import { badRequest, jobAccepted, notFound, type HandlerOpts } from "./_shared";
+import { badRequest, jobAccepted, notFound, preconditionFailed, type HandlerOpts } from "./_shared";
 
 type RunInput = z.output<typeof revisionContracts.run.input>;
 type ListInput = z.output<typeof revisionContracts.list.input>;
@@ -48,8 +48,11 @@ export const revisionImpl = {
   },
 
   /**
-   * Accept one suggestion: diff ops applied to the section body, revision
-   * marked accepted, script version++ and stats refreshed — atomically.
+   * Accept one suggestion: diff ops REBASED over previously accepted
+   * suggestions on the same section (line-offset tracking — accepts applied
+   * in order shift subsequent ops; ops that no longer match are rejected),
+   * then applied to the CURRENT section body; revision marked accepted,
+   * script version++ and stats refreshed — atomically.
    */
   async accept({
     ctx,
@@ -63,10 +66,17 @@ export const revisionImpl = {
     }
     const section = await deps.store.getSection(ctx.workspaceId, revision.sectionId);
     if (section === null) notFound("section");
-    if (section.locked) badRequest("section is locked — unlock it before applying revisions");
+    if (section.locked) {
+      preconditionFailed("section is locked — unlock it before applying revisions");
+    }
+    const allRevisions = await deps.store.listRevisions(ctx.workspaceId, revision.scriptId);
+    const acceptedDiffs = allRevisions
+      .filter((r) => r.sectionId === revision.sectionId && r.status === "accepted")
+      .sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime())
+      .map((r) => r.diff);
     let newBody: string;
     try {
-      newBody = applyDiffOps(section.body, revision.diff);
+      newBody = applyDiffOps(section.body, rebaseDiffOps(revision.diff, acceptedDiffs));
     } catch (err) {
       if (err instanceof DiffApplyError) {
         badRequest(`suggestion no longer applies: ${err.message}`);

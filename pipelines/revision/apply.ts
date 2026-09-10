@@ -15,6 +15,39 @@ export class DiffApplyError extends Error {
   }
 }
 
+/**
+ * Rebase a pending revision's diff ops over the revisions ALREADY accepted
+ * on the same section.
+ *
+ * All suggestions from a revision pass carry line numbers in the section
+ * body as it was when the pass ran. Accepting a suggestion changes the
+ * body's line count, so later accepts must shift their ranges by the net
+ * line delta of every accepted op that lies entirely BEFORE them (accepts
+ * applied in order shift subsequent ops). An op that overlaps an accepted
+ * range no longer matches the text it was written against and is rejected
+ * with DiffApplyError.
+ */
+export function rebaseDiffOps(ops: DiffOp[], acceptedDiffs: readonly DiffOp[][]): DiffOp[] {
+  const applied = acceptedDiffs.flat().sort((a, b) => a.lineStart - b.lineStart);
+  return ops.map((op) => {
+    let offset = 0;
+    for (const accepted of applied) {
+      if (accepted.lineEnd < op.lineStart) {
+        const replacedLines = accepted.lineEnd - accepted.lineStart + 1;
+        offset += accepted.replacement.split("\n").length - replacedLines;
+        continue;
+      }
+      if (accepted.lineStart <= op.lineEnd) {
+        throw new DiffApplyError(
+          `suggestion overlaps an already-accepted revision (lines ${accepted.lineStart}-${accepted.lineEnd})`,
+        );
+      }
+      // Accepted range lies entirely after this op — no shift.
+    }
+    return { ...op, lineStart: op.lineStart + offset, lineEnd: op.lineEnd + offset };
+  });
+}
+
 export function applyDiffOps(body: string, ops: DiffOp[]): string {
   const lines = body.split("\n");
   const sorted = [...ops].sort((a, b) => b.lineStart - a.lineStart);
