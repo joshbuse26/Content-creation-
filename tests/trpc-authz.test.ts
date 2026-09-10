@@ -93,11 +93,13 @@ describe("tRPC authz middleware", () => {
     expect(res.checkoutUrl).toContain("stripe.com");
   });
 
-  it("stub outputs satisfy their frozen output schemas (spot check)", async () => {
+  it("handler outputs satisfy their frozen output schemas (spot check)", async () => {
     const caller = createCaller(ctxFor(FIXTURE_IDS.user));
     const script = await caller.script.get({ workspaceId: WS, scriptId: fixtureScriptId() });
     expect(script.sections.length).toBe(6);
-    expect(script.qualityReport?.passed).toBe(true);
+    // The fixture script is still status=drafting, so the real handler
+    // reports no quality gate yet (it is computed for final scripts only).
+    expect(script.qualityReport).toBeNull();
   });
 });
 

@@ -21,42 +21,48 @@ import {
 import {
   FIXTURE_IDS,
   fixtureApiKey,
-  fixtureAvatar,
-  fixtureChannel,
-  fixtureChapterSet,
-  fixtureDescription,
   fixtureDescriptionTemplate,
-  fixtureFrame,
   fixtureIdea,
-  fixtureLedgerEntry,
-  fixtureMembership,
-  fixturePipelineRun,
   fixtureProject,
-  fixtureQualityReport,
-  fixtureResearchDoc,
-  fixtureRevision,
-  fixtureScript,
-  fixtureSections,
-  fixtureSnapshot,
-  fixtureTagSet,
   fixtureThumbnailConcept,
-  fixtureTitleSet,
-  fixtureUser,
-  fixtureWorkspace,
 } from "@/lib/fixtures";
+import { rateLimitMiddleware } from "@/server/ratelimit";
+import { avatarHandlers } from "@/server/routers/impl/avatar";
+import { billingHandlers } from "@/server/routers/impl/billing";
+import { channelHandlers } from "@/server/routers/impl/channel";
+import { chaptersHandlers } from "@/server/routers/impl/chapters";
+import { dashboardHandlers } from "@/server/routers/impl/dashboard";
+import { descriptionHandlers } from "@/server/routers/impl/description";
+import { frameImpl } from "@/server/routers/impl/frame";
+import { projectHandlers } from "@/server/routers/impl/project";
+import { researchImpl } from "@/server/routers/impl/research";
+import { revisionImpl } from "@/server/routers/impl/revision";
+import { scriptImpl } from "@/server/routers/impl/script";
+import { tagsHandlers } from "@/server/routers/impl/tags";
+import { titlesImpl } from "@/server/routers/impl/titles";
+import { workspaceHandlers } from "@/server/routers/impl/workspace";
 import { protectedProcedure, router, workspaceProcedure } from "@/server/trpc";
 
 /**
  * ROUTER CONTRACTS — FROZEN LAYER (sprint plan §2).
  *
- * Every router signature from build spec §6, with stub implementations
- * returning fixtures. Wave-2 agents REPLACE the bodies behind unchanged
- * signatures — inputs/outputs live in lib/types/api.ts and do not move.
+ * Signatures (inputs/outputs in lib/types/api.ts) are frozen; the bodies
+ * below delegate to the wave-2 implementations:
  *
- * Every workspace-scoped procedure runs through workspaceProcedure(), which
- * enforces assertAccess (role matrix) before the handler executes. Outputs
- * are schema-validated, so a stub that drifts from its contract throws.
+ *   channel/avatar        → A1 (server/routers/impl/{channel,avatar}.ts)
+ *   research/frame/script/revision/titles → A2 (impl/*.ts)
+ *   description/tags/chapters/dashboard   → A4 (impl/*.ts)
+ *   workspace/project/billing.summary     → A0 integration (impl/*.ts)
+ *
+ * Still fixture stubs (cut features / need live Stripe — see OPEN-ITEMS.md):
+ * ideas, thumbnails, templates, apiKeys, billing.checkout/portal.
+ *
+ * Rate limits (spec §6): every procedure carries the "general" policy;
+ * generation endpoints additionally carry the stricter "generation" policy.
  */
+
+const general = rateLimitMiddleware("general");
+const generation = rateLimitMiddleware("generation");
 
 const queued = { pipelineRunIds: [FIXTURE_IDS.pipelineRun], status: "queued" as const };
 
@@ -64,98 +70,115 @@ const queued = { pipelineRunIds: [FIXTURE_IDS.pipelineRun], status: "queued" as 
 
 export const workspaceRouter = router({
   list: protectedProcedure
+    .use(general)
     .input(workspaceContracts.list.input)
     .output(workspaceContracts.list.output)
-    .query(() => [{ ...fixtureWorkspace, role: "owner" as const }]),
+    .query(({ ctx }) => workspaceHandlers.list({ ctx })),
   get: workspaceProcedure("workspace", "read")
+    .use(general)
     .output(workspaceContracts.get.output)
-    .query(() => fixtureWorkspace),
+    .query(({ ctx }) => workspaceHandlers.get({ ctx })),
   create: protectedProcedure
+    .use(general)
     .input(workspaceContracts.create.input)
     .output(workspaceContracts.create.output)
-    .mutation(({ input }) => ({ ...fixtureWorkspace, name: input.name })),
+    .mutation(({ ctx, input }) => workspaceHandlers.create({ ctx, input })),
   update: workspaceProcedure("workspace", "update")
+    .use(general)
     .input(workspaceContracts.update.input)
     .output(workspaceContracts.update.output)
-    .mutation(({ input }) => ({ ...fixtureWorkspace, name: input.name })),
+    .mutation(({ ctx, input }) => workspaceHandlers.update({ ctx, input })),
   members: workspaceProcedure("member", "read")
+    .use(general)
     .output(workspaceContracts.members.output)
-    .query(() => [{ ...fixtureMembership, user: fixtureUser }]),
+    .query(({ ctx }) => workspaceHandlers.members({ ctx })),
   invite: workspaceProcedure("member", "create")
+    .use(general)
     .input(workspaceContracts.invite.input)
     .output(workspaceContracts.invite.output)
-    .mutation(({ input }) => ({ ...fixtureMembership, role: input.role })),
+    .mutation(({ ctx, input }) => workspaceHandlers.invite({ ctx, input })),
   setRole: workspaceProcedure("member", "update")
+    .use(general)
     .input(workspaceContracts.setRole.input)
     .output(workspaceContracts.setRole.output)
-    .mutation(({ input }) => ({ ...fixtureMembership, role: input.role })),
+    .mutation(({ ctx, input }) => workspaceHandlers.setRole({ ctx, input })),
   removeMember: workspaceProcedure("member", "delete")
+    .use(general)
     .input(workspaceContracts.removeMember.input)
     .output(workspaceContracts.removeMember.output)
-    .mutation(() => ({ removed: true })),
+    .mutation(({ ctx, input }) => workspaceHandlers.removeMember({ ctx, input })),
 });
 
 export const channelRouter = router({
   list: workspaceProcedure("channel", "read")
+    .use(general)
     .output(channelContracts.list.output)
-    .query(() => [fixtureChannel]),
+    .query(({ ctx, input }) => channelHandlers.list({ ctx, input })),
   get: workspaceProcedure("channel", "read")
+    .use(general)
     .input(channelContracts.get.input)
     .output(channelContracts.get.output)
-    .query(() => ({ ...fixtureChannel, latestSnapshot: fixtureSnapshot })),
+    .query(({ ctx, input }) => channelHandlers.get({ ctx, input })),
   connectPublic: workspaceProcedure("channel", "create")
+    .use(general)
     .input(channelContracts.connectPublic.input)
     .output(channelContracts.connectPublic.output)
-    .mutation(({ input }) => ({ ...fixtureChannel, nicheKeywords: input.nicheKeywords })),
+    .mutation(({ ctx, input }) => channelHandlers.connectPublic({ ctx, input })),
   sync: workspaceProcedure("channel", "update")
+    .use(general)
     .input(channelContracts.sync.input)
     .output(channelContracts.sync.output)
-    .mutation(() => queued),
+    .mutation(({ ctx, input }) => channelHandlers.sync({ ctx, input })),
   updateNiche: workspaceProcedure("channel", "update")
+    .use(general)
     .input(channelContracts.updateNiche.input)
     .output(channelContracts.updateNiche.output)
-    .mutation(({ input }) => ({ ...fixtureChannel, nicheKeywords: input.nicheKeywords })),
+    .mutation(({ ctx, input }) => channelHandlers.updateNiche({ ctx, input })),
   disconnect: workspaceProcedure("channel", "delete")
+    .use(general)
     .input(channelContracts.disconnect.input)
     .output(channelContracts.disconnect.output)
-    .mutation(() => ({ removed: true })),
+    .mutation(({ ctx, input }) => channelHandlers.disconnect({ ctx, input })),
 });
 
 export const avatarRouter = router({
   get: workspaceProcedure("avatar", "read")
+    .use(general)
     .input(avatarContracts.get.input)
     .output(avatarContracts.get.output)
-    .query(() => fixtureAvatar),
+    .query(({ ctx, input }) => avatarHandlers.get({ ctx, input })),
   update: workspaceProcedure("avatar", "update")
+    .use(general)
     .input(avatarContracts.update.input)
     .output(avatarContracts.update.output)
-    .mutation(({ ctx, input }) => ({
-      ...fixtureAvatar,
-      ...(input.fields.vocabularyNotes !== undefined
-        ? { vocabularyNotes: input.fields.vocabularyNotes }
-        : {}),
-      lastEditedBy: ctx.userId,
-    })),
+    .mutation(({ ctx, input }) => avatarHandlers.update({ ctx, input })),
   regenerate: workspaceProcedure("avatar", "update")
+    .use(general)
+    .use(generation)
     .input(avatarContracts.regenerate.input)
     .output(avatarContracts.regenerate.output)
-    .mutation(() => queued),
+    .mutation(({ ctx, input }) => avatarHandlers.regenerate({ ctx, input })),
 });
 
+// ideas — fixture stub (outlier index + daily feed are v1.1; see OPEN-ITEMS.md)
 export const ideasRouter = router({
   feed: workspaceProcedure("idea", "read")
+    .use(general)
     .input(ideasContracts.feed.input)
     .output(ideasContracts.feed.output)
     .query(() => [fixtureIdea]),
   save: workspaceProcedure("idea", "update")
+    .use(general)
     .input(ideasContracts.save.input)
     .output(ideasContracts.save.output)
     .mutation(() => ({ ...fixtureIdea, status: "saved" as const })),
   dismiss: workspaceProcedure("idea", "update")
+    .use(general)
     .input(ideasContracts.dismiss.input)
     .output(ideasContracts.dismiss.output)
     .mutation(() => ({ ...fixtureIdea, status: "dismissed" as const })),
   promote: workspaceProcedure("idea", "update")
+    .use(general)
     .input(ideasContracts.promote.input)
     .output(ideasContracts.promote.output)
     .mutation(() => ({
@@ -163,6 +186,8 @@ export const ideasRouter = router({
       project: fixtureProject,
     })),
   requestBatch: workspaceProcedure("idea", "create")
+    .use(general)
+    .use(generation)
     .input(ideasContracts.requestBatch.input)
     .output(ideasContracts.requestBatch.output)
     .mutation(() => queued),
@@ -170,188 +195,188 @@ export const ideasRouter = router({
 
 export const projectRouter = router({
   list: workspaceProcedure("project", "read")
+    .use(general)
     .input(projectContracts.list.input)
     .output(projectContracts.list.output)
-    .query(() => [fixtureProject]),
+    .query(({ ctx, input }) => projectHandlers.list({ ctx, input })),
   get: workspaceProcedure("project", "read")
+    .use(general)
     .input(projectContracts.get.input)
     .output(projectContracts.get.output)
-    .query(() => fixtureProject),
+    .query(({ ctx, input }) => projectHandlers.get({ ctx, input })),
   create: workspaceProcedure("project", "create")
+    .use(general)
     .input(projectContracts.create.input)
     .output(projectContracts.create.output)
-    .mutation(({ input }) => ({ ...fixtureProject, title: input.title, ideaId: input.ideaId })),
+    .mutation(({ ctx, input }) => projectHandlers.create({ ctx, input })),
   update: workspaceProcedure("project", "update")
+    .use(general)
     .input(projectContracts.update.input)
     .output(projectContracts.update.output)
-    .mutation(({ input }) => ({
-      ...fixtureProject,
-      ...(input.title !== undefined ? { title: input.title } : {}),
-      ...(input.status !== undefined ? { status: input.status } : {}),
-    })),
+    .mutation(({ ctx, input }) => projectHandlers.update({ ctx, input })),
   archive: workspaceProcedure("project", "delete")
+    .use(general)
     .input(projectContracts.archive.input)
     .output(projectContracts.archive.output)
-    .mutation(() => ({ archived: true })),
+    .mutation(({ ctx, input }) => projectHandlers.archive({ ctx, input })),
 });
 
 export const researchRouter = router({
   list: workspaceProcedure("research", "read")
+    .use(general)
     .input(researchContracts.list.input)
     .output(researchContracts.list.output)
-    .query(() => {
-      const { content: _content, ...meta } = fixtureResearchDoc;
-      return [meta];
-    }),
+    .query((opts) => researchImpl.list(opts)),
   get: workspaceProcedure("research", "read")
+    .use(general)
     .input(researchContracts.get.input)
     .output(researchContracts.get.output)
-    .query(() => fixtureResearchDoc),
+    .query((opts) => researchImpl.get(opts)),
   search: workspaceProcedure("research", "create")
+    .use(general)
+    .use(generation)
     .input(researchContracts.search.input)
     .output(researchContracts.search.output)
-    .mutation(() => queued),
+    .mutation((opts) => researchImpl.search(opts)),
   importTranscript: workspaceProcedure("research", "create")
+    .use(general)
     .input(researchContracts.importTranscript.input)
     .output(researchContracts.importTranscript.output)
-    .mutation(({ input }) => ({
-      ...fixtureResearchDoc,
-      kind: "transcript" as const,
-      sourceUrl: input.youtubeVideoUrl,
-    })),
+    .mutation((opts) => researchImpl.importTranscript(opts)),
   upload: workspaceProcedure("research", "create")
+    .use(general)
     .input(researchContracts.upload.input)
     .output(researchContracts.upload.output)
-    .mutation(({ input }) => ({
-      ...fixtureResearchDoc,
-      kind: input.kind,
-      title: input.filename,
-      sourceUrl: null,
-    })),
+    .mutation((opts) => researchImpl.upload(opts)),
   remove: workspaceProcedure("research", "delete")
+    .use(general)
     .input(researchContracts.remove.input)
     .output(researchContracts.remove.output)
-    .mutation(() => ({ removed: true })),
+    .mutation((opts) => researchImpl.remove(opts)),
 });
 
 export const frameRouter = router({
   list: workspaceProcedure("frame", "read")
+    .use(general)
     .input(frameContracts.list.input)
     .output(frameContracts.list.output)
-    .query(() => [fixtureFrame]),
+    .query((opts) => frameImpl.list(opts)),
   propose: workspaceProcedure("frame", "create")
+    .use(general)
+    .use(generation)
     .input(frameContracts.propose.input)
     .output(frameContracts.propose.output)
-    .mutation(() => queued),
+    .mutation((opts) => frameImpl.propose(opts)),
   choose: workspaceProcedure("frame", "update")
+    .use(general)
     .input(frameContracts.choose.input)
     .output(frameContracts.choose.output)
-    .mutation(() => ({ ...fixtureFrame, chosen: true })),
+    .mutation((opts) => frameImpl.choose(opts)),
   update: workspaceProcedure("frame", "update")
+    .use(general)
     .input(frameContracts.update.input)
     .output(frameContracts.update.output)
-    .mutation(({ input }) => ({ ...fixtureFrame, ...input.fields })),
+    .mutation((opts) => frameImpl.update(opts)),
 });
 
 export const scriptRouter = router({
   generate: workspaceProcedure("script", "create")
+    .use(general)
+    .use(generation)
     .input(scriptContracts.generate.input)
     .output(scriptContracts.generate.output)
-    .mutation(() => ({ ...queued, scriptId: fixtureScript.id })),
+    .mutation((opts) => scriptImpl.generate(opts)),
   get: workspaceProcedure("script", "read")
+    .use(general)
     .input(scriptContracts.get.input)
     .output(scriptContracts.get.output)
-    .query(() => ({
-      script: fixtureScript,
-      sections: fixtureSections,
-      qualityReport: fixtureQualityReport,
-    })),
+    .query((opts) => scriptImpl.get(opts)),
   listVersions: workspaceProcedure("script", "read")
+    .use(general)
     .input(scriptContracts.listVersions.input)
     .output(scriptContracts.listVersions.output)
-    .query(() => [fixtureScript]),
+    .query((opts) => scriptImpl.listVersions(opts)),
   updateSection: workspaceProcedure("script", "update")
+    .use(general)
     .input(scriptContracts.updateSection.input)
     .output(scriptContracts.updateSection.output)
-    .mutation(({ input }) => {
-      const section = fixtureSections[0];
-      if (section === undefined) throw new Error("fixture sections empty");
-      return {
-        ...section,
-        ...(input.heading !== undefined ? { heading: input.heading } : {}),
-        ...(input.body !== undefined ? { body: input.body } : {}),
-      };
-    }),
+    .mutation((opts) => scriptImpl.updateSection(opts)),
   regenerateSection: workspaceProcedure("script", "update")
+    .use(general)
+    .use(generation)
     .input(scriptContracts.regenerateSection.input)
     .output(scriptContracts.regenerateSection.output)
-    .mutation(() => queued),
+    .mutation((opts) => scriptImpl.regenerateSection(opts)),
   setSectionLock: workspaceProcedure("script", "update")
+    .use(general)
     .input(scriptContracts.setSectionLock.input)
     .output(scriptContracts.setSectionLock.output)
-    .mutation(({ input }) => {
-      const section = fixtureSections[0];
-      if (section === undefined) throw new Error("fixture sections empty");
-      return { ...section, locked: input.locked };
-    }),
+    .mutation((opts) => scriptImpl.setSectionLock(opts)),
+  reorderSections: workspaceProcedure("script", "update")
+    .use(general)
+    .input(scriptContracts.reorderSections.input)
+    .output(scriptContracts.reorderSections.output)
+    .mutation((opts) => scriptImpl.reorderSections(opts)),
   export: workspaceProcedure("script", "read")
+    .use(general)
     .input(scriptContracts.export.input)
     .output(scriptContracts.export.output)
-    .query(({ input }) => ({
-      filename: `script-v${fixtureScript.version}.${input.format === "teleprompter" ? "txt" : input.format}`,
-      mimeType:
-        input.format === "docx"
-          ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-          : "text/plain",
-      content: fixtureSections.map((s) => `${s.heading}\n\n${s.body}`).join("\n\n---\n\n"),
-      encoding: "utf8" as const,
-    })),
+    .query((opts) => scriptImpl.export(opts)),
 });
 
 export const revisionRouter = router({
   run: workspaceProcedure("revision", "create")
+    .use(general)
+    .use(generation)
     .input(revisionContracts.run.input)
     .output(revisionContracts.run.output)
-    .mutation(() => queued),
+    .mutation((opts) => revisionImpl.run(opts)),
   list: workspaceProcedure("revision", "read")
+    .use(general)
     .input(revisionContracts.list.input)
     .output(revisionContracts.list.output)
-    .query(() => [fixtureRevision]),
+    .query((opts) => revisionImpl.list(opts)),
   accept: workspaceProcedure("revision", "update")
+    .use(general)
     .input(revisionContracts.accept.input)
     .output(revisionContracts.accept.output)
-    .mutation(() => {
-      const section = fixtureSections[1];
-      if (section === undefined) throw new Error("fixture sections empty");
-      return { revision: { ...fixtureRevision, status: "accepted" as const }, section };
-    }),
+    .mutation((opts) => revisionImpl.accept(opts)),
   reject: workspaceProcedure("revision", "update")
+    .use(general)
     .input(revisionContracts.reject.input)
     .output(revisionContracts.reject.output)
-    .mutation(() => ({ ...fixtureRevision, status: "rejected" as const })),
+    .mutation((opts) => revisionImpl.reject(opts)),
 });
 
 export const titlesRouter = router({
   generate: workspaceProcedure("titles", "create")
+    .use(general)
+    .use(generation)
     .input(titlesContracts.generate.input)
     .output(titlesContracts.generate.output)
-    .mutation(() => queued),
+    .mutation((opts) => titlesImpl.generate(opts)),
   latest: workspaceProcedure("titles", "read")
+    .use(general)
     .input(titlesContracts.latest.input)
     .output(titlesContracts.latest.output)
-    .query(() => fixtureTitleSet),
+    .query((opts) => titlesImpl.latest(opts)),
 });
 
+// thumbnails — fixture stub (image generation cut to v1.1; see OPEN-ITEMS.md)
 export const thumbnailsRouter = router({
   generate: workspaceProcedure("thumbnail", "create")
+    .use(general)
+    .use(generation)
     .input(thumbnailsContracts.generate.input)
     .output(thumbnailsContracts.generate.output)
     .mutation(() => queued),
   list: workspaceProcedure("thumbnail", "read")
+    .use(general)
     .input(thumbnailsContracts.list.input)
     .output(thumbnailsContracts.list.output)
     .query(() => [fixtureThumbnailConcept]),
   choose: workspaceProcedure("thumbnail", "update")
+    .use(general)
     .input(thumbnailsContracts.choose.input)
     .output(thumbnailsContracts.choose.output)
     .mutation(() => ({ ...fixtureThumbnailConcept, status: "chosen" as const })),
@@ -359,55 +384,69 @@ export const thumbnailsRouter = router({
 
 export const descriptionRouter = router({
   generate: workspaceProcedure("description", "create")
+    .use(general)
+    .use(generation)
     .input(descriptionContracts.generate.input)
     .output(descriptionContracts.generate.output)
-    .mutation(({ input }) => ({ ...fixtureDescription, mode: input.mode })),
+    .mutation(({ ctx, input }) => descriptionHandlers.generate({ ctx, input })),
   list: workspaceProcedure("description", "read")
+    .use(general)
     .input(descriptionContracts.list.input)
     .output(descriptionContracts.list.output)
-    .query(() => [fixtureDescription]),
+    .query(({ ctx, input }) => descriptionHandlers.list({ ctx, input })),
   update: workspaceProcedure("description", "update")
+    .use(general)
     .input(descriptionContracts.update.input)
     .output(descriptionContracts.update.output)
-    .mutation(({ input }) => ({ ...fixtureDescription, body: input.body })),
+    .mutation(({ ctx, input }) => descriptionHandlers.update({ ctx, input })),
 });
 
 export const tagsRouter = router({
   generate: workspaceProcedure("tags", "create")
+    .use(general)
+    .use(generation)
     .input(tagsContracts.generate.input)
     .output(tagsContracts.generate.output)
-    .mutation(() => fixtureTagSet),
+    .mutation(({ ctx, input }) => tagsHandlers.generate({ ctx, input })),
   latest: workspaceProcedure("tags", "read")
+    .use(general)
     .input(tagsContracts.latest.input)
     .output(tagsContracts.latest.output)
-    .query(() => fixtureTagSet),
+    .query(({ ctx, input }) => tagsHandlers.latest({ ctx, input })),
   update: workspaceProcedure("tags", "update")
+    .use(general)
     .input(tagsContracts.update.input)
     .output(tagsContracts.update.output)
-    .mutation(({ input }) => ({ ...fixtureTagSet, tags: input.tags })),
+    .mutation(({ ctx, input }) => tagsHandlers.update({ ctx, input })),
 });
 
 export const chaptersRouter = router({
   derive: workspaceProcedure("chapters", "create")
+    .use(general)
     .input(chaptersContracts.derive.input)
     .output(chaptersContracts.derive.output)
-    .mutation(() => fixtureChapterSet),
+    .mutation(({ ctx, input }) => chaptersHandlers.derive({ ctx, input })),
   latest: workspaceProcedure("chapters", "read")
+    .use(general)
     .input(chaptersContracts.latest.input)
     .output(chaptersContracts.latest.output)
-    .query(() => fixtureChapterSet),
+    .query(({ ctx, input }) => chaptersHandlers.latest({ ctx, input })),
   update: workspaceProcedure("chapters", "update")
+    .use(general)
     .input(chaptersContracts.update.input)
     .output(chaptersContracts.update.output)
-    .mutation(({ input }) => ({ ...fixtureChapterSet, entries: input.entries })),
+    .mutation(({ ctx, input }) => chaptersHandlers.update({ ctx, input })),
 });
 
+// templates — fixture stub (description templates UI is v1.1; see OPEN-ITEMS.md)
 export const templatesRouter = router({
   list: workspaceProcedure("template", "read")
+    .use(general)
     .input(templatesContracts.list.input)
     .output(templatesContracts.list.output)
     .query(() => [fixtureDescriptionTemplate]),
   create: workspaceProcedure("template", "create")
+    .use(general)
     .input(templatesContracts.create.input)
     .output(templatesContracts.create.output)
     .mutation(({ input }) => ({
@@ -416,6 +455,7 @@ export const templatesRouter = router({
       body: input.body,
     })),
   update: workspaceProcedure("template", "update")
+    .use(general)
     .input(templatesContracts.update.input)
     .output(templatesContracts.update.output)
     .mutation(({ input }) => ({
@@ -424,6 +464,7 @@ export const templatesRouter = router({
       ...(input.body !== undefined ? { body: input.body } : {}),
     })),
   remove: workspaceProcedure("template", "delete")
+    .use(general)
     .input(templatesContracts.remove.input)
     .output(templatesContracts.remove.output)
     .mutation(() => ({ removed: true })),
@@ -431,53 +472,45 @@ export const templatesRouter = router({
 
 export const dashboardRouter = router({
   overview: workspaceProcedure("dashboard", "read")
+    .use(general)
     .output(dashboardContracts.overview.output)
-    .query(() => ({
-      creditBalance: fixtureWorkspace.creditBalance,
-      projectCounts: { scripting: 1 },
-      recentProjects: [fixtureProject],
-      recentRuns: [fixturePipelineRun],
-    })),
+    .query(({ ctx, input }) => dashboardHandlers.overview({ ctx, input })),
   tracking: workspaceProcedure("dashboard", "read")
+    .use(general)
     .input(dashboardContracts.tracking.input)
     .output(dashboardContracts.tracking.output)
-    .query(() => [
-      {
-        project: fixtureProject,
-        projectedScore: 87.5,
-        actualViews: null,
-        capturedAt: null,
-      },
-    ]),
+    .query(({ ctx, input }) => dashboardHandlers.tracking({ ctx, input })),
 });
 
 export const billingRouter = router({
   summary: workspaceProcedure("billing", "read")
+    .use(general)
     .output(billingContracts.summary.output)
-    .query(() => ({
-      plan: fixtureWorkspace.plan,
-      creditBalance: fixtureWorkspace.creditBalance,
-      billingCycleAnchor: fixtureWorkspace.billingCycleAnchor,
-      ledger: [fixtureLedgerEntry],
-    })),
+    .query(({ ctx }) => billingHandlers.summary({ ctx })),
+  // checkout/portal — fixture stubs until live Stripe lands (OPEN-ITEMS.md)
   checkout: workspaceProcedure("billing", "update")
+    .use(general)
     .input(billingContracts.checkout.input)
     .output(billingContracts.checkout.output)
     .mutation(({ input }) => ({
       checkoutUrl: `https://checkout.stripe.com/c/pay/fixture_${input.plan}`,
     })),
   portal: workspaceProcedure("billing", "update")
+    .use(general)
     .input(billingContracts.portal.input)
     .output(billingContracts.portal.output)
     .mutation(() => ({ portalUrl: "https://billing.stripe.com/p/session/fixture" })),
 });
 
+// apiKeys — fixture stub (MCP access is v1.1; see OPEN-ITEMS.md)
 export const apiKeysRouter = router({
   list: workspaceProcedure("apiKey", "read")
+    .use(general)
     .input(apiKeysContracts.list.input)
     .output(apiKeysContracts.list.output)
     .query(() => [fixtureApiKey]),
   create: workspaceProcedure("apiKey", "create")
+    .use(general)
     .input(apiKeysContracts.create.input)
     .output(apiKeysContracts.create.output)
     .mutation(({ input }) => ({
@@ -485,6 +518,7 @@ export const apiKeysRouter = router({
       secret: "gr_live_fixture_secret_shown_once",
     })),
   revoke: workspaceProcedure("apiKey", "delete")
+    .use(general)
     .input(apiKeysContracts.revoke.input)
     .output(apiKeysContracts.revoke.output)
     .mutation(() => ({ ...fixtureApiKey, revokedAt: new Date("2026-09-09T00:00:00.000Z") })),

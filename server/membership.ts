@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { getConfig } from "@/lib/config";
 import type { RoleResolver } from "@/lib/authz";
 import { getDb, hasDb, schema } from "@/db";
-import { FIXTURE_IDS } from "@/lib/fixtures";
+import { getSharedWorkspaceStore } from "@/server/workspace/memory";
 
 /**
  * Session → workspace membership resolution.
@@ -26,9 +26,10 @@ export const dbRoleResolver: RoleResolver = async (userId, workspaceId) => {
 };
 
 export const fixtureRoleResolver: RoleResolver = (userId, workspaceId) => {
-  const isMember =
-    (userId as string) === FIXTURE_IDS.user && (workspaceId as string) === FIXTURE_IDS.workspace;
-  return Promise.resolve(isMember ? ("owner" as const) : null);
+  // The shared in-memory workspace store is seeded with exactly the fixture
+  // owner membership, so the default behavior is unchanged — but workspaces
+  // and members created at runtime in fixture mode resolve too.
+  return Promise.resolve(getSharedWorkspaceStore().roleFor(userId, workspaceId));
 };
 
 /** Pick the resolver for the current environment. */
