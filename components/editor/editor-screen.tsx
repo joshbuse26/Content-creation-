@@ -52,6 +52,11 @@ export function EditorScreen() {
     [versionsQuery.data],
   );
   const [pickedScriptId, setPickedScriptId] = useState<ScriptId | null>(null);
+  // A picked version belongs to one project — reset it when the project
+  // changes so another project never renders a stale script.
+  useEffect(() => {
+    setPickedScriptId(null);
+  }, [projectId]);
   const scriptId = pickedScriptId ?? versions[0]?.id ?? null;
 
   // ---- script + sections (local overlay for reorder/edits) ---------------
@@ -200,6 +205,16 @@ export function EditorScreen() {
             <IconSparkle size={14} /> Generate script
           </Link>
         }
+      />
+    );
+  }
+  if (scriptQuery.isError) {
+    return (
+      <ErrorState
+        message="Could not load the script."
+        onRetry={() => {
+          void scriptQuery.refetch();
+        }}
       />
     );
   }
@@ -442,15 +457,15 @@ export function EditorScreen() {
                 regenMutation.isPending && regenMutation.variables.sectionId === section.id
               }
               onMove={(direction) => {
-                setSections((prev) => {
-                  const moved = moveSection(prev, section.id as string, direction);
-                  if (moved === prev) return prev; // no-op (already at an edge)
-                  reorderMutation.mutate({
-                    workspaceId,
-                    scriptId,
-                    sectionIds: [...moved].sort((a, b) => a.position - b.position).map((s) => s.id),
-                  });
-                  return [...moved];
+                // Compute the next order from current state, THEN set state
+                // and fire the mutation — no side effects inside updaters.
+                const moved = moveSection(sections, section.id as string, direction);
+                if (moved === sections) return; // no-op (already at an edge)
+                setSections([...moved]);
+                reorderMutation.mutate({
+                  workspaceId,
+                  scriptId,
+                  sectionIds: [...moved].sort((a, b) => a.position - b.position).map((s) => s.id),
                 });
               }}
               onToggleLock={() => {

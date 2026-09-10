@@ -67,7 +67,18 @@ export function ProjectListScreen() {
         }
       />
 
-      {creating ? (
+      {creating && channels.length === 0 ? (
+        <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+          Every project belongs to a channel — connect a channel first.{" "}
+          <Link
+            href="/channels"
+            className="font-medium underline hover:no-underline dark:text-amber-100"
+          >
+            Connect a channel →
+          </Link>
+        </div>
+      ) : null}
+      {creating && channels.length > 0 ? (
         <form
           className="mb-6 flex flex-wrap items-end gap-3 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
           onSubmit={(e) => {

@@ -62,6 +62,21 @@ describe("SectionCard", () => {
     ).toBe(true);
   });
 
+  it("Alt+arrow reorders an unlocked section but respects locked (like the buttons)", () => {
+    const onMove = vi.fn();
+    const { unmount } = renderCard({ onMove });
+    fireEvent.keyDown(screen.getByLabelText(chapter.heading), { key: "ArrowDown", altKey: true });
+    expect(onMove).toHaveBeenCalledWith(1);
+    unmount();
+
+    const onMoveLocked = vi.fn();
+    renderCard({ onMove: onMoveLocked, section: { ...chapter, locked: true } });
+    const card = screen.getByLabelText(chapter.heading);
+    fireEvent.keyDown(card, { key: "ArrowDown", altKey: true });
+    fireEvent.keyDown(card, { key: "ArrowUp", altKey: true });
+    expect(onMoveLocked).not.toHaveBeenCalled();
+  });
+
   it("submits a steering note through onRegenerate", () => {
     const onRegenerate = vi.fn();
     renderCard({ onRegenerate });

@@ -82,11 +82,12 @@ export function SectionCard({
       data-testid={`section-${section.id}`}
       aria-label={section.heading}
       onKeyDown={(e) => {
-        if (e.altKey && e.key === "ArrowUp" && !isFirst) {
+        // Match the move buttons: locked sections cannot be reordered.
+        if (e.altKey && e.key === "ArrowUp" && !isFirst && !locked) {
           e.preventDefault();
           onMove(-1);
         }
-        if (e.altKey && e.key === "ArrowDown" && !isLast) {
+        if (e.altKey && e.key === "ArrowDown" && !isLast && !locked) {
           e.preventDefault();
           onMove(1);
         }

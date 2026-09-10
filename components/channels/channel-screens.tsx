@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { skipToken } from "@tanstack/react-query";
 import type { ChannelId } from "@/lib/types/ids";
@@ -12,7 +13,7 @@ import { SyncStatusBadge } from "@/components/projects/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { TextInput } from "@/components/ui/field";
-import { IconRefresh } from "@/components/ui/icons";
+import { IconRefresh, IconX } from "@/components/ui/icons";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
 import { PipelineStatusNote } from "@/components/ui/pipeline-note";
 import { useToast } from "@/components/ui/toast";
@@ -20,10 +21,34 @@ import { fmtCompact, fmtDateTime } from "@/components/lib/format";
 import { usePipelinePoll } from "@/components/lib/use-pipeline-poll";
 import { ConnectChannel } from "./connect-channel";
 
+/** Human copy for the OAuth callback's connectError redirect flag. */
+const CONNECT_ERROR_COPY: Record<string, string> = {
+  missing_code: "Google did not return an authorization code — the consent flow was interrupted.",
+  bad_state: "The sign-in state check failed — please start the connect flow again.",
+  oauth_not_configured: "YouTube OAuth is not configured for this deployment.",
+  no_refresh_token:
+    "Google did not grant offline access. Remove the app from your Google account permissions and connect again.",
+  no_channel: "That Google account has no YouTube channel to connect.",
+  connect_failed: "Connecting the channel failed partway through — please try again.",
+};
+
 export function ChannelListScreen() {
   const { workspaceId, channels } = useWorkspace();
   const utils = trpc.useUtils();
   const { toast } = useToast();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const connectError = searchParams.get("connectError");
+  const [errorDismissed, setErrorDismissed] = useState(false);
+  const dismissConnectError = () => {
+    setErrorDismissed(true);
+    // Strip the flag from the URL so a reload doesn't resurrect it.
+    const params = new URLSearchParams(searchParams);
+    params.delete("connectError");
+    const query = params.toString();
+    router.replace(query === "" ? pathname : `${pathname}?${query}`);
+  };
   const invalidate = () => {
     if (workspaceId !== null) void utils.channel.list.invalidate({ workspaceId });
   };
@@ -48,6 +73,25 @@ export function ChannelListScreen() {
         title="Channels"
         subtitle="Connected channels feed research, audience avatars, and voice."
       />
+      {connectError !== null && !errorDismissed ? (
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+          <div className="flex-1">
+            <p className="font-medium">Channel connect failed</p>
+            <p className="mt-0.5">
+              {CONNECT_ERROR_COPY[connectError] ??
+                "Something went wrong completing the Google connect flow — please try again."}
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="Dismiss connect error"
+            className="shrink-0 cursor-pointer rounded p-1 text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900"
+            onClick={dismissConnectError}
+          >
+            <IconX size={13} />
+          </button>
+        </div>
+      ) : null}
       <div className="mb-3">
         <PipelineStatusNote
           poll={syncPoll}
