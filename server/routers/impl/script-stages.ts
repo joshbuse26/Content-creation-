@@ -1,24 +1,36 @@
-import { TRPCError } from "@trpc/server";
-import type { z } from "zod";
-import { getArchetypeSeed } from "@/lib/archetypes";
-import type { scriptContracts } from "@/lib/types/api";
-import type { Frame, GenerationTarget, StyleCard, VoiceProfile } from "@/lib/types/entities";
-import type { HookCandidate, Outline, ScriptContext, TopicCandidate } from "@/lib/types/pipeline";
-import { assembleContext } from "@/pipelines/script/context";
-import { getEngineDeps, type EngineDeps } from "@/pipelines/script/deps";
+import { z } from "zod";
+import { LLM_MODELS } from "@/lib/config";
+import type { Channel, Frame, GenerationTarget, StyleCard } from "@/lib/types/entities";
 import {
-  fnv1a,
-  synthHookCandidates,
-  synthOutline,
-  synthSectionBody,
-} from "@/pipelines/script/fixture-content";
-import { computeQualityReport } from "@/pipelines/script/quality-gate";
-import { countWords, estimateSeconds, fleschReadingEase } from "@/pipelines/script/readability";
+  topicCandidateSchema,
+  type HookCandidate,
+  type Outline,
+  type ScriptContext,
+  type TopicCandidate,
+} from "@/lib/types/pipeline";
+import type { scriptContracts } from "@/lib/types/api";
+import { assembleContext } from "@/pipelines/script/context";
+import { synthOutline, synthTopicCandidates } from "@/pipelines/script/fixture-content";
+import { dispatchPipelineJob } from "@/pipelines/script/execute";
+import { handleGenerateScriptJob } from "@/pipelines/script/jobs";
+import { generateJson } from "@/pipelines/script/llm-json";
+import { getStageDeps, type StageDeps } from "@/pipelines/stages/deps";
+import { generateHookCandidates } from "@/pipelines/stages/hooks";
+import { generateOutline } from "@/pipelines/stages/outline";
+import { runMeteredSyncStage } from "@/pipelines/stages/run";
+import { resolveStyleCard } from "@/pipelines/stages/style-resolver";
+import { topicsPrompt } from "@/prompts";
 import { requireCreditsWithOverage } from "@/server/billing";
 import { CREDIT_COSTS } from "@/server/credits";
 import { assertGenerationTargetAllowed } from "@/server/modes";
-import type { ProjectId, WorkspaceId } from "@/lib/types/ids";
-import { jobAccepted, notFound, type HandlerOpts, type WorkspaceHandlerCtx } from "./_shared";
+import { JOB_NAMES, QUEUE_NAMES } from "@/queue/queues";
+import {
+  badRequest,
+  jobAccepted,
+  notFound,
+  type HandlerOpts,
+  type WorkspaceHandlerCtx,
+} from "./_shared";
 
 type TopicsInput = z.output<typeof scriptContracts.topics.input>;
 type OutlineInput = z.output<typeof scriptContracts.outline.input>;
@@ -26,186 +38,91 @@ type HooksInput = z.output<typeof scriptContracts.hooks.input>;
 type DraftInput = z.output<typeof scriptContracts.draft.input>;
 
 /**
- * Staged script procedures (PRODUCT-CONTRACTS §4) — WAVE-C CONTRACT STUBS.
+ * Staged script procedures (PRODUCT-CONTRACTS §4) — wave-C C1, the real
+ * staged pipeline replacing the C0 contract stubs. Every stage:
  *
- * The contracts (lib/types/api.ts scriptContracts.topics/outline/hooks/
- * draft) are frozen; these bodies are deterministic fixture-quality
- * implementations so the staged flow works keyless END TO END today:
- *   - `requireCreditsWithOverage` gates every stage at dispatch (§4), and
- *     each stage writes its own itemized ledger entry (reason
- *     "script_generation" — the frozen credit_reason enum has no per-stage
- *     members; the itemization lives in one entry per stage).
- *   - Outputs are runtime-validated against the frozen contracts by
- *     `_contracts.ts` `.output()`.
+ *  - mode guard (`assertGenerationTargetAllowed`) then mode → style-card
+ *    resolution (pipelines/stages/style-resolver.ts: archetype seed card,
+ *    deterministic crossover merge, enabled-partner card, or the LEGACY
+ *    null-generation voice-profile path, unchanged);
+ *  - `requireCreditsWithOverage` at dispatch, AFTER tenant-scoped row
+ *    validation (a cross-workspace probe gets NOT_FOUND and never charges);
+ *  - PipelineRunner execution — every invocation persists pipeline_runs
+ *    rows (kind "script", §4 stage names), with per-stage retries, resume,
+ *    concurrent-claim protection, and an idempotent completion charge
+ *    keyed `<stage>:<input hash>` (reason script_generation, one itemized
+ *    entry per stage);
+ *  - Grok only ever via the LlmProvider seam; fixture mode is fully
+ *    deterministic (pipelines/script/fixture-content.ts synthesizers).
  *
- * C1 REPLACES the bodies with the real Grok-backed staged pipeline
- * (resumable, SSE-streamed, idempotent completion charges keyed by input
- * hash) — the signatures, credit costs, and mode guards here are the
- * contract it implements against. C1 also implements: crossover style-card
- * merging (documented merge rules — the stub picks the heavier archetype),
- * partner resolution, and channel-niche-aware topics.
+ * `topics`/`outline`/`hooks` return complete results in the response (no
+ * SSE); `draft` streams sections over the existing script event bus /
+ * /api/script-stream with the frozen ScriptStreamEvent union.
  */
-
-// ---------------------------------------------------------------------------
-// Style-card resolution (stub)
-// ---------------------------------------------------------------------------
-
-/**
- * Resolve the style card for a generation target. Stub rules:
- *  - null → the voice profile's card (legacy flow), or null.
- *  - archetype → the seeded archetype's card.
- *  - crossover → the heavier archetype's card (C1: deterministic merge).
- *  - partnered_named → passes the feature-flag guard upstream, but partner
- *    resolution itself is C1's — rejected here with a clear message.
- */
-export function resolveStubStyleCard(
-  generation: GenerationTarget | null,
-  voiceProfile: VoiceProfile | null,
-): StyleCard | null {
-  if (generation === null) return voiceProfile?.styleCard ?? null;
-  switch (generation.mode) {
-    case "archetype": {
-      const seed =
-        generation.archetypeId === null ? null : getArchetypeSeed(generation.archetypeId);
-      if (seed === null) notFound("archetype");
-      return seed.styleCard;
-    }
-    case "crossover": {
-      const blend = generation.crossover;
-      if (blend === null) notFound("crossover blend");
-      const heavier = blend.weightA >= 0.5 ? blend.a : blend.b;
-      const seed = getArchetypeSeed(heavier);
-      if (seed === null) notFound("archetype");
-      return seed.styleCard;
-    }
-    case "partnered_named":
-      throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message: "Partner voice resolution is not implemented yet.",
-      });
-    case "train_on_my_channel":
-      // Unreachable: assertGenerationTargetAllowed rejects this mode first.
-      return voiceProfile?.styleCard ?? null;
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
 
-async function chargeStage(
-  deps: EngineDeps,
-  params: {
-    workspaceId: WorkspaceId;
-    cost: number;
-    ctx: WorkspaceHandlerCtx;
-    projectId: ProjectId | null;
-  },
-): Promise<void> {
-  await deps.store.recordCredits({
-    workspaceId: params.workspaceId,
-    delta: -params.cost,
-    // Frozen credit_reason enum has no per-stage members; each stage still
-    // writes its OWN entry, so the ledger stays itemized (§4).
-    reason: "script_generation",
-    actorUserId: params.ctx.userId,
-    projectId: params.projectId,
-  });
+/** Deterministic seed key for a generation target (fixture synthesizers). */
+function generationSeedKey(generation: GenerationTarget | null): string {
+  if (generation === null) return "channel-voice";
+  switch (generation.mode) {
+    case "archetype":
+      return generation.archetypeId ?? "archetype";
+    case "crossover":
+      return generation.crossover === null
+        ? "crossover"
+        : `${generation.crossover.a}+${generation.crossover.b}@${String(generation.crossover.weightA)}`;
+    case "partnered_named":
+      return generation.partnerId ?? "partner";
+    case "train_on_my_channel":
+      return generation.voiceProfileId ?? "own-channel";
+  }
 }
 
+/** Project-scoped context for outline/hooks/draft, style card resolved. */
 async function contextForProject(
-  deps: EngineDeps,
+  deps: StageDeps,
   ctx: WorkspaceHandlerCtx,
   projectId: OutlineInput["projectId"],
   frameId: OutlineInput["frameId"],
   generation: GenerationTarget | null,
   voiceProfileId: DraftInput["voiceProfileId"] = null,
-): Promise<{ context: ScriptContext; frame: Frame; voiceProfile: VoiceProfile | null }> {
-  const project = await deps.store.getProject(ctx.workspaceId, projectId);
+): Promise<{ context: ScriptContext; frame: Frame }> {
+  const store = deps.engine.store;
+  const project = await store.getProject(ctx.workspaceId, projectId);
   if (project === null) notFound("project");
-  const frames = await deps.store.listFrames(ctx.workspaceId, projectId);
+  const frames = await store.listFrames(ctx.workspaceId, projectId);
   const frame =
     frameId === null ? frames.find((f) => f.chosen) : frames.find((f) => f.id === frameId);
   if (frame === undefined) notFound("frame");
   const [researchDocs, avatar, voiceProfile] = await Promise.all([
-    deps.store.listResearchDocs(ctx.workspaceId, projectId),
-    deps.store.getAvatarForChannel(project.channelId),
+    store.listResearchDocs(ctx.workspaceId, projectId),
+    store.getAvatarForChannel(project.channelId),
     voiceProfileId === null
       ? Promise.resolve(null)
-      : deps.store.getVoiceProfile(ctx.workspaceId, voiceProfileId),
+      : store.getVoiceProfile(ctx.workspaceId, voiceProfileId),
   ]);
   if (voiceProfileId !== null && voiceProfile === null) notFound("voice profile");
   const base = assembleContext({ frame, researchDocs, avatar, voiceProfile });
-  const styleCard = resolveStubStyleCard(generation, voiceProfile);
-  return { context: { ...base, styleCard }, frame, voiceProfile };
+  const styleCard =
+    generation === null
+      ? base.styleCard
+      : await resolveStyleCard(generation, voiceProfile, deps.partners);
+  return { context: { ...base, styleCard }, frame };
 }
 
-/** Deterministic topic candidates seeded by channel + archetype. */
-function synthTopics(input: TopicsInput): TopicCandidate[] {
-  const seedName =
-    input.generation?.archetypeId ??
-    (input.generation?.crossover !== null && input.generation?.crossover !== undefined
-      ? `${input.generation.crossover.a}+${input.generation.crossover.b}`
-      : "channel-voice");
-  const templates: readonly { title: string; angle: string; rationale: string }[] = [
-    {
-      title: "The upgrade everyone buys first (and why it should be last)",
-      angle: "Reorder the standard buying advice using measured results, not habit.",
-      rationale: "Purchase-order videos outperform in most gear niches; strong comment bait.",
-    },
-    {
-      title: "I tracked 30 days of results — here is what actually moved the needle",
-      angle: "A month of honest measurement, ranked by effect size.",
-      rationale: "Time-boxed self-experiments retain well and are cheap to produce.",
-    },
-    {
-      title: "Five beginner mistakes that quietly cost the most",
-      angle: "Rank the common mistakes by real cost, with the fix for each.",
-      rationale: "Mistake-ranking maps directly onto the audience's stated pains.",
-    },
-    {
-      title: "The cheap option vs the expensive one — blind comparison",
-      angle: "Same task, both price points, judged blind.",
-      rationale: "Versus formats are proven outliers in comparable niches.",
-    },
-    {
-      title: "What nobody tells you before your first year",
-      angle: "The unglamorous fundamentals, told through one concrete story.",
-      rationale: "Experience-retrospectives earn saves and shares from newer viewers.",
-    },
-    {
-      title: "One week using only the basics — was the fancy gear ever needed?",
-      angle: "A constraint experiment that questions the upgrade treadmill.",
-      rationale: "Constraint formats generate strong open loops and low production cost.",
-    },
-    {
-      title: "The setting almost everyone gets wrong",
-      angle: "One high-leverage adjustment, demonstrated before/after.",
-      rationale: "Single-fix videos convert search traffic and are highly clippable.",
-    },
-    {
-      title: "Reacting to my own first attempt — a brutal audit",
-      angle: "Revisit early work with today's standards and extract the lessons.",
-      rationale: "Self-audit formats humanize the channel and bridge old/new audiences.",
-    },
-    {
-      title: "The 80/20 of getting good — what to practice first",
-      angle: "The minimum set of skills that produces most of the results.",
-      rationale: "Prioritization content matches beginner motivation and ranks well.",
-    },
-    {
-      title: "Everything I would buy again (and the three things I regret)",
-      angle: "A no-affiliate honesty pass over a year of purchases.",
-      rationale: "Regret framing differentiates from standard recommendation lists.",
-    },
-  ];
-  const offset = fnv1a(`${input.channelId}|${seedName}`) % templates.length;
-  const out: TopicCandidate[] = [];
-  for (let i = 0; i < input.count; i++) {
-    const t = templates[(offset + i) % templates.length];
-    if (t !== undefined) out.push(t);
-  }
-  return out;
+/** Chosen topic steers the outline/hook context through the frame angle. */
+function steerByTopic(
+  context: ScriptContext,
+  topic: { title: string; angle: string } | null,
+): ScriptContext {
+  if (topic === null) return context;
+  return {
+    ...context,
+    frame: { ...context.frame, angle: `${topic.title} — ${topic.angle}` },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -213,30 +130,77 @@ function synthTopics(input: TopicsInput): TopicCandidate[] {
 // ---------------------------------------------------------------------------
 
 export const scriptStagesImpl = {
-  /** §4 `script.topics` — 1 credit. */
+  /**
+   * §4 `script.topics` — 1 credit. Channel niche + fresh niche outliers
+   * (ideation store, when data exists) + resolved style card → candidates.
+   */
   async topics({ ctx, input }: HandlerOpts<TopicsInput>) {
     assertGenerationTargetAllowed(input.generation);
+    const deps = await getStageDeps();
+    // Channel OWNERSHIP is validated before any charge or channel data use:
+    // the repo read is workspace-scoped, so a foreign channel is NOT_FOUND.
+    const channel: Channel | null = await deps.channels.get(ctx.workspaceId, input.channelId);
+    if (channel === null) notFound("channel");
+    const styleCard: StyleCard | null = await resolveStyleCard(
+      input.generation,
+      null,
+      deps.partners,
+    );
     await requireCreditsWithOverage(ctx.workspaceId, CREDIT_COSTS.scriptTopics);
-    const deps = await getEngineDeps();
-    // Stub note (C1): topics are deterministic templates, not yet bound to
-    // the channel's niche/outlier data — so no channel-owned data is read
-    // (and none can leak). C1 must validate channel ownership when it
-    // starts reading channel context.
-    const topics = synthTopics(input);
-    await chargeStage(deps, {
+
+    const outliers =
+      channel.nicheKeywords.length === 0
+        ? []
+        : await deps.ideation.listOutliers({
+            nicheKeywords: channel.nicheKeywords,
+            limit: 5,
+          });
+
+    const topics = await runMeteredSyncStage<TopicCandidate[]>({
+      deps: deps.engine,
+      stage: "topics",
       workspaceId: ctx.workspaceId,
-      cost: CREDIT_COSTS.scriptTopics,
-      ctx,
       projectId: null,
+      input,
+      cost: CREDIT_COSTS.scriptTopics,
+      actorUserId: ctx.userId,
+      compute: async () => {
+        const result = await generateJson({
+          mode: deps.engine.mode,
+          llm: deps.engine.llm,
+          model: LLM_MODELS.sonnet,
+          template: topicsPrompt({
+            channelTitle: channel.title,
+            nicheKeywords: channel.nicheKeywords,
+            outliers: outliers.map((o) => ({ title: o.title, outlierRatio: o.outlierRatio })),
+            styleCard,
+            count: input.count,
+          }),
+          maxTokens: 3000,
+          schema: z.object({
+            topics: z.array(topicCandidateSchema).min(input.count).max(10),
+          }),
+          fixture: () => ({
+            topics: synthTopicCandidates({
+              seed: `${input.channelId}|${generationSeedKey(input.generation)}`,
+              nicheKeywords: channel.nicheKeywords,
+              outlierTitles: outliers.map((o) => o.title),
+              energy: styleCard?.energy ?? 3,
+              count: input.count,
+            }),
+          }),
+        });
+        return result.topics.slice(0, input.count);
+      },
     });
     return { topics };
   },
 
-  /** §4 `script.outline` — 1 credit. */
+  /** §4 `script.outline` — 1 credit. Chosen topic + research (when
+   *  attached) + style card → outline honoring the card's pacing. */
   async outline({ ctx, input }: HandlerOpts<OutlineInput>) {
     assertGenerationTargetAllowed(input.generation);
-    await requireCreditsWithOverage(ctx.workspaceId, CREDIT_COSTS.scriptOutline);
-    const deps = await getEngineDeps();
+    const deps = await getStageDeps();
     const { context } = await contextForProject(
       deps,
       ctx,
@@ -244,70 +208,88 @@ export const scriptStagesImpl = {
       input.frameId,
       input.generation,
     );
-    // Chosen topic (when given) steers the outline via the frame angle.
-    const steered: ScriptContext =
-      input.topic === null
-        ? context
-        : {
-            ...context,
-            frame: { ...context.frame, angle: `${input.topic.title} — ${input.topic.angle}` },
-          };
-    const outline = synthOutline(steered);
-    await chargeStage(deps, {
+    await requireCreditsWithOverage(ctx.workspaceId, CREDIT_COSTS.scriptOutline);
+    const steered = steerByTopic(context, input.topic);
+
+    const outline = await runMeteredSyncStage<Outline>({
+      deps: deps.engine,
+      stage: "outline",
       workspaceId: ctx.workspaceId,
-      cost: CREDIT_COSTS.scriptOutline,
-      ctx,
       projectId: input.projectId,
+      input,
+      cost: CREDIT_COSTS.scriptOutline,
+      actorUserId: ctx.userId,
+      compute: () =>
+        generateOutline({ mode: deps.engine.mode, llm: deps.engine.llm, context: steered }),
     });
     return { outline };
   },
 
-  /** §4 `script.hooks` — 1 credit, 3 tagged candidates. */
+  /** §4 `script.hooks` — 1 credit, 3 candidates constrained to the card's
+   *  hookPatterns, tagged; one auto-picked by the card's preference. */
   async hooks({ ctx, input }: HandlerOpts<HooksInput>) {
     assertGenerationTargetAllowed(input.generation);
-    await requireCreditsWithOverage(ctx.workspaceId, CREDIT_COSTS.scriptHooks);
-    const deps = await getEngineDeps();
+    const deps = await getStageDeps();
     const { context } = await contextForProject(deps, ctx, input.projectId, null, input.generation);
-    const hooks: HookCandidate[] = synthHookCandidates(context).map((h, i) => ({
-      style: h.style,
-      body: h.body,
-      autoPicked: i === 0,
-    }));
-    await chargeStage(deps, {
+    await requireCreditsWithOverage(ctx.workspaceId, CREDIT_COSTS.scriptHooks);
+    // Contract: outline null ⇒ synthesize a scaffold from the chosen frame
+    // (deterministic code, not a metered LLM call) — it only gives the hook
+    // writer the video's shape.
+    const outline = input.outline ?? synthOutline(context);
+
+    const hooks = await runMeteredSyncStage<HookCandidate[]>({
+      deps: deps.engine,
+      stage: "hooks",
       workspaceId: ctx.workspaceId,
-      cost: CREDIT_COSTS.scriptHooks,
-      ctx,
       projectId: input.projectId,
+      input,
+      cost: CREDIT_COSTS.scriptHooks,
+      actorUserId: ctx.userId,
+      compute: () =>
+        generateHookCandidates({
+          mode: deps.engine.mode,
+          llm: deps.engine.llm,
+          context,
+          outline,
+        }),
     });
     return { hooks };
   },
 
   /**
-   * §4 `script.draft` — 4 credits. Stub runs synchronously (fixture-grade
-   * sections from the approved outline + chosen hook) and returns the
-   * jobAccepted shape the real (C1) section-streamed pipeline will keep.
+   * §4 `script.draft` — 4 credits. Approved outline + chosen hook →
+   * section-streamed full draft over the existing SSE event bus, then the
+   * internal retention/voice/fact-check/quality passes (not user-facing
+   * stages). Resumable; completion charge keyed `draft:<input hash>`.
    */
   async draft({ ctx, input }: HandlerOpts<DraftInput>) {
     assertGenerationTargetAllowed(input.generation);
+    const deps = await getStageDeps();
+    const store = deps.engine.store;
+    const project = await store.getProject(ctx.workspaceId, input.projectId);
+    if (project === null) notFound("project");
+    const frame = await store.getFrame(ctx.workspaceId, input.frameId);
+    if (frame === null || frame.projectId !== input.projectId) notFound("frame");
+    const voiceProfile =
+      input.voiceProfileId === null
+        ? null
+        : await store.getVoiceProfile(ctx.workspaceId, input.voiceProfileId);
+    if (input.voiceProfileId !== null && voiceProfile === null) notFound("voice profile");
+    // Resolve the card NOW so mode errors (unknown archetype, unlicensed
+    // partner) surface at dispatch, before any charge or job.
+    const styleCard = await resolveStyleCard(input.generation, voiceProfile, deps.partners);
+    if (
+      input.hook !== null &&
+      styleCard !== null &&
+      !styleCard.hookPatterns.some((p) => p.technique === input.hook?.style)
+    ) {
+      badRequest(
+        `hook technique "${input.hook.style}" is not in the style card's allowed patterns (${styleCard.hookPatterns.map((p) => p.technique).join(", ")})`,
+      );
+    }
     await requireCreditsWithOverage(ctx.workspaceId, CREDIT_COSTS.scriptDraft);
-    const deps = await getEngineDeps();
-    const { context } = await contextForProject(
-      deps,
-      ctx,
-      input.projectId,
-      input.frameId,
-      input.generation,
-      input.voiceProfileId,
-    );
-    const outline: Outline = input.outline ?? synthOutline(context);
-    const candidates: HookCandidate[] = synthHookCandidates(context).map((h, i) => ({
-      style: h.style,
-      body: h.body,
-      autoPicked: input.hook === null ? i === 0 : h.style === input.hook.style,
-    }));
-    const hookBody = input.hook?.body ?? candidates[0]?.body ?? "";
 
-    const script = await deps.store.createScript({
+    const script = await store.createScript({
       workspaceId: ctx.workspaceId,
       projectId: input.projectId,
       voiceProfileId: input.voiceProfileId,
@@ -316,41 +298,23 @@ export const scriptStagesImpl = {
       crossover: input.generation?.crossover ?? null,
       partnerId: input.generation?.partnerId ?? null,
     });
-    await deps.store.updateProjectStatus(ctx.workspaceId, input.projectId, "scripting");
+    await store.updateProjectStatus(ctx.workspaceId, input.projectId, "scripting");
 
-    const sections = outline.sections.map((section, i) => ({
-      position: i,
-      kind: section.kind,
-      heading: section.heading,
-      body:
-        section.kind === "hook" && hookBody !== ""
-          ? hookBody
-          : synthSectionBody(context, section, i),
-      estSeconds: section.targetSeconds,
-      retentionNote: section.retentionNote === "" ? null : section.retentionNote,
-      factRefs: [],
-    }));
-    const persisted = await deps.store.replaceSections(ctx.workspaceId, script.id, sections);
-    const text = persisted.map((s) => s.body).join("\n\n");
-    const words = countWords(text);
-    await deps.store.updateScript(ctx.workspaceId, script.id, {
-      status: "final",
-      stats: { words, estRuntimeS: estimateSeconds(words), readability: fleschReadingEase(text) },
-    });
-    deps.store.saveHookCandidates(script.id, candidates);
-    const report = computeQualityReport({
-      sections: persisted,
-      targetMinutes: context.frame.targetMinutes,
-      tone: context.frame.tone,
-      styleCard: context.styleCard,
-    });
-    deps.store.saveQualityReport(script.id, report);
-    await chargeStage(deps, {
-      workspaceId: ctx.workspaceId,
-      cost: CREDIT_COSTS.scriptDraft,
-      ctx,
+    const payload = {
+      workspaceId: input.workspaceId,
       projectId: input.projectId,
-    });
+      frameId: input.frameId,
+      voiceProfileId: input.voiceProfileId,
+      generation: input.generation,
+      scriptId: script.id,
+      actorUserId: ctx.userId as string,
+      dispatch: "draft" as const,
+      presetOutline: input.outline,
+      chosenHook: input.hook,
+    };
+    await dispatchPipelineJob(QUEUE_NAMES.script, JOB_NAMES.generateScript, payload, () =>
+      handleGenerateScriptJob(payload),
+    );
     return { ...jobAccepted(), scriptId: script.id };
   },
 };
