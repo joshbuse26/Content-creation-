@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { extractSlots, fillSlots } from "@/components/packaging/template-slots";
 import { TRPCError } from "@trpc/server";
 import type { Session } from "next-auth";
 import { FIXTURE_IDS } from "@/lib/fixtures";
@@ -147,5 +148,20 @@ describe("template → description generation ({{slot}} filling, zero env)", () 
     });
     expect(description.body.length).toBeGreaterThan(50);
     expect(description.body).not.toContain("{{");
+  });
+});
+
+describe("panel slot helpers (fill remaining {{slots}} client-side)", () => {
+  it("extracts unique slot names in order of first appearance", () => {
+    expect(extractSlots("{{a}} x {{ b }} y {{a}} {{c}}")).toEqual(["a", "b", "c"]);
+    expect(extractSlots("no slots here")).toEqual([]);
+  });
+
+  it("fills only slots with non-empty values, preserving the rest", () => {
+    const filled = fillSlots("Hi {{name}}, see {{link}} ({{name}})", {
+      name: "Casey",
+      link: "   ",
+    });
+    expect(filled).toBe("Hi Casey, see {{link}} (Casey)");
   });
 });

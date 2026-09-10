@@ -159,9 +159,9 @@ describe("thumbnail pipeline (fixture image provider, in-memory storage)", () =>
 
     const second = await runThumbnailPipeline(deps, { input: jobInput, actorUserId: null });
     expect(second.result.status).toBe("done");
-    expect(
-      second.result.status === "done" ? second.result.skippedStages : [],
-    ).toHaveLength(THUMBNAIL_STAGES.length);
+    expect(second.result.status === "done" ? second.result.skippedStages : []).toHaveLength(
+      THUMBNAIL_STAGES.length,
+    );
     expect(records).toHaveLength(1); // still exactly one charge
   });
 
