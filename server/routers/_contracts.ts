@@ -18,8 +18,8 @@ import {
   titlesContracts,
   workspaceContracts,
 } from "@/lib/types/api";
-import { FIXTURE_IDS, fixtureApiKey, fixtureIdea, fixtureProject } from "@/lib/fixtures";
 import { rateLimitMiddleware } from "@/server/ratelimit";
+import { apiKeysImpl } from "@/server/routers/impl/apiKeys";
 import { avatarHandlers } from "@/server/routers/impl/avatar";
 import { billingHandlers } from "@/server/routers/impl/billing";
 import { channelHandlers } from "@/server/routers/impl/channel";
@@ -27,6 +27,7 @@ import { chaptersHandlers } from "@/server/routers/impl/chapters";
 import { dashboardHandlers } from "@/server/routers/impl/dashboard";
 import { descriptionHandlers } from "@/server/routers/impl/description";
 import { frameImpl } from "@/server/routers/impl/frame";
+import { ideasHandlers } from "@/server/routers/impl/ideas";
 import { projectHandlers } from "@/server/routers/impl/project";
 import { researchImpl } from "@/server/routers/impl/research";
 import { revisionImpl } from "@/server/routers/impl/revision";
@@ -49,10 +50,10 @@ import { protectedProcedure, router, workspaceProcedure } from "@/server/trpc";
  *   description/tags/chapters/dashboard   → A4 (impl/*.ts)
  *   workspace/project/billing.summary     → A0 integration (impl/*.ts)
  *
+ *   ideas                                 → B1 (impl/ideas.ts)
+ *   apiKeys                               → B2 (impl/apiKeys.ts)
+ *   billing.checkout/portal               → B3 (impl/billing.ts, live Stripe)
  *   thumbnails/templates                  → B4 (impl/{thumbnails,templates}.ts)
- *
- * Still fixture stubs (cut features / need live Stripe — see OPEN-ITEMS.md):
- * ideas, apiKeys, billing.checkout/portal.
  *
  * Rate limits (spec §6): every procedure carries the "general" policy;
  * generation endpoints additionally carry the stricter "generation" policy.
@@ -60,8 +61,6 @@ import { protectedProcedure, router, workspaceProcedure } from "@/server/trpc";
 
 const general = rateLimitMiddleware("general");
 const generation = rateLimitMiddleware("generation");
-
-const queued = { pipelineRunIds: [FIXTURE_IDS.pipelineRun], status: "queued" as const };
 
 // ---------------------------------------------------------------------------
 
@@ -157,37 +156,34 @@ export const avatarRouter = router({
     .mutation(({ ctx, input }) => avatarHandlers.regenerate({ ctx, input })),
 });
 
-// ideas — fixture stub (outlier index + daily feed are v1.1; see OPEN-ITEMS.md)
+// ideas — B1 (server/routers/impl/ideas.ts): outlier index §5.3 + daily feed §5.4
 export const ideasRouter = router({
   feed: workspaceProcedure("idea", "read")
     .use(general)
     .input(ideasContracts.feed.input)
     .output(ideasContracts.feed.output)
-    .query(() => [fixtureIdea]),
+    .query(({ ctx, input }) => ideasHandlers.feed({ ctx, input })),
   save: workspaceProcedure("idea", "update")
     .use(general)
     .input(ideasContracts.save.input)
     .output(ideasContracts.save.output)
-    .mutation(() => ({ ...fixtureIdea, status: "saved" as const })),
+    .mutation(({ ctx, input }) => ideasHandlers.save({ ctx, input })),
   dismiss: workspaceProcedure("idea", "update")
     .use(general)
     .input(ideasContracts.dismiss.input)
     .output(ideasContracts.dismiss.output)
-    .mutation(() => ({ ...fixtureIdea, status: "dismissed" as const })),
+    .mutation(({ ctx, input }) => ideasHandlers.dismiss({ ctx, input })),
   promote: workspaceProcedure("idea", "update")
     .use(general)
     .input(ideasContracts.promote.input)
     .output(ideasContracts.promote.output)
-    .mutation(() => ({
-      idea: { ...fixtureIdea, status: "promoted" as const },
-      project: fixtureProject,
-    })),
+    .mutation(({ ctx, input }) => ideasHandlers.promote({ ctx, input })),
   requestBatch: workspaceProcedure("idea", "create")
     .use(general)
     .use(generation)
     .input(ideasContracts.requestBatch.input)
     .output(ideasContracts.requestBatch.output)
-    .mutation(() => queued),
+    .mutation(({ ctx, input }) => ideasHandlers.requestBatch({ ctx, input })),
 });
 
 export const projectRouter = router({
@@ -476,39 +472,35 @@ export const billingRouter = router({
     .use(general)
     .output(billingContracts.summary.output)
     .query(({ ctx }) => billingHandlers.summary({ ctx })),
-  // checkout/portal — fixture stubs until live Stripe lands (OPEN-ITEMS.md)
+  // checkout/portal — B3 (impl/billing.ts): live Stripe when STRIPE_SECRET_KEY
+  // is set; the handlers keep the exact fixture URLs when it is not.
   checkout: workspaceProcedure("billing", "update")
     .use(general)
     .input(billingContracts.checkout.input)
     .output(billingContracts.checkout.output)
-    .mutation(({ input }) => ({
-      checkoutUrl: `https://checkout.stripe.com/c/pay/fixture_${input.plan}`,
-    })),
+    .mutation(({ ctx, input }) => billingHandlers.checkout({ ctx, input })),
   portal: workspaceProcedure("billing", "update")
     .use(general)
     .input(billingContracts.portal.input)
     .output(billingContracts.portal.output)
-    .mutation(() => ({ portalUrl: "https://billing.stripe.com/p/session/fixture" })),
+    .mutation(({ ctx }) => billingHandlers.portal({ ctx })),
 });
 
-// apiKeys — fixture stub (MCP access is v1.1; see OPEN-ITEMS.md)
+// apiKeys — B2 (server/routers/impl/apiKeys.ts): hashed show-once MCP keys
 export const apiKeysRouter = router({
   list: workspaceProcedure("apiKey", "read")
     .use(general)
     .input(apiKeysContracts.list.input)
     .output(apiKeysContracts.list.output)
-    .query(() => [fixtureApiKey]),
+    .query(({ ctx, input }) => apiKeysImpl.list({ ctx, input })),
   create: workspaceProcedure("apiKey", "create")
     .use(general)
     .input(apiKeysContracts.create.input)
     .output(apiKeysContracts.create.output)
-    .mutation(({ input }) => ({
-      apiKey: { ...fixtureApiKey, scopes: input.scopes, channelIds: input.channelIds },
-      secret: "gr_live_fixture_secret_shown_once",
-    })),
+    .mutation(({ ctx, input }) => apiKeysImpl.create({ ctx, input })),
   revoke: workspaceProcedure("apiKey", "delete")
     .use(general)
     .input(apiKeysContracts.revoke.input)
     .output(apiKeysContracts.revoke.output)
-    .mutation(() => ({ ...fixtureApiKey, revokedAt: new Date("2026-09-09T00:00:00.000Z") })),
+    .mutation(({ ctx, input }) => apiKeysImpl.revoke({ ctx, input })),
 });
