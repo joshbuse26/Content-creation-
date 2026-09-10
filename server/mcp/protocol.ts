@@ -1,9 +1,8 @@
 import { logger } from "@/lib/logger";
 
 /**
- * MCP streamable-HTTP protocol layer — hand-rolled JSON-RPC 2.0 (see
- * REQUESTS-B2.md: the official @modelcontextprotocol/sdk is a requested
- * dependency; this module is deliberately transport-only and dependency-free
+ * MCP streamable-HTTP protocol layer — hand-rolled JSON-RPC 2.0 (the
+ * official @modelcontextprotocol/sdk swap is deferred — see OPEN-ITEMS.md; this module is deliberately transport-only and dependency-free
  * so swapping the SDK in later touches nothing but this file and the route).
  *
  * Supported methods: initialize · notifications/* (acknowledged, no reply) ·

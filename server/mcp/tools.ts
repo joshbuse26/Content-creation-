@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import type { Session } from "next-auth";
 import { z } from "zod";
+import { getConfig } from "@/lib/config";
 import { logger } from "@/lib/logger";
 import { IDEA_STATUSES } from "@/lib/types/enums";
 import type { ApiKey, Project } from "@/lib/types/entities";
@@ -19,6 +20,7 @@ import {
 } from "@/pipelines/packaging";
 import { getEngineDeps } from "@/pipelines/script/deps";
 import { appRouter } from "@/server/routers";
+import { s3ConfigFromEnv } from "@/server/storage";
 import { createCallerFactory, createContext } from "@/server/trpc";
 import type { McpAuthContext } from "./auth";
 import {
@@ -161,7 +163,7 @@ const TOOL_DEFINITIONS: Record<McpToolName, McpToolDefinition> = {
   },
   generate_thumbnail: {
     name: "generate_thumbnail",
-    description: `Produce a thumbnail TEXT BRIEF for a project (image generation ships in a later version; no credits charged for briefs). composition_pattern is one of the library patterns (${Object.keys(COMPOSITION_PATTERN_NOTES).join(", ")}) or free-form.`,
+    description: `Generate thumbnail concepts for a project (3 images, 1 credit each) via the shared thumbnails pipeline. When image generation is not configured for this deployment (no image key / object storage), returns a thumbnail TEXT BRIEF instead with no credits charged. composition_pattern is one of the library patterns (${Object.keys(COMPOSITION_PATTERN_NOTES).join(", ")}) or free-form.`,
     inputSchema: {
       type: "object",
       properties: {
@@ -253,6 +255,17 @@ async function projectInScope(auth: McpAuthContext, projectId: string): Promise<
   const project = await deps.store.getProject(auth.key.workspaceId, asProjectId(projectId));
   if (project === null || !channelInScope(auth.key, project.channelId)) return null;
   return project;
+}
+
+/**
+ * generate_thumbnail dispatches to the real thumbnails pipeline only when
+ * the deployment can actually produce and persist images: an image API key
+ * plus S3-compatible object storage. Otherwise (fixture/keyless boots
+ * included) the tool keeps its zero-cost TEXT BRIEF fallback.
+ */
+function thumbnailImageGenAvailable(): boolean {
+  const config = getConfig();
+  return config.IMAGE_API_KEY !== undefined && s3ConfigFromEnv() !== null;
 }
 
 export async function callMcpTool(
@@ -354,13 +367,25 @@ export async function callMcpTool(
         const input = parsedArgs.data as z.output<(typeof ARG_SCHEMAS)["generate_thumbnail"]>;
         const project = await projectInScope(auth, input.project_id);
         if (project === null) return toolError(OUT_OF_SCOPE_PROJECT);
+        if (thumbnailImageGenAvailable()) {
+          // Same caller-dispatch as generate_titles — the 3-credit gate and
+          // idempotent completion charge come from the shared pipeline.
+          const accepted = await caller.thumbnails.generate({
+            workspaceId,
+            projectId: project.id,
+            compositionPattern: input.composition_pattern,
+            subjectDescription: input.subject_description,
+          });
+          return toolText(accepted);
+        }
+        // Fallback: image key / object storage not configured — text brief.
         const ctx = await loadPackagingContext(workspaceId, project.id);
         const brief = buildThumbnailBrief(ctx, {
           compositionPattern: input.composition_pattern,
           subjectDescription: input.subject_description,
         });
         return toolText(
-          `${brief}\n\n[Note: this build ships thumbnail TEXT BRIEFS only — image generation is coming in a following release. No credits were charged.]`,
+          `${brief}\n\n[Note: image generation is not configured for this deployment (image key / object storage missing) — this is a thumbnail TEXT BRIEF only. No credits were charged.]`,
         );
       }
       case "get_project_status": {
