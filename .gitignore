@@ -1,0 +1,20 @@
+# deps
+node_modules/
+
+# next.js
+.next/
+out/
+next-env.d.ts
+
+# env — never commit secrets
+.env
+.env.*
+!.env.example
+
+# testing
+coverage/
+
+# misc
+*.tsbuildinfo
+.DS_Store
+*.log
