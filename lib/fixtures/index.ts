@@ -66,6 +66,9 @@ export const FIXTURE_IDS = {
   pipelineRun: "00000000-0000-4000-8000-000000000070",
   ledgerEntry: "00000000-0000-4000-8000-000000000071",
   apiKey: "00000000-0000-4000-8000-000000000080",
+  // Wave C: reserved for the partnered_named stub (no partner fixture row
+  // exists while FEATURE_PARTNERED_NAMED is off; tests use this id).
+  partner: "00000000-0000-4000-8000-000000000090",
   // A second workspace that the fixture user is NOT a member of — used by
   // cross-tenant denial tests.
   otherWorkspace: "00000000-0000-4000-8000-000000000099",
@@ -166,13 +169,39 @@ export const fixtureVoiceProfile = voiceProfileSchema.parse({
   channelId: FIXTURE_IDS.channel,
   name: "Casey — default",
   source: "own_channel",
+  // StyleCard v2 (PRODUCT-CONTRACTS §1) — a channel-learned card.
   styleCard: {
-    rhythm: "Short punchy sentences, then one long payoff sentence per beat.",
-    register: "Casual expert — first-name basis, zero jargon gatekeeping.",
-    catchphrases: ["here's the thing", "let's dial it in"],
-    humor: "Dry, self-deprecating; jokes land in asides, never in explanations.",
-    pov: "First person singular, addresses viewer as 'you'.",
-    taboos: ["clickbait superlatives", "trash-talking other creators"],
+    voice: {
+      pov: "First person singular, addresses viewer as 'you'.",
+      diction: "Casual expert — first-name basis, zero jargon gatekeeping.",
+      rhythm: "Short punchy sentences, then one long payoff sentence per beat.",
+    },
+    tone: {
+      register: "Dry, self-deprecating; jokes land in asides, never in explanations.",
+      never: "clickbait superlatives; trash-talking other creators",
+    },
+    pacing: { wpmTarget: 150, sectionSeconds: 90, rehookSeconds: 75 },
+    hookPatterns: [
+      {
+        technique: "open_loop",
+        guidance: "Tease the test result without revealing which way it went.",
+      },
+      {
+        technique: "stakes",
+        guidance: "Name the dollar amount on the line in the first two sentences.",
+      },
+    ],
+    ctaHabits: {
+      placement: "after_payoff",
+      placementPct: null,
+      phrasingStyle: "One dry, self-aware ask tied to the money just saved.",
+      maxPerVideo: 1,
+    },
+    bannedClaims: ["guaranteed_results", "medical_claims"],
+    readingLevel: { minGrade: 6, maxGrade: 9 },
+    energy: 3,
+    exampleSnippets: ["here's the thing", "let's dial it in"],
+    thumbnailPresetId: null,
   },
   licenseDocUrl: null,
   licenseSignedAt: null,
@@ -218,6 +247,11 @@ export const fixtureProject = projectSchema.parse({
   ideaId: FIXTURE_IDS.idea,
   targetPublishDate: "2026-09-20",
   publishedVideoId: null,
+  // Legacy (pre-mode) project: generation mode fields are null.
+  generationMode: null,
+  archetypeId: null,
+  crossover: null,
+  partnerId: null,
   ...stamps,
 });
 
@@ -258,6 +292,10 @@ export const fixtureScript = scriptSchema.parse({
   voiceProfileId: FIXTURE_IDS.voiceProfile,
   status: "drafting",
   stats: { words: 1840, estRuntimeS: 736, readability: 68.4 },
+  generationMode: null,
+  archetypeId: null,
+  crossover: null,
+  partnerId: null,
   ...stamps,
 });
 
@@ -348,6 +386,10 @@ export const fixtureSections: ScriptSection[] = z.array(scriptSectionSchema).par
   },
 ]);
 
+/** Wave C: the 12 seeded archetypes double as fixture rows — archetypes.list
+ *  serves them keyless, and scripts/seed.ts inserts the same objects. */
+export { ARCHETYPE_SEEDS as fixtureArchetypes } from "@/lib/archetypes";
+
 export const fixtureQualityReport = qualityGateReportSchema.parse({
   passed: true,
   wordCount: 1840,
@@ -360,6 +402,8 @@ export const fixtureQualityReport = qualityGateReportSchema.parse({
   hookOk: true,
   warnings: [],
   autoFixAttempted: false,
+  /** Pre-wave-C report: no style card was in play. */
+  styleGates: null,
 });
 
 export const fixtureRevision = revisionSchema.parse({

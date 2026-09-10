@@ -49,6 +49,7 @@ import type {
   NewProject,
   NewResearchDoc,
   NewRevision,
+  NewScriptModeFields,
   NewSection,
   ProjectListFilter,
   ProjectPatch,
@@ -153,6 +154,10 @@ export class InMemoryEngineStore implements EngineStore {
       ideaId: project.ideaId,
       targetPublishDate: null,
       publishedVideoId: null,
+      generationMode: project.generationMode ?? null,
+      archetypeId: project.archetypeId ?? null,
+      crossover: project.crossover ?? null,
+      partnerId: project.partnerId ?? null,
       createdAt: now,
       updatedAt: now,
     };
@@ -313,11 +318,13 @@ export class InMemoryEngineStore implements EngineStore {
 
   // -- scripts + sections ---------------------------------------------------
 
-  createScript(params: {
-    workspaceId: WorkspaceId;
-    projectId: ProjectId;
-    voiceProfileId: VoiceProfileId | null;
-  }): Promise<Script> {
+  createScript(
+    params: {
+      workspaceId: WorkspaceId;
+      projectId: ProjectId;
+      voiceProfileId: VoiceProfileId | null;
+    } & NewScriptModeFields,
+  ): Promise<Script> {
     const now = new Date();
     const maxVersion = this.scripts
       .filter((s) => s.projectId === params.projectId)
@@ -330,6 +337,10 @@ export class InMemoryEngineStore implements EngineStore {
       voiceProfileId: params.voiceProfileId,
       status: "outlining",
       stats: { words: 0, estRuntimeS: 0, readability: 0 },
+      generationMode: params.generationMode ?? null,
+      archetypeId: params.archetypeId ?? null,
+      crossover: params.crossover ?? null,
+      partnerId: params.partnerId ?? null,
       createdAt: now,
       updatedAt: now,
     };

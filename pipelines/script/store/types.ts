@@ -127,6 +127,19 @@ export interface NewProject {
   channelId: ChannelId;
   title: string;
   ideaId: Project["ideaId"];
+  /** Wave-C mode fields — omitted/undefined ⇒ null (legacy flow). */
+  generationMode?: Project["generationMode"];
+  archetypeId?: Project["archetypeId"];
+  crossover?: Project["crossover"];
+  partnerId?: Project["partnerId"];
+}
+
+/** Wave-C mode fields accepted by createScript (undefined ⇒ null). */
+export interface NewScriptModeFields {
+  generationMode?: Script["generationMode"];
+  archetypeId?: Script["archetypeId"];
+  crossover?: Script["crossover"];
+  partnerId?: Script["partnerId"];
 }
 
 export interface ProjectPatch {
@@ -192,11 +205,13 @@ export interface EngineStore {
   ): Promise<Frame | null>;
 
   // Scripts + sections
-  createScript(params: {
-    workspaceId: WorkspaceId;
-    projectId: ProjectId;
-    voiceProfileId: VoiceProfileId | null;
-  }): Promise<Script>;
+  createScript(
+    params: {
+      workspaceId: WorkspaceId;
+      projectId: ProjectId;
+      voiceProfileId: VoiceProfileId | null;
+    } & NewScriptModeFields,
+  ): Promise<Script>;
   getScript(workspaceId: WorkspaceId, scriptId: ScriptId): Promise<Script | null>;
   listScriptVersions(workspaceId: WorkspaceId, projectId: ProjectId): Promise<Script[]>;
   updateScript(

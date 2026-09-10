@@ -15,10 +15,12 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+import type { CrossoverBlend, StyleCard, ThumbnailPreset } from "@/lib/types/entities";
 import {
   CHANNEL_MODES,
   CREDIT_REASONS,
   DESCRIPTION_MODES,
+  GENERATION_MODES,
   FRAME_FORMATS,
   FRAME_OUTCOMES,
   IDEA_STATUSES,
@@ -70,6 +72,7 @@ export const descriptionModeEnum = pgEnum("description_mode", DESCRIPTION_MODES)
 export const pipelineKindEnum = pgEnum("pipeline_kind", PIPELINE_KINDS);
 export const pipelineRunStatusEnum = pgEnum("pipeline_run_status", PIPELINE_RUN_STATUSES);
 export const creditReasonEnum = pgEnum("credit_reason", CREDIT_REASONS);
+export const generationModeEnum = pgEnum("generation_mode", GENERATION_MODES);
 
 // ---------------------------------------------------------------------------
 // Column helpers
@@ -291,16 +294,10 @@ export const voiceProfiles = pgTable(
       .references(() => channels.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     source: voiceSourceEnum("source").notNull(),
-    styleCard: jsonb("style_card")
-      .$type<{
-        rhythm: string;
-        register: string;
-        catchphrases: string[];
-        humor: string;
-        pov: string;
-        taboos: string[];
-      }>()
-      .notNull(),
+    /** StyleCard v2 (PRODUCT-CONTRACTS §1) — structured shape in
+     *  lib/types/entities.ts styleCardSchema. Legacy rows are transformed
+     *  by migration 0005. */
+    styleCard: jsonb("style_card").$type<StyleCard>().notNull(),
     licenseDocUrl: text("license_doc_url"),
     licenseSignedAt: timestamp("license_signed_at", { withTimezone: true }),
     createdAt: createdAt(),
@@ -313,6 +310,56 @@ export const voiceProfiles = pgTable(
     check(
       "voice_profiles_license_required",
       sql`${t.source} <> 'licensed' OR (${t.licenseDocUrl} IS NOT NULL AND ${t.licenseSignedAt} IS NOT NULL)`,
+    ),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Archetypes & partners (wave C — PRODUCT-CONTRACTS §2/§3/§5)
+// ---------------------------------------------------------------------------
+
+/**
+ * The 12 seeded generation archetypes — GLOBAL (not tenant-scoped), never an
+ * empty table (scripts/seed.ts seeds all 12; fixture mode serves them from
+ * lib/archetypes.ts). id is the frozen slug from ARCHETYPE_IDS, not a uuid.
+ * Style cards + thumbnail presets are ORIGINAL generic craft — no real
+ * creator's name, catchphrase, or wording, ever.
+ */
+export const archetypes = pgTable("archetypes", {
+  /** Frozen slug (lib/types/enums.ts ARCHETYPE_IDS). */
+  id: text("id").primaryKey(),
+  displayName: text("display_name").notNull(),
+  pitch: text("pitch").notNull(),
+  styleCard: jsonb("style_card").$type<StyleCard>().notNull(),
+  thumbnailPreset: jsonb("thumbnail_preset").$type<ThumbnailPreset>().notNull(),
+  sort: integer("sort").notNull().default(0),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+/**
+ * Named-creator partners (partnered_named mode) — STUB, feature-flagged off
+ * (FEATURE_PARTNERED_NAMED). Global like archetypes. Reuses the
+ * licensed-voice constraint pattern: a partner can never be enabled without
+ * both signed-license fields on file. No routers write this table in wave C.
+ */
+export const partners = pgTable(
+  "partners",
+  {
+    id: id(),
+    name: text("name").notNull(),
+    styleCard: jsonb("style_card").$type<StyleCard>(),
+    licenseDocUrl: text("license_doc_url"),
+    licenseSignedAt: timestamp("license_signed_at", { withTimezone: true }),
+    enabled: boolean("enabled").notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    // Enabled partners require BOTH license fields non-null. No exceptions.
+    check(
+      "partners_license_required",
+      sql`${t.enabled} = false OR (${t.licenseDocUrl} IS NOT NULL AND ${t.licenseSignedAt} IS NOT NULL)`,
     ),
   ],
 );
@@ -387,6 +434,12 @@ export const projects = pgTable(
     ideaId: uuid("idea_id").references(() => ideas.id, { onDelete: "set null" }),
     targetPublishDate: date("target_publish_date"),
     publishedVideoId: text("published_video_id"),
+    // -- wave-C mode columns (PRODUCT-CONTRACTS §3); null = legacy flow ----
+    generationMode: generationModeEnum("generation_mode"),
+    archetypeId: text("archetype_id").references(() => archetypes.id, { onDelete: "set null" }),
+    /** {a, b, weightA} — weightB is 1 - weightA. Only for mode=crossover. */
+    crossover: jsonb("crossover").$type<CrossoverBlend>(),
+    partnerId: uuid("partner_id").references(() => partners.id, { onDelete: "set null" }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -394,6 +447,20 @@ export const projects = pgTable(
     index("projects_workspace_idx").on(t.workspaceId),
     index("projects_channel_idx").on(t.channelId),
     index("projects_idea_idx").on(t.ideaId),
+    index("projects_archetype_idx").on(t.archetypeId),
+    index("projects_partner_idx").on(t.partnerId),
+    check(
+      "projects_mode_archetype_required",
+      sql`${t.generationMode} IS DISTINCT FROM 'archetype' OR ${t.archetypeId} IS NOT NULL`,
+    ),
+    check(
+      "projects_mode_crossover_required",
+      sql`${t.generationMode} IS DISTINCT FROM 'crossover' OR ${t.crossover} IS NOT NULL`,
+    ),
+    check(
+      "projects_mode_partner_required",
+      sql`${t.generationMode} IS DISTINCT FROM 'partnered_named' OR ${t.partnerId} IS NOT NULL`,
+    ),
   ],
 );
 
@@ -469,6 +536,12 @@ export const scripts = pgTable(
       .$type<{ words: number; estRuntimeS: number; readability: number }>()
       .notNull()
       .default({ words: 0, estRuntimeS: 0, readability: 0 }),
+    // -- wave-C mode columns (PRODUCT-CONTRACTS §3); null = legacy flow ----
+    generationMode: generationModeEnum("generation_mode"),
+    archetypeId: text("archetype_id").references(() => archetypes.id, { onDelete: "set null" }),
+    /** {a, b, weightA} — weightB is 1 - weightA. Only for mode=crossover. */
+    crossover: jsonb("crossover").$type<CrossoverBlend>(),
+    partnerId: uuid("partner_id").references(() => partners.id, { onDelete: "set null" }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -477,6 +550,20 @@ export const scripts = pgTable(
     index("scripts_workspace_idx").on(t.workspaceId),
     index("scripts_voice_profile_idx").on(t.voiceProfileId),
     uniqueIndex("scripts_project_version_uq").on(t.projectId, t.version),
+    index("scripts_archetype_idx").on(t.archetypeId),
+    index("scripts_partner_idx").on(t.partnerId),
+    check(
+      "scripts_mode_archetype_required",
+      sql`${t.generationMode} IS DISTINCT FROM 'archetype' OR ${t.archetypeId} IS NOT NULL`,
+    ),
+    check(
+      "scripts_mode_crossover_required",
+      sql`${t.generationMode} IS DISTINCT FROM 'crossover' OR ${t.crossover} IS NOT NULL`,
+    ),
+    check(
+      "scripts_mode_partner_required",
+      sql`${t.generationMode} IS DISTINCT FROM 'partnered_named' OR ${t.partnerId} IS NOT NULL`,
+    ),
   ],
 );
 

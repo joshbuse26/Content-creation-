@@ -25,9 +25,11 @@ import {
 } from "./enums";
 import {
   apiKeySchema,
+  archetypeSchema,
   audienceAvatarSchema,
   avatarMotivationSchema,
   avatarPainSchema,
+  generationTargetSchema,
   channelSchema,
   channelStatsSnapshotSchema,
   chapterSetSchema,
@@ -49,7 +51,12 @@ import {
   userSchema,
   workspaceSchema,
 } from "./entities";
-import { hookCandidateSchema, qualityGateReportSchema } from "./pipeline";
+import {
+  hookCandidateSchema,
+  outlineSchema,
+  qualityGateReportSchema,
+  topicCandidateSchema,
+} from "./pipeline";
 
 /**
  * Router input/output contracts — FROZEN LAYER.
@@ -339,13 +346,74 @@ export const frameContracts = {
 // script
 // --------------------------------------------------------------------------
 
+/** Optional generation target carried by script procedures (wave C).
+ *  null = legacy flow (voiceProfileId alone drives the style card). */
+const generationParam = generationTargetSchema.nullable().default(null);
+
 export const scriptContracts = {
-  /** Starts the 7-stage pipeline. 6 credits on completion. Stream via GET /api/script/stream. */
+  /**
+   * COMPOSITE generation — kept for MCP/one-click use. Wave-C contract note
+   * (PRODUCT-CONTRACTS §4): this becomes an ORCHESTRATOR over the staged
+   * procedures below — outline (1) + hooks (1) + draft (4) in order, summed
+   * cost 6 with itemized ledger entries; it may NOT bypass stage metering.
+   * C1 implements the orchestration; the signature is unchanged apart from
+   * the additive `generation` param.
+   */
   generate: {
     input: workspaceScopedSchema.extend({
       projectId: projectIdSchema,
       frameId: frameIdSchema,
       voiceProfileId: voiceProfileIdSchema.nullable().default(null),
+      generation: generationParam,
+    }),
+    output: jobAcceptedSchema.extend({ scriptId: scriptIdSchema }),
+  },
+  // -- staged, individually metered procedures (PRODUCT-CONTRACTS §4) ------
+  /** Topic candidates for a channel/archetype. 1 credit. */
+  topics: {
+    input: workspaceScopedSchema.extend({
+      channelId: channelIdSchema,
+      generation: generationParam,
+      count: z.number().int().min(3).max(10).default(5),
+    }),
+    output: z.object({ topics: z.array(topicCandidateSchema).min(3).max(10) }),
+  },
+  /** Outline from the chosen topic + style card. 1 credit. topic null ⇒
+   *  derive from the project's chosen frame. */
+  outline: {
+    input: workspaceScopedSchema.extend({
+      projectId: projectIdSchema,
+      /** null = use the project's chosen frame. */
+      frameId: frameIdSchema.nullable().default(null),
+      topic: topicCandidateSchema.pick({ title: true, angle: true }).nullable().default(null),
+      generation: generationParam,
+    }),
+    output: z.object({ outline: outlineSchema }),
+  },
+  /** 3 tagged hook candidates for an approved outline. 1 credit. */
+  hooks: {
+    input: workspaceScopedSchema.extend({
+      projectId: projectIdSchema,
+      /** The approved outline; null = synthesize from the chosen frame. */
+      outline: outlineSchema.nullable().default(null),
+      generation: generationParam,
+    }),
+    output: z.object({ hooks: z.array(hookCandidateSchema).length(3) }),
+  },
+  /**
+   * Full script from approved outline + chosen hook, section-streamed over
+   * the existing SSE route. 4 credits. Retention/voice/fact-check/quality
+   * passes stay INSIDE draft (not user-facing stages).
+   */
+  draft: {
+    input: workspaceScopedSchema.extend({
+      projectId: projectIdSchema,
+      frameId: frameIdSchema,
+      outline: outlineSchema.nullable().default(null),
+      /** The chosen hook; null = auto-pick. */
+      hook: hookCandidateSchema.nullable().default(null),
+      voiceProfileId: voiceProfileIdSchema.nullable().default(null),
+      generation: generationParam,
     }),
     output: jobAcceptedSchema.extend({ scriptId: scriptIdSchema }),
   },
@@ -614,6 +682,19 @@ export const billingContracts = {
   portal: {
     input: workspaceScopedSchema,
     output: z.object({ portalUrl: z.url() }),
+  },
+} as const;
+
+// --------------------------------------------------------------------------
+// archetypes (wave C — seeded catalog, PRODUCT-CONTRACTS §2)
+// --------------------------------------------------------------------------
+
+export const archetypesContracts = {
+  /** Public within a workspace (any member), no charge. Always 12 rows —
+   *  served from seed data (DB) or lib/archetypes.ts (fixture mode). */
+  list: {
+    input: workspaceScopedSchema,
+    output: z.array(archetypeSchema),
   },
 } as const;
 

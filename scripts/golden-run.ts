@@ -137,6 +137,7 @@ async function runBrief(brief: z.infer<typeof briefSchema>): Promise<BriefResult
         projectId: project.id,
         frameId: frame.id,
         voiceProfileId: fixtureVoiceProfile.id,
+        generation: null,
       },
       scriptId: script.id,
       actorUserId: null,

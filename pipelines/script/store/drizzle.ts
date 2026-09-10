@@ -41,6 +41,7 @@ import type {
   NewProject,
   NewResearchDoc,
   NewRevision,
+  NewScriptModeFields,
   NewSection,
   ProjectListFilter,
   ProjectPatch,
@@ -113,6 +114,10 @@ export class DrizzleEngineStore implements EngineStore {
         channelId: project.channelId,
         title: project.title,
         ideaId: project.ideaId,
+        generationMode: project.generationMode ?? null,
+        archetypeId: project.archetypeId ?? null,
+        crossover: project.crossover ?? null,
+        partnerId: project.partnerId ?? null,
       })
       .returning();
     const row = rows[0];
@@ -310,11 +315,13 @@ export class DrizzleEngineStore implements EngineStore {
 
   // -- scripts + sections ---------------------------------------------------
 
-  async createScript(params: {
-    workspaceId: WorkspaceId;
-    projectId: ProjectId;
-    voiceProfileId: VoiceProfileId | null;
-  }): Promise<Script> {
+  async createScript(
+    params: {
+      workspaceId: WorkspaceId;
+      projectId: ProjectId;
+      voiceProfileId: VoiceProfileId | null;
+    } & NewScriptModeFields,
+  ): Promise<Script> {
     const attempt = async (): Promise<Script> =>
       await getDb().transaction(async (tx) => {
         const versions = await tx
@@ -330,6 +337,10 @@ export class DrizzleEngineStore implements EngineStore {
             version: nextVersion,
             voiceProfileId: params.voiceProfileId,
             status: "outlining",
+            generationMode: params.generationMode ?? null,
+            archetypeId: params.archetypeId ?? null,
+            crossover: params.crossover ?? null,
+            partnerId: params.partnerId ?? null,
           })
           .returning();
         const row = rows[0];

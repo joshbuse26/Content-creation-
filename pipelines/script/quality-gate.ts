@@ -1,4 +1,6 @@
+import type { StyleCard } from "@/lib/types/entities";
 import type { QualityGateReport } from "@/lib/types/pipeline";
+import { computeStyleGates } from "@/lib/style-gates";
 import { findBannedPhrases } from "@/prompts";
 import { countWords, estimateSeconds, fleschReadingEase, WORDS_PER_MINUTE } from "./readability";
 
@@ -10,6 +12,13 @@ import { countWords, estimateSeconds, fleschReadingEase, WORDS_PER_MINUTE } from
  * - hook ≤ 30 spoken seconds
  * Failures trigger ONE auto-fix loop (LLM repair, then re-check); remaining
  * problems surface as warnings on the report, never silently.
+ *
+ * Wave C (PRODUCT-CONTRACTS §6): when a style card is in play the report
+ * also carries styleGates — bannedClaims scan (HARD FAIL) and CTA placement
+ * are computed here via lib/style-gates.ts; hookPatternOk and the per-card
+ * readingLevel (which will REPLACE the global Flesch gate when present) are
+ * typed but computed by C1's staged pipeline. Until C1 lands, the global
+ * Flesch gate still applies even with a card.
  */
 
 export const WORD_TOLERANCE = 0.15;
@@ -20,6 +29,8 @@ export interface GateInput {
   sections: { kind: string; heading: string; body: string; estSeconds: number }[];
   targetMinutes: number;
   tone: string;
+  /** Style card driving the per-card gates; omit/null for legacy scripts. */
+  styleCard?: StyleCard | null;
 }
 
 export function isAcademicTone(tone: string): boolean {
@@ -71,8 +82,22 @@ export function computeQualityReport(
     }
   }
 
+  // -- style-card gates (wave C) --------------------------------------------
+  const card = input.styleCard ?? null;
+  const styleGates = card === null ? null : computeStyleGates(input.sections, card);
+  if (styleGates !== null) {
+    for (const hit of styleGates.bannedClaimHits) {
+      warnings.push(
+        `Banned claim (${hit.claimType}) in "${hit.sectionHeading}": "${hit.excerpt}".`,
+      );
+    }
+    warnings.push(...styleGates.notes);
+  }
+  const styleGatesPass =
+    styleGates === null || (styleGates.bannedClaimsOk && styleGates.ctaPlacementOk);
+
   return {
-    passed: wordCountWithinTolerance && readabilityOk && hookOk,
+    passed: wordCountWithinTolerance && readabilityOk && hookOk && styleGatesPass,
     wordCount,
     targetWordCount,
     wordCountWithinTolerance,
@@ -83,6 +108,7 @@ export function computeQualityReport(
     hookOk,
     warnings,
     autoFixAttempted: options.autoFixAttempted,
+    styleGates,
   };
 }
 
@@ -105,6 +131,18 @@ export function gateViolations(report: QualityGateReport): string[] {
     violations.push(
       `Hook runs ~${report.hookSeconds} spoken seconds; tighten to under 30 (~75 words).`,
     );
+  }
+  if (report.styleGates !== null) {
+    for (const hit of report.styleGates.bannedClaimHits) {
+      violations.push(
+        `Remove the banned ${hit.claimType} claim ("${hit.excerpt}") — rephrase without the promissory/absolute framing.`,
+      );
+    }
+    if (!report.styleGates.ctaPlacementOk) {
+      violations.push(
+        `Fix CTA placement: ${report.styleGates.notes.join(" ") || "match the style card's CTA habits."}`,
+      );
+    }
   }
   return violations;
 }

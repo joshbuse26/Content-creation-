@@ -16,9 +16,11 @@ import {
   avatarPainSchema,
   diffOpSchema,
   factRefSchema,
+  generationTargetSchema,
   styleCardSchema,
   titleOptionSchema,
 } from "./entities";
+import { bannedClaimTypeSchema } from "./enums";
 
 /**
  * Pipeline stage input/output contracts — FROZEN LAYER.
@@ -217,6 +219,12 @@ export const scriptJobInputSchema = z.object({
   projectId: projectIdSchema,
   frameId: frameIdSchema,
   voiceProfileId: voiceProfileIdSchema.nullable(),
+  /**
+   * Wave-C generation target (mode + archetype/crossover/partner). null =
+   * legacy flow driven by voiceProfileId alone. C1 resolves this to the
+   * style card the stages use.
+   */
+  generation: generationTargetSchema.nullable().default(null),
 });
 export type ScriptJobInput = z.infer<typeof scriptJobInputSchema>;
 
@@ -294,6 +302,40 @@ export const factCheckOutputSchema = z.object({
 });
 export type FactCheckOutput = z.infer<typeof factCheckOutputSchema>;
 
+/** One banned-claim match found by the machine scan (lib/style-gates.ts). */
+export const bannedClaimHitSchema = z.object({
+  claimType: bannedClaimTypeSchema,
+  /** The matched text, trimmed to a short excerpt. */
+  excerpt: z.string().max(200),
+  /** Heading of the section the match was found in ("" when unknown). */
+  sectionHeading: z.string().max(200),
+});
+export type BannedClaimHit = z.infer<typeof bannedClaimHitSchema>;
+
+/**
+ * Style-card-aware gates (PRODUCT-CONTRACTS §6) — present on the report
+ * only when the script was generated against a style card. Wave-C split:
+ * bannedClaims + ctaPlacement are pure code and implemented now
+ * (lib/style-gates.ts); hookPatternOk and readingLevel* are typed here and
+ * computed by C1 (null = not evaluated yet, NOT a pass).
+ */
+export const styleGateReportSchema = z.object({
+  /** Chosen hook's technique is in the card's hookPatterns. null = not evaluated (C1). */
+  hookPatternOk: z.boolean().nullable(),
+  /** CTA count + position satisfy the card's ctaHabits. */
+  ctaPlacementOk: z.boolean(),
+  ctaCount: z.number().int().nonnegative(),
+  /** Computed reading grade vs the card's band — replaces the global Flesch
+   *  gate where a card is present. null = not evaluated (C1). */
+  readingGrade: z.number().nullable(),
+  readingLevelOk: z.boolean().nullable(),
+  /** Hard fail when non-empty. */
+  bannedClaimHits: z.array(bannedClaimHitSchema),
+  bannedClaimsOk: z.boolean(),
+  notes: z.array(z.string()),
+});
+export type StyleGateReport = z.infer<typeof styleGateReportSchema>;
+
 /** Stage 7 (code, not LLM): the quality gate report. */
 export const qualityGateReportSchema = z.object({
   passed: z.boolean(),
@@ -307,8 +349,20 @@ export const qualityGateReportSchema = z.object({
   hookOk: z.boolean(),
   warnings: z.array(z.string()),
   autoFixAttempted: z.boolean(),
+  /** Style-card gates — null when no card was in play (legacy scripts,
+   *  pre-wave-C reports). Wave-C contract addition; default keeps old
+   *  persisted/fixture reports parseable. */
+  styleGates: styleGateReportSchema.nullable().default(null),
 });
 export type QualityGateReport = z.infer<typeof qualityGateReportSchema>;
+
+/** Topic candidate returned by the staged `script.topics` procedure (§4). */
+export const topicCandidateSchema = z.object({
+  title: z.string().min(1).max(120),
+  angle: z.string().max(500),
+  rationale: z.string().max(1000),
+});
+export type TopicCandidate = z.infer<typeof topicCandidateSchema>;
 
 /** SSE events streamed to the editor while the script pipeline runs. */
 export const scriptStreamEventSchema = z.discriminatedUnion("type", [

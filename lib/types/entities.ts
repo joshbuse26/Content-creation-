@@ -12,6 +12,7 @@ import {
   ideaIdSchema,
   membershipIdSchema,
   nicheVideoIdSchema,
+  partnerIdSchema,
   pipelineRunIdSchema,
   projectIdSchema,
   researchDocIdSchema,
@@ -26,8 +27,17 @@ import {
   workspaceIdSchema,
 } from "./ids";
 import {
+  archetypeIdSchema,
+  bannedClaimTypeSchema,
+  BANNED_CLAIM_TYPES,
   channelModeSchema,
+  contrastRuleSchema,
   creditReasonSchema,
+  ctaPlacementSchema,
+  faceRequirementSchema,
+  generationModeSchema,
+  hookStyleSchema,
+  paletteTemperatureSchema,
   descriptionModeSchema,
   frameFormatSchema,
   frameOutcomeSchema,
@@ -135,15 +145,192 @@ export const audienceAvatarSchema = z.object({
 });
 export type AudienceAvatar = z.infer<typeof audienceAvatarSchema>;
 
+// ---------------------------------------------------------------------------
+// StyleCard v2 — first-class structured model (PRODUCT-CONTRACTS §1).
+// One shape for archetype cards and channel-learned cards; the owning
+// voice_profiles.source (or the archetype row) distinguishes provenance.
+// Legacy {rhythm, register, catchphrases, humor, pov, taboos} cards are
+// upgraded by migration 0005 (SQL) and lib/style-card.ts (in-memory).
+// ---------------------------------------------------------------------------
+
+/** POV, diction register, sentence rhythm — short text fields, not prose soup. */
+export const styleVoiceSchema = z.object({
+  pov: z.string().max(300),
+  diction: z.string().max(300),
+  rhythm: z.string().max(300),
+});
+export type StyleVoice = z.infer<typeof styleVoiceSchema>;
+
+/** Emotional register + what this style is never (both short text). */
+export const styleToneSchema = z.object({
+  register: z.string().max(300),
+  never: z.string().max(300),
+});
+export type StyleTone = z.infer<typeof styleToneSchema>;
+
+export const stylePacingSchema = z.object({
+  /** Words-per-minute speaking target (drives runtime estimation per card). */
+  wpmTarget: z.number().int().min(80).max(240),
+  /** Typical section length norm in seconds. */
+  sectionSeconds: z.number().int().min(20).max(600),
+  /** Re-hook cadence in seconds of estimated runtime. */
+  rehookSeconds: z.number().int().min(20).max(240),
+});
+export type StylePacing = z.infer<typeof stylePacingSchema>;
+
+/** One allowed hook technique (frozen enum) + per-pattern guidance. Order matters: first = preferred. */
+export const styleHookPatternSchema = z.object({
+  technique: hookStyleSchema,
+  guidance: z.string().max(500),
+});
+export type StyleHookPattern = z.infer<typeof styleHookPatternSchema>;
+
+export const styleCtaHabitsSchema = z
+  .object({
+    placement: ctaPlacementSchema,
+    /** Percent of runtime (0–100) — required iff placement === "timestamp_pct". */
+    placementPct: z.number().min(0).max(100).nullable(),
+    phrasingStyle: z.string().max(300),
+    maxPerVideo: z.number().int().min(0).max(5),
+  })
+  .refine((c) => c.placement !== "timestamp_pct" || c.placementPct !== null, {
+    message: "placementPct is required when placement is timestamp_pct",
+  });
+export type StyleCtaHabits = z.infer<typeof styleCtaHabitsSchema>;
+
+/** Target US grade band — replaces the global Flesch ≥ 60 gate per card (§6). */
+export const styleReadingLevelSchema = z
+  .object({
+    minGrade: z.number().int().min(1).max(16),
+    maxGrade: z.number().int().min(1).max(16),
+  })
+  .refine((r) => r.minGrade <= r.maxGrade, { message: "minGrade must be <= maxGrade" });
+export type StyleReadingLevel = z.infer<typeof styleReadingLevelSchema>;
+
 export const styleCardSchema = z.object({
-  rhythm: z.string(),
-  register: z.string(),
-  catchphrases: z.array(z.string()),
-  humor: z.string(),
-  pov: z.string(),
-  taboos: z.array(z.string()),
+  voice: styleVoiceSchema,
+  tone: styleToneSchema,
+  pacing: stylePacingSchema,
+  /** At least one allowed technique; the hook gate checks membership. */
+  hookPatterns: z.array(styleHookPatternSchema).min(1).max(4),
+  ctaHabits: styleCtaHabitsSchema,
+  /** Claim types this style must never make — machine-checked hard fail (§6). */
+  bannedClaims: z.array(bannedClaimTypeSchema).max(BANNED_CLAIM_TYPES.length),
+  readingLevel: styleReadingLevelSchema,
+  /** 1 = hushed, 5 = maximum hype. */
+  energy: z.number().int().min(1).max(5),
+  /**
+   * 2–4 short ORIGINAL sample passages on finished cards. `TODO(seed-copy)`
+   * placeholders (and empty arrays on migrated/learned cards) are permitted
+   * until Josh's content pipeline supplies seed copy — NEVER a real
+   * creator's words.
+   */
+  exampleSnippets: z.array(z.string().max(600)).max(4),
+  /** Thumbnail preset keyed to the same archetype (= archetype id for archetype cards); null for cards without one yet. */
+  thumbnailPresetId: z.string().min(1).nullable(),
 });
 export type StyleCard = z.infer<typeof styleCardSchema>;
+
+// ---------------------------------------------------------------------------
+// Thumbnail presets (PRODUCT-CONTRACTS §5) — abstract pattern rules only.
+// ---------------------------------------------------------------------------
+
+export const thumbnailPresetSchema = z.object({
+  /** Preset id — equals the owning archetype id for seeded presets. */
+  id: z.string().min(1).max(60),
+  /** Composition rule id from the existing 20-pattern library (pipelines/thumbnails/patterns.ts). */
+  compositionPatternId: z.string().min(1).max(60),
+  maxOverlayWords: z.number().int().min(0).max(8),
+  contrastRule: contrastRuleSchema,
+  face: faceRequirementSchema,
+  paletteTemperature: paletteTemperatureSchema,
+});
+export type ThumbnailPreset = z.infer<typeof thumbnailPresetSchema>;
+
+// ---------------------------------------------------------------------------
+// Archetypes (PRODUCT-CONTRACTS §2) — seeded, never an empty DB.
+// ---------------------------------------------------------------------------
+
+export const archetypeSchema = z.object({
+  /** One of the 12 frozen slugs. */
+  id: archetypeIdSchema,
+  displayName: z.string().min(1).max(80),
+  /** One-line pitch — `TODO(seed-copy)` prefix until final marketing copy lands. */
+  pitch: z.string().min(1).max(300),
+  styleCard: styleCardSchema,
+  thumbnailPreset: thumbnailPresetSchema,
+  sort: z.number().int().nonnegative(),
+  ...timestamps,
+});
+export type Archetype = z.infer<typeof archetypeSchema>;
+
+// ---------------------------------------------------------------------------
+// Partners (partnered_named mode — schema stub, feature flagged OFF).
+// ---------------------------------------------------------------------------
+
+/**
+ * A named-creator partner record. partnered_named generation requires one of
+ * these WITH signed license fields (same DB CHECK pattern as licensed
+ * voices) AND the FEATURE_PARTNERED_NAMED flag on. Stub in wave C: no
+ * routers create these yet.
+ */
+export const partnerSchema = z
+  .object({
+    id: partnerIdSchema,
+    name: z.string().min(1).max(120),
+    styleCard: styleCardSchema.nullable(),
+    licenseDocUrl: z.url().nullable(),
+    licenseSignedAt: z.date().nullable(),
+    enabled: z.boolean(),
+    ...timestamps,
+  })
+  .refine((p) => !p.enabled || (p.licenseDocUrl !== null && p.licenseSignedAt !== null), {
+    message: "enabled partners require licenseDocUrl and licenseSignedAt",
+  });
+export type Partner = z.infer<typeof partnerSchema>;
+
+// ---------------------------------------------------------------------------
+// Generation modes (PRODUCT-CONTRACTS §3)
+// ---------------------------------------------------------------------------
+
+/** Crossover blend of two archetypes; weightB is implicitly 1 - weightA. */
+export const crossoverBlendSchema = z
+  .object({
+    a: archetypeIdSchema,
+    b: archetypeIdSchema,
+    weightA: z.number().min(0).max(1),
+  })
+  .refine((c) => c.a !== c.b, { message: "crossover archetypes must differ" });
+export type CrossoverBlend = z.infer<typeof crossoverBlendSchema>;
+
+/**
+ * Mode + mode-specific reference, carried by staged script procedures (and
+ * the composite generate). Consumed by server/modes.ts guards: the schema
+ * enforces shape consistency; the flag/availability checks are server-side.
+ */
+export const generationTargetSchema = z
+  .object({
+    mode: generationModeSchema,
+    archetypeId: archetypeIdSchema.nullable().default(null),
+    crossover: crossoverBlendSchema.nullable().default(null),
+    partnerId: partnerIdSchema.nullable().default(null),
+    voiceProfileId: voiceProfileIdSchema.nullable().default(null),
+  })
+  .superRefine((g, ctx) => {
+    if (g.mode === "archetype" && g.archetypeId === null) {
+      ctx.addIssue({ code: "custom", message: "archetype mode requires archetypeId" });
+    }
+    if (g.mode === "crossover" && g.crossover === null) {
+      ctx.addIssue({ code: "custom", message: "crossover mode requires crossover weights" });
+    }
+    if (g.mode === "partnered_named" && g.partnerId === null) {
+      ctx.addIssue({ code: "custom", message: "partnered_named mode requires partnerId" });
+    }
+    if (g.mode === "train_on_my_channel" && g.voiceProfileId === null) {
+      ctx.addIssue({ code: "custom", message: "train_on_my_channel mode requires voiceProfileId" });
+    }
+  });
+export type GenerationTarget = z.infer<typeof generationTargetSchema>;
 
 export const voiceProfileSchema = z
   .object({
@@ -205,6 +392,11 @@ export const projectSchema = z.object({
   ideaId: ideaIdSchema.nullable(),
   targetPublishDate: z.iso.date().nullable(),
   publishedVideoId: z.string().nullable(),
+  /** Wave-C mode fields (PRODUCT-CONTRACTS §3). null = legacy/voice-profile flow. */
+  generationMode: generationModeSchema.nullable().default(null),
+  archetypeId: archetypeIdSchema.nullable().default(null),
+  crossover: crossoverBlendSchema.nullable().default(null),
+  partnerId: partnerIdSchema.nullable().default(null),
   ...timestamps,
 });
 export type Project = z.infer<typeof projectSchema>;
@@ -254,6 +446,11 @@ export const scriptSchema = z.object({
   voiceProfileId: voiceProfileIdSchema.nullable(),
   status: scriptStatusSchema,
   stats: scriptStatsSchema,
+  /** Wave-C mode fields (PRODUCT-CONTRACTS §3). null = legacy/voice-profile flow. */
+  generationMode: generationModeSchema.nullable().default(null),
+  archetypeId: archetypeIdSchema.nullable().default(null),
+  crossover: crossoverBlendSchema.nullable().default(null),
+  partnerId: partnerIdSchema.nullable().default(null),
   ...timestamps,
 });
 export type Script = z.infer<typeof scriptSchema>;

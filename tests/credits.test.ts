@@ -33,6 +33,7 @@ const scriptInput = {
   projectId: fixtureProject.id,
   frameId: fixtureFrame.id,
   voiceProfileId: null,
+  generation: null,
 };
 
 describe("credit gating at dispatch", () => {

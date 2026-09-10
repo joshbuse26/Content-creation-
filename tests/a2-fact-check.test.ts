@@ -80,6 +80,7 @@ describe("fact_check stage persists refs and flags unsupported claims", () => {
         projectId: fixtureProject.id,
         frameId: fixtureFrame.id,
         voiceProfileId: null,
+        generation: null,
       },
       scriptId: script.id,
       actorUserId: null,

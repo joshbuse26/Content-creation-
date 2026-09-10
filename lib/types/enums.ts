@@ -28,9 +28,84 @@ export const SOPHISTICATION_LEVELS = ["beginner", "intermediate", "advanced", "e
 export const sophisticationSchema = z.enum(SOPHISTICATION_LEVELS);
 export type Sophistication = z.infer<typeof sophisticationSchema>;
 
-export const VOICE_SOURCES = ["own_channel", "samples", "licensed"] as const;
+/**
+ * "archetype" added in wave C (C0, approved): style cards derived from a
+ * seeded archetype share one StyleCard shape with channel-learned cards —
+ * `source` is what distinguishes them (PRODUCT-CONTRACTS §1).
+ */
+export const VOICE_SOURCES = ["own_channel", "samples", "licensed", "archetype"] as const;
 export const voiceSourceSchema = z.enum(VOICE_SOURCES);
 export type VoiceSource = z.infer<typeof voiceSourceSchema>;
+
+/** Script generation modes (PRODUCT-CONTRACTS §3). Feature-gating:
+ *  partnered_named is rejected server-side unless FEATURE_PARTNERED_NAMED is
+ *  on (server/modes.ts); train_on_my_channel is enum-only in this wave. */
+export const GENERATION_MODES = [
+  "archetype",
+  "crossover",
+  "partnered_named",
+  "train_on_my_channel",
+] as const;
+export const generationModeSchema = z.enum(GENERATION_MODES);
+export type GenerationMode = z.infer<typeof generationModeSchema>;
+
+/**
+ * The 12 seeded archetype ids — FROZEN slugs (PRODUCT-CONTRACTS §2).
+ * Archetype ids are these slugs, not UUIDs; the archetypes table's pk is
+ * text. Never add a real creator's name here.
+ */
+export const ARCHETYPE_IDS = [
+  "high-stakes-challenge",
+  "calm-explainer",
+  "data-storyteller",
+  "investigative-narrator",
+  "rapid-listicle",
+  "contrarian-essayist",
+  "hands-on-builder",
+  "friendly-coach",
+  "deadpan-comedian",
+  "hype-gamer",
+  "cozy-vlogger",
+  "story-time-confessional",
+] as const;
+export const archetypeIdSchema = z.enum(ARCHETYPE_IDS);
+export type ArchetypeId = z.infer<typeof archetypeIdSchema>;
+
+/** StyleCard.ctaHabits.placement rule (PRODUCT-CONTRACTS §1):
+ *  timestamp_pct = at ~placementPct% of runtime; after_payoff = directly
+ *  after a chapter's payoff; end_only = only after the last chapter. */
+export const CTA_PLACEMENTS = ["timestamp_pct", "after_payoff", "end_only"] as const;
+export const ctaPlacementSchema = z.enum(CTA_PLACEMENTS);
+export type CtaPlacement = z.infer<typeof ctaPlacementSchema>;
+
+/**
+ * Machine-checkable claim types for StyleCard.bannedClaims — each maps to a
+ * conservative pattern set in lib/style-gates.ts (checked by code, not
+ * vibes; PRODUCT-CONTRACTS §1/§6).
+ */
+export const BANNED_CLAIM_TYPES = [
+  "guaranteed_results",
+  "medical_claims",
+  "financial_promises",
+  "absolute_superlatives",
+  "fear_mongering",
+] as const;
+export const bannedClaimTypeSchema = z.enum(BANNED_CLAIM_TYPES);
+export type BannedClaimType = z.infer<typeof bannedClaimTypeSchema>;
+
+// Thumbnail preset vocabulary (PRODUCT-CONTRACTS §5) — abstract pattern
+// rules only; presets live in jsonb, so these are Zod-only enums (no pgEnum).
+export const CONTRAST_RULES = ["light_on_dark", "dark_on_light", "complementary"] as const;
+export const contrastRuleSchema = z.enum(CONTRAST_RULES);
+export type ContrastRule = z.infer<typeof contrastRuleSchema>;
+
+export const FACE_REQUIREMENTS = ["required", "optional", "none"] as const;
+export const faceRequirementSchema = z.enum(FACE_REQUIREMENTS);
+export type FaceRequirement = z.infer<typeof faceRequirementSchema>;
+
+export const PALETTE_TEMPERATURES = ["warm", "cool", "neutral"] as const;
+export const paletteTemperatureSchema = z.enum(PALETTE_TEMPERATURES);
+export type PaletteTemperature = z.infer<typeof paletteTemperatureSchema>;
 
 export const IDEA_STATUSES = ["new", "saved", "dismissed", "promoted"] as const;
 export const ideaStatusSchema = z.enum(IDEA_STATUSES);

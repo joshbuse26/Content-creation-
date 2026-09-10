@@ -1,4 +1,5 @@
 import { getDb, hasDb, schema } from "@/db";
+import { ARCHETYPE_SEEDS } from "@/lib/archetypes";
 import {
   FIXTURE_IDS,
   fixtureAvatar,
@@ -45,6 +46,33 @@ async function seed(): Promise<void> {
     return;
   }
   const db = getDb();
+
+  // Archetype catalog (wave C, PRODUCT-CONTRACTS §2) — global rows, all 12,
+  // upserted so card/preset refinements reach existing databases. The same
+  // objects back fixture mode (lib/archetypes.ts), so keyless and seeded
+  // deployments show an identical catalog.
+  for (const archetype of ARCHETYPE_SEEDS) {
+    await db
+      .insert(schema.archetypes)
+      .values({
+        id: archetype.id,
+        displayName: archetype.displayName,
+        pitch: archetype.pitch,
+        styleCard: archetype.styleCard,
+        thumbnailPreset: archetype.thumbnailPreset,
+        sort: archetype.sort,
+      })
+      .onConflictDoUpdate({
+        target: schema.archetypes.id,
+        set: {
+          displayName: archetype.displayName,
+          pitch: archetype.pitch,
+          styleCard: archetype.styleCard,
+          thumbnailPreset: archetype.thumbnailPreset,
+          sort: archetype.sort,
+        },
+      });
+  }
 
   await db
     .insert(schema.workspaces)
@@ -346,6 +374,7 @@ async function seed(): Promise<void> {
     .onConflictDoNothing();
 
   console.log("Seed complete (idempotent).");
+  console.log(`  archetypes: ${ARCHETYPE_SEEDS.length} seeded/updated`);
   console.log(`  workspace: ${fixtureWorkspace.name} (${fixtureWorkspace.id})`);
   console.log(`  user:      ${fixtureUser.email}`);
   console.log(`  channel:   ${fixtureChannel.title} [${fixtureChannel.mode}]`);

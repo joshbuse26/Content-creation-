@@ -242,7 +242,8 @@ export function synthRetentionRewrite(body: string, kind: string, estSeconds: nu
   return `${body} Hold that thought, because the next part is where it gets weird.`;
 }
 
-/** Voice pass, fixture mode: apply one catchphrase and the POV register. */
+/** Voice pass, fixture mode: apply one energy-keyed connector once, so the
+ *  pass visibly ran. Deterministic; never quotes example snippets. */
 export function synthVoiceRewrite(
   body: string,
   kind: string,
@@ -250,11 +251,15 @@ export function synthVoiceRewrite(
   used: { catchphrase: boolean },
 ): string {
   if (styleCard === null) return body;
-  const phrase = styleCard.catchphrases[0];
-  if (kind === "chapter" && !used.catchphrase && phrase !== undefined) {
+  if (kind === "chapter" && !used.catchphrase) {
     used.catchphrase = true;
-    const capped = phrase.charAt(0).toUpperCase() + phrase.slice(1);
-    return `${capped} — ${body.charAt(0).toLowerCase()}${body.slice(1)}`;
+    const connector =
+      styleCard.energy >= 4
+        ? "Here is where it gets good"
+        : styleCard.energy <= 2
+          ? "Take a second with this one"
+          : "Here is the part that matters";
+    return `${connector} — ${body.charAt(0).toLowerCase()}${body.slice(1)}`;
   }
   return body;
 }

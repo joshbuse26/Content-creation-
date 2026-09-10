@@ -406,6 +406,8 @@ export async function runScriptPipeline(
         sections,
         targetMinutes: context.frame.targetMinutes,
         tone: context.frame.tone,
+        // Wave C: style-card gates (bannedClaims hard-fail + CTA placement).
+        styleCard: context.styleCard,
       });
       let report = computeQualityReport(gateInput());
       if (!report.passed) {
