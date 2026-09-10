@@ -1,5 +1,6 @@
 "use client";
 
+import { skipToken } from "@tanstack/react-query";
 import {
   createContext,
   useContext,
@@ -74,8 +75,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const workspaceId = workspace?.id ?? null;
 
   const channelsQuery = trpc.channel.list.useQuery(
-    { workspaceId: workspaceId as WorkspaceId },
-    { enabled: workspaceId !== null },
+    workspaceId !== null ? { workspaceId } : skipToken,
   );
   const channels = useMemo(() => channelsQuery.data ?? [], [channelsQuery.data]);
 
