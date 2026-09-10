@@ -15,6 +15,7 @@ import { TextInput } from "@/components/ui/field";
 import { IconRefresh } from "@/components/ui/icons";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
 import { PipelineStatusNote } from "@/components/ui/pipeline-note";
+import { useToast } from "@/components/ui/toast";
 import { fmtCompact, fmtDateTime } from "@/components/lib/format";
 import { usePipelinePoll } from "@/components/lib/use-pipeline-poll";
 import { ConnectChannel } from "./connect-channel";
@@ -22,6 +23,7 @@ import { ConnectChannel } from "./connect-channel";
 export function ChannelListScreen() {
   const { workspaceId, channels } = useWorkspace();
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const invalidate = () => {
     if (workspaceId !== null) void utils.channel.list.invalidate({ workspaceId });
   };
@@ -32,6 +34,9 @@ export function ChannelListScreen() {
     onSuccess: () => {
       invalidate();
       syncPoll.begin();
+    },
+    onError: () => {
+      toast("Could not start the channel sync — try again.");
     },
   });
 
@@ -90,6 +95,7 @@ export function ChannelListScreen() {
 export function ChannelDetailScreen({ channelId }: { channelId: ChannelId }) {
   const { workspaceId } = useWorkspace();
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const channelQuery = trpc.channel.get.useQuery(
     workspaceId !== null ? { workspaceId, channelId } : skipToken,
   );
@@ -105,13 +111,15 @@ export function ChannelDetailScreen({ channelId }: { channelId: ChannelId }) {
       invalidateChannel();
       syncPoll.begin();
     },
+    onError: () => {
+      toast("Could not start the channel sync — try again.");
+    },
   });
   const nicheMutation = trpc.channel.updateNiche.useMutation({
-    onSuccess: () => {
-      if (workspaceId !== null) {
-        void utils.channel.get.invalidate({ workspaceId, channelId });
-        void utils.channel.list.invalidate({ workspaceId });
-      }
+    onSuccess: invalidateChannel,
+    onError: () => {
+      invalidateChannel();
+      toast("Could not save the niche keywords — they were not changed.");
     },
   });
 

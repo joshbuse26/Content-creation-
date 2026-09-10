@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, TextInput, Label } from "@/components/ui/field";
 import { IconPlus, IconTrash } from "@/components/ui/icons";
 import { ErrorState, LoadingState } from "@/components/ui/state";
+import { useToast } from "@/components/ui/toast";
 
 const roleHelp: Record<Role, string> = {
   owner: "billing + everything",
@@ -21,6 +22,7 @@ const roleHelp: Record<Role, string> = {
 export function MembersPanel() {
   const { workspaceId, workspace } = useWorkspace();
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>("writer");
 
@@ -36,8 +38,20 @@ export function MembersPanel() {
       invalidate();
     },
   });
-  const setRoleMutation = trpc.workspace.setRole.useMutation({ onSuccess: invalidate });
-  const removeMutation = trpc.workspace.removeMember.useMutation({ onSuccess: invalidate });
+  const setRoleMutation = trpc.workspace.setRole.useMutation({
+    onSuccess: invalidate,
+    onError: () => {
+      invalidate();
+      toast("Could not change that member's role — it was not saved.");
+    },
+  });
+  const removeMutation = trpc.workspace.removeMember.useMutation({
+    onSuccess: invalidate,
+    onError: () => {
+      invalidate();
+      toast("Could not remove that member — they are still in the workspace.");
+    },
+  });
 
   if (workspaceId === null || membersQuery.isLoading) return <LoadingState />;
   if (membersQuery.isError) {

@@ -10,6 +10,7 @@ import { Button, IconButton } from "@/components/ui/button";
 import { IconCheck, IconCopy, IconSparkle } from "@/components/ui/icons";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
 import { PipelineStatusNote } from "@/components/ui/pipeline-note";
+import { useToast } from "@/components/ui/toast";
 import { usePipelinePoll } from "@/components/lib/use-pipeline-poll";
 
 /** 25 scored title options grouped by pattern family, with copy buttons. */
@@ -17,6 +18,7 @@ export function TitlesPanel() {
   const { workspaceId } = useWorkspace();
   const projectId = useProjectId();
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const [copied, setCopied] = useState<string | null>(null);
 
   const latestQuery = trpc.titles.latest.useQuery(
@@ -31,6 +33,9 @@ export function TitlesPanel() {
     onSuccess: () => {
       invalidate();
       generatePoll.begin();
+    },
+    onError: () => {
+      toast("Could not queue the title generation — try again.");
     },
   });
 

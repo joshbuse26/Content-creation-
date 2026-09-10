@@ -15,6 +15,7 @@ import { Field, Select, TextArea, TextInput } from "@/components/ui/field";
 import { IconCheck, IconPencil, IconSparkle } from "@/components/ui/icons";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
 import { PipelineStatusNote } from "@/components/ui/pipeline-note";
+import { useToast } from "@/components/ui/toast";
 import { usePipelinePoll } from "@/components/lib/use-pipeline-poll";
 
 /** Framing: 4 proposals as cards, pick one, edit the frame fields as a form. */
@@ -22,6 +23,7 @@ export function FramingPanel() {
   const { workspaceId } = useWorkspace();
   const projectId = useProjectId();
   const utils = trpc.useUtils();
+  const { toast } = useToast();
 
   const listQuery = trpc.frame.list.useQuery(
     workspaceId !== null ? { workspaceId, projectId } : skipToken,
@@ -36,8 +38,17 @@ export function FramingPanel() {
       invalidate();
       proposePoll.begin();
     },
+    onError: () => {
+      toast("Could not queue the frame proposals — try again.");
+    },
   });
-  const chooseMutation = trpc.frame.choose.useMutation({ onSuccess: invalidate });
+  const chooseMutation = trpc.frame.choose.useMutation({
+    onSuccess: invalidate,
+    onError: () => {
+      invalidate();
+      toast("Could not pick that frame — nothing was changed.");
+    },
+  });
 
   const [editingId, setEditingId] = useState<string | null>(null);
 

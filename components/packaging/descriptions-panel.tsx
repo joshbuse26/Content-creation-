@@ -11,6 +11,7 @@ import { TextArea } from "@/components/ui/field";
 import { Tabs } from "@/components/ui/tabs";
 import { IconCopy, IconSparkle } from "@/components/ui/icons";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
+import { useToast } from "@/components/ui/toast";
 
 const modeLabels: Record<DescriptionMode, string> = {
   informative: "Informative",
@@ -23,6 +24,7 @@ export function DescriptionsPanel() {
   const { workspaceId } = useWorkspace();
   const projectId = useProjectId();
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const [mode, setMode] = useState<DescriptionMode>("informative");
   const [draft, setDraft] = useState<string | null>(null);
 
@@ -32,11 +34,19 @@ export function DescriptionsPanel() {
   const invalidate = () => {
     if (workspaceId !== null) void utils.description.list.invalidate({ workspaceId, projectId });
   };
-  const generateMutation = trpc.description.generate.useMutation({ onSuccess: invalidate });
+  const generateMutation = trpc.description.generate.useMutation({
+    onSuccess: invalidate,
+    onError: () => {
+      toast("Could not generate the description — try again.");
+    },
+  });
   const updateMutation = trpc.description.update.useMutation({
     onSuccess: () => {
       setDraft(null);
       invalidate();
+    },
+    onError: () => {
+      toast("Could not save the description — your draft is still in the editor.");
     },
   });
 

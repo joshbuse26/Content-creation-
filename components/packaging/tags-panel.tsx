@@ -9,12 +9,14 @@ import { Button } from "@/components/ui/button";
 import { TextInput } from "@/components/ui/field";
 import { IconCopy, IconSparkle, IconX } from "@/components/ui/icons";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
+import { useToast } from "@/components/ui/toast";
 
 /** Tag set editor: chips with remove, add input, regenerate, copy-all. */
 export function TagsPanel() {
   const { workspaceId } = useWorkspace();
   const projectId = useProjectId();
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const [newTag, setNewTag] = useState("");
 
   const latestQuery = trpc.tags.latest.useQuery(
@@ -23,8 +25,19 @@ export function TagsPanel() {
   const invalidate = () => {
     if (workspaceId !== null) void utils.tags.latest.invalidate({ workspaceId, projectId });
   };
-  const generateMutation = trpc.tags.generate.useMutation({ onSuccess: invalidate });
-  const updateMutation = trpc.tags.update.useMutation({ onSuccess: invalidate });
+  const generateMutation = trpc.tags.generate.useMutation({
+    onSuccess: invalidate,
+    onError: () => {
+      toast("Could not generate tags — try again.");
+    },
+  });
+  const updateMutation = trpc.tags.update.useMutation({
+    onSuccess: invalidate,
+    onError: () => {
+      invalidate();
+      toast("Could not save the tag change — nothing was changed.");
+    },
+  });
 
   if (workspaceId === null || latestQuery.isLoading) return <LoadingState />;
   if (latestQuery.isError) {

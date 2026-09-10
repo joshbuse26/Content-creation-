@@ -14,6 +14,7 @@ import { Dropdown, DropdownItem } from "@/components/ui/dropdown";
 import { IconHistory, IconSparkle, IconWarning } from "@/components/ui/icons";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
 import { PipelineStatusNote } from "@/components/ui/pipeline-note";
+import { useToast } from "@/components/ui/toast";
 import { fmtDate, fmtDuration, fmtNumber } from "@/components/lib/format";
 import { usePipelinePoll } from "@/components/lib/use-pipeline-poll";
 import { loadHookCandidates } from "./hook-store";
@@ -40,6 +41,7 @@ export function EditorScreen() {
   const { workspaceId } = useWorkspace();
   const projectId = useProjectId();
   const utils = trpc.useUtils();
+  const { toast } = useToast();
 
   // ---- versions -----------------------------------------------------------
   const versionsQuery = trpc.script.listVersions.useQuery(
@@ -114,15 +116,35 @@ export function EditorScreen() {
   const regenPoll = usePipelinePoll(invalidateScript, scriptQuery.data);
   const revisionPoll = usePipelinePoll(invalidateRevisions, revisionsQuery.data);
 
+  // Explicit rollback for optimistic section edits: reset local overlay from
+  // the cached server payload (an invalidate alone is not enough — identical
+  // refetched data keeps its reference, so the sync effect would not refire).
+  const rollbackSections = () => {
+    if (workspaceId !== null && scriptId !== null) {
+      const cached = utils.script.get.getData({ workspaceId, scriptId });
+      if (cached !== undefined) {
+        setSections([...cached.sections].sort((a, b) => a.position - b.position));
+      }
+    }
+    invalidateScript();
+  };
+
   const updateSectionMutation = trpc.script.updateSection.useMutation({
     onError: () => {
-      invalidateScript();
+      rollbackSections();
+      toast("Could not save the section — your change was reverted.");
     },
   });
-  const lockMutation = trpc.script.setSectionLock.useMutation();
+  const lockMutation = trpc.script.setSectionLock.useMutation({
+    onError: () => {
+      rollbackSections();
+      toast("Could not change the section lock — reverted.");
+    },
+  });
   const reorderMutation = trpc.script.reorderSections.useMutation({
     onError: () => {
-      invalidateScript();
+      rollbackSections();
+      toast("Could not save the new section order — reverted.");
     },
   });
   const regenMutation = trpc.script.regenerateSection.useMutation({
@@ -130,15 +152,29 @@ export function EditorScreen() {
       invalidateScript();
       regenPoll.begin();
     },
+    onError: () => {
+      toast("Could not queue the section regeneration — try again.");
+    },
   });
   const runRevisionMutation = trpc.revision.run.useMutation({
     onSuccess: () => {
       invalidateRevisions();
       revisionPoll.begin();
     },
+    onError: () => {
+      toast("Could not start the revision pass — try again.");
+    },
   });
-  const acceptMutation = trpc.revision.accept.useMutation();
-  const rejectMutation = trpc.revision.reject.useMutation();
+  const acceptMutation = trpc.revision.accept.useMutation({
+    onError: () => {
+      toast("Could not accept the suggestion — nothing was applied.");
+    },
+  });
+  const rejectMutation = trpc.revision.reject.useMutation({
+    onError: () => {
+      toast("Could not reject the suggestion — it stays pending.");
+    },
+  });
 
   if (workspaceId === null || versionsQuery.isLoading)
     return <LoadingState label="Loading script…" />;

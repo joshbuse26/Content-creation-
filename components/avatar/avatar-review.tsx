@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/icons";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
 import { PipelineStatusNote } from "@/components/ui/pipeline-note";
+import { useToast } from "@/components/ui/toast";
 import { fmtDateTime } from "@/components/lib/format";
 import { usePipelinePoll } from "@/components/lib/use-pipeline-poll";
 
@@ -40,6 +41,7 @@ type AvatarFieldKey =
 export function AvatarReview({ channelId }: { channelId: ChannelId }) {
   const { workspaceId } = useWorkspace();
   const utils = trpc.useUtils();
+  const { toast } = useToast();
 
   const avatarQuery = trpc.avatar.get.useQuery(
     workspaceId !== null ? { workspaceId, channelId } : skipToken,
@@ -61,6 +63,9 @@ export function AvatarReview({ channelId }: { channelId: ChannelId }) {
     onSuccess: () => {
       invalidateAvatar();
       regenPoll.begin();
+    },
+    onError: () => {
+      toast("Could not queue the avatar regeneration — try again.");
     },
   });
 

@@ -12,6 +12,7 @@ import { Field, Select, TextArea } from "@/components/ui/field";
 import { IconCheck, IconSparkle } from "@/components/ui/icons";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
 import { PipelineStatusNote } from "@/components/ui/pipeline-note";
+import { useToast } from "@/components/ui/toast";
 import { usePipelinePoll } from "@/components/lib/use-pipeline-poll";
 
 /** v1: text thumbnail briefs only — image generation ships in v1.1. */
@@ -32,6 +33,7 @@ export function ThumbsPanel() {
   const { workspaceId } = useWorkspace();
   const projectId = useProjectId();
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const [pattern, setPattern] = useState(COMPOSITION_PATTERNS[0] ?? "big text");
   const [subject, setSubject] = useState("");
 
@@ -48,8 +50,17 @@ export function ThumbsPanel() {
       invalidate();
       generatePoll.begin();
     },
+    onError: () => {
+      toast("Could not queue the thumbnail brief — try again.");
+    },
   });
-  const chooseMutation = trpc.thumbnails.choose.useMutation({ onSuccess: invalidate });
+  const chooseMutation = trpc.thumbnails.choose.useMutation({
+    onSuccess: invalidate,
+    onError: () => {
+      invalidate();
+      toast("Could not mark that brief as chosen — nothing was changed.");
+    },
+  });
 
   if (workspaceId === null || listQuery.isLoading) return <LoadingState />;
   if (listQuery.isError) {

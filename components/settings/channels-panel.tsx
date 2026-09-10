@@ -9,12 +9,14 @@ import { Button } from "@/components/ui/button";
 import { IconRefresh, IconTrash } from "@/components/ui/icons";
 import { LoadingState } from "@/components/ui/state";
 import { PipelineStatusNote } from "@/components/ui/pipeline-note";
+import { useToast } from "@/components/ui/toast";
 import { fmtDateTime } from "@/components/lib/format";
 import { usePipelinePoll } from "@/components/lib/use-pipeline-poll";
 
 export function ChannelsSettingsPanel() {
   const { workspaceId, channels, selectChannel } = useWorkspace();
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const invalidate = () => {
     if (workspaceId !== null) void utils.channel.list.invalidate({ workspaceId });
   };
@@ -25,11 +27,17 @@ export function ChannelsSettingsPanel() {
       invalidate();
       syncPoll.begin();
     },
+    onError: () => {
+      toast("Could not start the channel sync — try again.");
+    },
   });
   const disconnectMutation = trpc.channel.disconnect.useMutation({
     onSuccess: () => {
       selectChannel(null);
       invalidate();
+    },
+    onError: () => {
+      toast("Could not disconnect the channel — it is still connected.");
     },
   });
 
