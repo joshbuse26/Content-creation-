@@ -154,7 +154,10 @@ export function IconDoc(p: IconProps) {
 export function IconLink(p: IconProps) {
   return (
     <Svg {...p}>
-      <path d="M6.5 9.5 9.5 6.5M5 11l-1 1a2.47 2.47 0 0 1-3.5-3.5L3 6M11 5l1.5-1.5A2.47 2.47 0 0 1 16 7l-1.5 1.5" transform="translate(0 0) scale(0.94)" />
+      <path
+        d="M6.5 9.5 9.5 6.5M5 11l-1 1a2.47 2.47 0 0 1-3.5-3.5L3 6M11 5l1.5-1.5A2.47 2.47 0 0 1 16 7l-1.5 1.5"
+        transform="translate(0 0) scale(0.94)"
+      />
     </Svg>
   );
 }
@@ -276,10 +279,30 @@ export function IconGear(p: IconProps) {
 export function IconGoogle(p: IconProps) {
   return (
     <Svg {...p}>
-      <path d="M14 8.2c0-.5 0-.9-.1-1.4H8v2.6h3.4a3 3 0 0 1-1.3 2v1.6h2.1A6 6 0 0 0 14 8.2Z" fill="currentColor" stroke="none" opacity="0.9" />
-      <path d="M8 14a5.9 5.9 0 0 0 4.2-1.5L10.1 11a3.7 3.7 0 0 1-5.5-2H2.4v1.7A6 6 0 0 0 8 14Z" fill="currentColor" stroke="none" opacity="0.7" />
-      <path d="M4.6 9a3.6 3.6 0 0 1 0-2.3V5H2.4a6 6 0 0 0 0 5.4L4.6 9Z" fill="currentColor" stroke="none" opacity="0.5" />
-      <path d="M8 4.4c.9 0 1.8.3 2.4 1l1.9-1.9A6 6 0 0 0 2.4 5l2.2 1.7A3.6 3.6 0 0 1 8 4.4Z" fill="currentColor" stroke="none" opacity="0.8" />
+      <path
+        d="M14 8.2c0-.5 0-.9-.1-1.4H8v2.6h3.4a3 3 0 0 1-1.3 2v1.6h2.1A6 6 0 0 0 14 8.2Z"
+        fill="currentColor"
+        stroke="none"
+        opacity="0.9"
+      />
+      <path
+        d="M8 14a5.9 5.9 0 0 0 4.2-1.5L10.1 11a3.7 3.7 0 0 1-5.5-2H2.4v1.7A6 6 0 0 0 8 14Z"
+        fill="currentColor"
+        stroke="none"
+        opacity="0.7"
+      />
+      <path
+        d="M4.6 9a3.6 3.6 0 0 1 0-2.3V5H2.4a6 6 0 0 0 0 5.4L4.6 9Z"
+        fill="currentColor"
+        stroke="none"
+        opacity="0.5"
+      />
+      <path
+        d="M8 4.4c.9 0 1.8.3 2.4 1l1.9-1.9A6 6 0 0 0 2.4 5l2.2 1.7A3.6 3.6 0 0 1 8 4.4Z"
+        fill="currentColor"
+        stroke="none"
+        opacity="0.8"
+      />
     </Svg>
   );
 }

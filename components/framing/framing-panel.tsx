@@ -102,7 +102,9 @@ export function FramingPanel() {
                     <Button
                       size="sm"
                       variant="primary"
-                      busy={chooseMutation.isPending && chooseMutation.variables.frameId === frame.id}
+                      busy={
+                        chooseMutation.isPending && chooseMutation.variables.frameId === frame.id
+                      }
                       onClick={() => {
                         chooseMutation.mutate({ workspaceId, frameId: frame.id });
                       }}
@@ -177,7 +179,10 @@ function FrameForm({ frame, onSaved }: { frame: Frame; onSaved: () => void }) {
             outcome,
             audienceSegment,
             tone,
-            targetMinutes: Number.isFinite(minutes) && minutes > 0 ? Math.min(120, Math.round(minutes)) : frame.targetMinutes,
+            targetMinutes:
+              Number.isFinite(minutes) && minutes > 0
+                ? Math.min(120, Math.round(minutes))
+                : frame.targetMinutes,
             keywords: keywords
               .split(",")
               .map((k) => k.trim())

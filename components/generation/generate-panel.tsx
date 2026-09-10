@@ -72,7 +72,10 @@ export function GeneratePanel() {
   }
 
   const running = state.phase === "running";
-  const totalDrafted = state.sections.reduce((acc, s) => acc + s.body.split(/\s+/).filter((w) => w !== "").length, 0);
+  const totalDrafted = state.sections.reduce(
+    (acc, s) => acc + s.body.split(/\s+/).filter((w) => w !== "").length,
+    0,
+  );
 
   return (
     <div className="space-y-6">
@@ -158,7 +161,9 @@ export function GeneratePanel() {
                   <p className="font-medium">
                     Generation failed at {stageLabels[state.failure.stage]}
                   </p>
-                  <p className="mt-0.5">{state.failure.message} Credits are refunded automatically.</p>
+                  <p className="mt-0.5">
+                    {state.failure.message} Credits are refunded automatically.
+                  </p>
                 </div>
               </div>
             ) : null}
@@ -217,10 +222,10 @@ export function GeneratePanel() {
             {running ? (
               <div className="flex items-center gap-2 py-2 text-sm text-zinc-500 dark:text-zinc-400">
                 <Spinner size={13} />
-                {state.stages.draft_sections === "running"
-                  ? "Drafting next section…"
-                  : "Working…"}
-                {totalDrafted > 0 ? <span className="text-xs">({totalDrafted} words so far)</span> : null}
+                {state.stages.draft_sections === "running" ? "Drafting next section…" : "Working…"}
+                {totalDrafted > 0 ? (
+                  <span className="text-xs">({totalDrafted} words so far)</span>
+                ) : null}
               </div>
             ) : null}
 

@@ -100,7 +100,10 @@ export function LoginForm({ fixtureMode }: { fixtureMode: boolean }) {
           <p className="font-medium text-zinc-600 dark:text-zinc-300">Development environment</p>
           <p className="mt-1">
             Auth providers are not configured. You can{" "}
-            <Link href="/projects" className="font-medium text-emerald-700 underline dark:text-emerald-400">
+            <Link
+              href="/projects"
+              className="font-medium text-emerald-700 underline dark:text-emerald-400"
+            >
               enter the app on fixture data
             </Link>{" "}
             without signing in.

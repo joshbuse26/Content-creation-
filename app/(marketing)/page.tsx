@@ -52,10 +52,31 @@ const features = [
 ];
 
 const tiers = [
-  { name: "Free", price: "$0", detail: "8 credits to try the full loop", items: ["1 channel", "1 seat", "Every pipeline stage"] },
-  { name: "Starter", price: "$49", detail: "per month · 60 credits", items: ["3 channels", "2 seats", "~10 full scripts / mo"], featured: true },
-  { name: "Team", price: "$99", detail: "per month · 200 credits", items: ["10 channels", "5 seats", "Priority generation"] },
-  { name: "Agency", price: "$249", detail: "per month · 600 credits", items: ["Unlimited channels", "15 seats", "Client workspaces"] },
+  {
+    name: "Free",
+    price: "$0",
+    detail: "8 credits to try the full loop",
+    items: ["1 channel", "1 seat", "Every pipeline stage"],
+  },
+  {
+    name: "Starter",
+    price: "$49",
+    detail: "per month · 60 credits",
+    items: ["3 channels", "2 seats", "~10 full scripts / mo"],
+    featured: true,
+  },
+  {
+    name: "Team",
+    price: "$99",
+    detail: "per month · 200 credits",
+    items: ["10 channels", "5 seats", "Priority generation"],
+  },
+  {
+    name: "Agency",
+    price: "$249",
+    detail: "per month · 600 credits",
+    items: ["Unlimited channels", "15 seats", "Client workspaces"],
+  },
 ];
 
 export default function LandingPage() {
@@ -71,8 +92,8 @@ export default function LandingPage() {
         </h1>
         <p className="mt-5 max-w-2xl text-lg text-zinc-600 dark:text-zinc-400">
           {PRODUCT_NAME} turns an idea into a fact-checked, retention-engineered script in your
-          voice — researched, framed, drafted, and packaged in minutes, with you in control of
-          every section.
+          voice — researched, framed, drafted, and packaged in minutes, with you in control of every
+          section.
         </p>
         <div className="mt-8 flex flex-wrap items-center gap-4">
           <Link
@@ -96,9 +117,13 @@ export default function LandingPage() {
           <div className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
             {steps.map((s) => (
               <div key={s.n}>
-                <span className="font-mono text-xs text-emerald-700 dark:text-emerald-400">{s.n}</span>
+                <span className="font-mono text-xs text-emerald-700 dark:text-emerald-400">
+                  {s.n}
+                </span>
                 <h3 className="mt-1 text-sm font-semibold">{s.title}</h3>
-                <p className="mt-1.5 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{s.body}</p>
+                <p className="mt-1.5 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+                  {s.body}
+                </p>
               </div>
             ))}
           </div>
@@ -114,7 +139,9 @@ export default function LandingPage() {
           {features.map((f) => (
             <div key={f.title}>
               <h3 className="text-sm font-semibold">{f.title}</h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{f.body}</p>
+              <p className="mt-1.5 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+                {f.body}
+              </p>
             </div>
           ))}
         </div>
@@ -123,7 +150,9 @@ export default function LandingPage() {
       {/* Pricing */}
       <section className="border-t border-zinc-200 bg-white py-16 dark:border-zinc-800 dark:bg-zinc-900/40">
         <div className="mx-auto max-w-5xl px-6">
-          <h2 className="font-(family-name:--font-display) text-2xl font-semibold sm:text-3xl">Pricing</h2>
+          <h2 className="font-(family-name:--font-display) text-2xl font-semibold sm:text-3xl">
+            Pricing
+          </h2>
           <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
             One credit system across everything: a full script is 6 credits, a revision pass is 2.
           </p>

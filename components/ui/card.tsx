@@ -27,11 +27,19 @@ export function CardHeader({
           <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{subtitle}</p>
         ) : null}
       </div>
-      {actions !== undefined ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+      {actions !== undefined ? (
+        <div className="flex shrink-0 items-center gap-2">{actions}</div>
+      ) : null}
     </div>
   );
 }
 
-export function CardBody({ className = "", children }: { className?: string; children: ReactNode }) {
+export function CardBody({
+  className = "",
+  children,
+}: {
+  className?: string;
+  children: ReactNode;
+}) {
   return <div className={`px-4 py-3 ${className}`}>{children}</div>;
 }

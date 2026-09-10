@@ -54,7 +54,13 @@ export function RevisionCard({
         <div className="flex shrink-0 items-center gap-1.5">
           {decision === "pending" ? (
             <>
-              <Button size="sm" variant="primary" busy={busy} onClick={onAccept} aria-label="Accept suggestion">
+              <Button
+                size="sm"
+                variant="primary"
+                busy={busy}
+                onClick={onAccept}
+                aria-label="Accept suggestion"
+              >
                 <IconCheck size={12} /> Accept
               </Button>
               <Button size="sm" busy={busy} onClick={onReject} aria-label="Reject suggestion">

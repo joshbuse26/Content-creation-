@@ -3,7 +3,10 @@
 export const WORDS_PER_MINUTE = 150;
 
 export function wordCount(text: string): number {
-  const words = text.trim().split(/\s+/).filter((w) => w !== "");
+  const words = text
+    .trim()
+    .split(/\s+/)
+    .filter((w) => w !== "");
   return words.length;
 }
 

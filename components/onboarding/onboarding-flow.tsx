@@ -60,11 +60,7 @@ export function OnboardingFlow() {
               >
                 {i < stepIndex ? <IconCheck size={10} /> : i + 1}
               </span>
-              <span
-                className={
-                  i === stepIndex ? "" : "text-zinc-400 dark:text-zinc-500"
-                }
-              >
+              <span className={i === stepIndex ? "" : "text-zinc-400 dark:text-zinc-500"}>
                 {s.label}
               </span>
             </li>

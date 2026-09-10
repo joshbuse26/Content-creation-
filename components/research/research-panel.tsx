@@ -47,7 +47,9 @@ export function ResearchPanel() {
     setUploadError(null);
     const name = file.name.toLowerCase();
     if (!name.endsWith(".txt") && !name.endsWith(".md") && !name.endsWith(".markdown")) {
-      setUploadError("Only .txt and .md uploads are supported here for now (PDF lands with the server-side parser).");
+      setUploadError(
+        "Only .txt and .md uploads are supported here for now (PDF lands with the server-side parser).",
+      );
       return;
     }
     file
@@ -73,7 +75,10 @@ export function ResearchPanel() {
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Agent search */}
         <Card>
-          <CardHeader title="Research agent" subtitle="Search the web, compile a cited brief. 1 credit." />
+          <CardHeader
+            title="Research agent"
+            subtitle="Search the web, compile a cited brief. 1 credit."
+          />
           <CardBody>
             <form
               className="space-y-2"
@@ -110,7 +115,10 @@ export function ResearchPanel() {
 
         {/* Transcript import */}
         <Card>
-          <CardHeader title="Video transcript" subtitle="Import any public video's transcript by URL." />
+          <CardHeader
+            title="Video transcript"
+            subtitle="Import any public video's transcript by URL."
+          />
           <CardBody>
             <form
               className="space-y-2"
@@ -212,7 +220,13 @@ export function ResearchPanel() {
                   <p className="truncate text-sm font-medium">{doc.title}</p>
                   <p className="mt-0.5 flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
                     <Badge
-                      tone={doc.kind === "web" ? "blue" : doc.kind === "transcript" ? "purple" : "neutral"}
+                      tone={
+                        doc.kind === "web"
+                          ? "blue"
+                          : doc.kind === "transcript"
+                            ? "purple"
+                            : "neutral"
+                      }
                     >
                       {doc.kind}
                     </Badge>

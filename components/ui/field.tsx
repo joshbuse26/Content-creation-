@@ -24,18 +24,17 @@ export function Label({
   );
 }
 
-export function TextInput({
-  className = "",
-  ...rest
-}: InputHTMLAttributes<HTMLInputElement>) {
+export function TextInput({ className = "", ...rest }: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={`${controlClasses} h-9 ${className}`} {...rest} />;
 }
 
-export function TextArea({
-  className = "",
-  ...rest
-}: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea className={`${controlClasses} min-h-20 py-2 leading-relaxed ${className}`} {...rest} />;
+export function TextArea({ className = "", ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return (
+    <textarea
+      className={`${controlClasses} min-h-20 py-2 leading-relaxed ${className}`}
+      {...rest}
+    />
+  );
 }
 
 export function Select({

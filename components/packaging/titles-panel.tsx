@@ -26,7 +26,8 @@ export function TitlesPanel() {
     },
   });
 
-  if (workspaceId === null || latestQuery.isLoading) return <LoadingState label="Loading titles…" />;
+  if (workspaceId === null || latestQuery.isLoading)
+    return <LoadingState label="Loading titles…" />;
   if (latestQuery.isError) {
     return (
       <ErrorState
@@ -84,7 +85,10 @@ export function TitlesPanel() {
       ) : null}
 
       {titleSet === null ? (
-        <EmptyState title="No titles yet" hint="Generate 25 options across at least 5 pattern families." />
+        <EmptyState
+          title="No titles yet"
+          hint="Generate 25 options across at least 5 pattern families."
+        />
       ) : (
         <div className="space-y-6">
           {[...groups.entries()].map(([family, options]) => (
@@ -96,7 +100,9 @@ export function TitlesPanel() {
                 {options.map((opt) => (
                   <li key={opt.text} className="flex items-center gap-3 px-4 py-2.5">
                     <span className="flex-1 text-sm">{opt.text}</span>
-                    <Badge tone={opt.score >= 85 ? "emerald" : opt.score >= 70 ? "yellow" : "neutral"}>
+                    <Badge
+                      tone={opt.score >= 85 ? "emerald" : opt.score >= 70 ? "yellow" : "neutral"}
+                    >
                       {Math.round(opt.score)}
                     </Badge>
                     <IconButton

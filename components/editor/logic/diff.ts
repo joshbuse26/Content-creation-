@@ -29,7 +29,10 @@ export interface DiffRow {
 
 /** Line-by-line red/green rows between an original and a revised body. */
 export function computeLineDiff(original: string, revised: string): DiffRow[] {
-  const changes = diffLines(original.endsWith("\n") ? original : `${original}\n`, revised.endsWith("\n") ? revised : `${revised}\n`);
+  const changes = diffLines(
+    original.endsWith("\n") ? original : `${original}\n`,
+    revised.endsWith("\n") ? revised : `${revised}\n`,
+  );
   const rows: DiffRow[] = [];
   for (const change of changes) {
     const lines = change.value.split("\n");

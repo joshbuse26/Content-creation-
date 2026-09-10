@@ -1,14 +1,7 @@
 import type { ReactNode } from "react";
 
 export type BadgeTone =
-  | "neutral"
-  | "green"
-  | "yellow"
-  | "red"
-  | "blue"
-  | "purple"
-  | "emerald"
-  | "orange";
+  "neutral" | "green" | "yellow" | "red" | "blue" | "purple" | "emerald" | "orange";
 
 const toneClasses: Record<BadgeTone, string> = {
   neutral: "bg-zinc-200/70 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",

@@ -35,12 +35,17 @@ export function ChannelsSettingsPanel() {
           channels.map((c) => (
             <li key={c.id} className="flex items-center gap-3 px-4 py-3">
               <div className="min-w-0 flex-1">
-                <Link href={`/channels/${c.id}`} className="truncate text-sm font-medium hover:underline">
+                <Link
+                  href={`/channels/${c.id}`}
+                  className="truncate text-sm font-medium hover:underline"
+                >
                   {c.title}
                 </Link>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400">
                   {c.mode === "oauth" ? "Google-connected" : "public mode"} ·{" "}
-                  {c.lastSyncedAt !== null ? `synced ${fmtDateTime(c.lastSyncedAt)}` : "never synced"}
+                  {c.lastSyncedAt !== null
+                    ? `synced ${fmtDateTime(c.lastSyncedAt)}`
+                    : "never synced"}
                 </p>
               </div>
               <SyncStatusBadge status={c.syncStatus} />
@@ -56,7 +61,9 @@ export function ChannelsSettingsPanel() {
               <Button
                 size="sm"
                 variant="danger"
-                busy={disconnectMutation.isPending && disconnectMutation.variables.channelId === c.id}
+                busy={
+                  disconnectMutation.isPending && disconnectMutation.variables.channelId === c.id
+                }
                 onClick={() => {
                   disconnectMutation.mutate({ workspaceId, channelId: c.id });
                 }}
@@ -68,7 +75,9 @@ export function ChannelsSettingsPanel() {
         )}
       </ul>
       <div>
-        <h3 className="mb-3 text-sm font-semibold text-zinc-600 dark:text-zinc-400">Add a channel</h3>
+        <h3 className="mb-3 text-sm font-semibold text-zinc-600 dark:text-zinc-400">
+          Add a channel
+        </h3>
         <ConnectChannel />
       </div>
     </div>

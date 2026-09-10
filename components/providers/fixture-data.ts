@@ -117,7 +117,8 @@ export const demoRevisions = z.array(revisionSchema).parse([
           "The full parts list with current prices is in the description — grab it before the sale prices rotate.",
       },
     ],
-    rationale: "Two asks in one breath halves conversion on both; the parts list is the stronger pull.",
+    rationale:
+      "Two asks in one breath halves conversion on both; the parts list is the stronger pull.",
   },
 ]);
 
@@ -205,8 +206,14 @@ function sectionById(input: unknown) {
 const resolvers: Record<string, (input: unknown) => unknown> = {
   "workspace.list": () => [{ ...fixtureWorkspace, role: "owner" as const }],
   "workspace.get": () => fixtureWorkspace,
-  "workspace.create": (i) => ({ ...fixtureWorkspace, name: str(obj(i).name, fixtureWorkspace.name) }),
-  "workspace.update": (i) => ({ ...fixtureWorkspace, name: str(obj(i).name, fixtureWorkspace.name) }),
+  "workspace.create": (i) => ({
+    ...fixtureWorkspace,
+    name: str(obj(i).name, fixtureWorkspace.name),
+  }),
+  "workspace.update": (i) => ({
+    ...fixtureWorkspace,
+    name: str(obj(i).name, fixtureWorkspace.name),
+  }),
   "workspace.members": () => [{ ...fixtureMembership, user: fixtureUser }],
   "workspace.invite": (i) => ({ ...fixtureMembership, role: obj(i).role ?? "writer" }),
   "workspace.setRole": (i) => ({ ...fixtureMembership, role: obj(i).role ?? "writer" }),
@@ -304,7 +311,8 @@ const resolvers: Record<string, (input: unknown) => unknown> = {
   "revision.run": () => queued,
   "revision.list": () => demoRevisions,
   "revision.accept": (i) => {
-    const rev = demoRevisions.find((r) => (r.id as string) === obj(i).revisionId) ?? fixtureRevision;
+    const rev =
+      demoRevisions.find((r) => (r.id as string) === obj(i).revisionId) ?? fixtureRevision;
     const section = fixtureSections.find((s) => s.id === rev.sectionId) ?? fixtureSections[0];
     return { revision: { ...rev, status: "accepted" as const }, section };
   },

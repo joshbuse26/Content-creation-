@@ -116,7 +116,12 @@ export function ThumbsPanel() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {concepts.map((c) => (
-            <Card key={c.id} className={c.status === "chosen" ? "ring-2 ring-emerald-600 dark:ring-emerald-500" : ""}>
+            <Card
+              key={c.id}
+              className={
+                c.status === "chosen" ? "ring-2 ring-emerald-600 dark:ring-emerald-500" : ""
+              }
+            >
               <CardBody className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Badge tone="purple">{c.compositionPattern}</Badge>
@@ -126,11 +131,16 @@ export function ThumbsPanel() {
                     </Badge>
                   ) : null}
                 </div>
-                <p className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{c.promptUsed}</p>
+                <p className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
+                  {c.promptUsed}
+                </p>
                 {c.status !== "chosen" ? (
                   <Button
                     size="sm"
-                    busy={chooseMutation.isPending && chooseMutation.variables.thumbnailConceptId === c.id}
+                    busy={
+                      chooseMutation.isPending &&
+                      chooseMutation.variables.thumbnailConceptId === c.id
+                    }
                     onClick={() => {
                       chooseMutation.mutate({ workspaceId, thumbnailConceptId: c.id });
                     }}

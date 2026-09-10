@@ -2,8 +2,8 @@
 
 @theme {
   /* Display face for marketing headlines — system serif stack, no webfont fetch. */
-  --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman",
-    serif;
+  --font-display:
+    "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
 }
 
 ::selection {

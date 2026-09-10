@@ -51,7 +51,8 @@ export function MembersPanel() {
   }
 
   const members = membersQuery.data ?? [];
-  const canManage = workspace !== null && (workspace.role === "owner" || workspace.role === "admin");
+  const canManage =
+    workspace !== null && (workspace.role === "owner" || workspace.role === "admin");
 
   return (
     <div className="space-y-6">
@@ -147,7 +148,9 @@ export function MembersPanel() {
             <p className="w-full text-xs text-red-600 dark:text-red-400">Invite failed.</p>
           ) : null}
           {inviteMutation.isSuccess ? (
-            <p className="w-full text-xs text-emerald-700 dark:text-emerald-400">Invitation sent.</p>
+            <p className="w-full text-xs text-emerald-700 dark:text-emerald-400">
+              Invitation sent.
+            </p>
           ) : null}
         </form>
       ) : (

@@ -53,7 +53,8 @@ export function ChaptersPanel() {
   const chapterSet = latestQuery.data ?? null;
   const rows =
     draft ??
-    (chapterSet?.entries.map((e) => ({ ts: fmtDuration(e.tsSeconds), label: e.label })) ?? []);
+    chapterSet?.entries.map((e) => ({ ts: fmtDuration(e.tsSeconds), label: e.label })) ??
+    [];
 
   const setRow = (i: number, patch: Partial<{ ts: string; label: string }>) => {
     const next = rows.map((r, j) => (j === i ? { ...r, ...patch } : r));

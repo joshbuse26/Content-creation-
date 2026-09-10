@@ -36,15 +36,16 @@ export function ProjectFrame({ children }: { children: ReactNode }) {
   return (
     <div>
       <div className="mb-1 text-xs">
-        <Link href="/projects" className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200">
+        <Link
+          href="/projects"
+          className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+        >
           Projects
         </Link>
         <span className="mx-1 text-zinc-300 dark:text-zinc-600">/</span>
       </div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-semibold tracking-tight">
-          {project?.title ?? "…"}
-        </h1>
+        <h1 className="text-xl font-semibold tracking-tight">{project?.title ?? "…"}</h1>
         {project !== undefined ? <ProjectStatusBadge status={project.status} /> : null}
       </div>
       <nav className="mb-6 flex flex-wrap items-center gap-1 border-b border-zinc-200 dark:border-zinc-800">

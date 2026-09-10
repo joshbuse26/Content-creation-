@@ -11,7 +11,9 @@ export function LegalPage({
 }) {
   return (
     <article className="mx-auto max-w-3xl px-6 py-14">
-      <h1 className="font-(family-name:--font-display) text-3xl font-semibold tracking-tight">{title}</h1>
+      <h1 className="font-(family-name:--font-display) text-3xl font-semibold tracking-tight">
+        {title}
+      </h1>
       <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">Effective date: {effective}</p>
       <div className="mt-8 space-y-8">{children}</div>
     </article>

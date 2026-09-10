@@ -74,9 +74,7 @@ export function EditorScreen() {
     }
     setSections((current) => {
       const bodies = Object.fromEntries(current.map((s) => [s.id as string, s.body]));
-      const serverDecisions = Object.fromEntries(
-        revisions.map((r) => [r.id as string, r.status]),
-      );
+      const serverDecisions = Object.fromEntries(revisions.map((r) => [r.id as string, r.status]));
       setReview(
         initReviewState(
           revisions.map((r) => ({ id: r.id, sectionId: r.sectionId, diff: r.diff })),
@@ -108,7 +106,8 @@ export function EditorScreen() {
   const acceptMutation = trpc.revision.accept.useMutation();
   const rejectMutation = trpc.revision.reject.useMutation();
 
-  if (workspaceId === null || versionsQuery.isLoading) return <LoadingState label="Loading script…" />;
+  if (workspaceId === null || versionsQuery.isLoading)
+    return <LoadingState label="Loading script…" />;
   if (versionsQuery.isError) {
     return (
       <ErrorState
@@ -149,16 +148,24 @@ export function EditorScreen() {
   };
 
   const decide = (revision: Revision, decision: "accepted" | "rejected") => {
-    const lite = { id: revision.id as string, sectionId: revision.sectionId as string, diff: revision.diff };
+    const lite = {
+      id: revision.id as string,
+      sectionId: revision.sectionId as string,
+      diff: revision.diff,
+    };
     if (decision === "accepted") {
       acceptMutation.mutate(
         { workspaceId, revisionId: revision.id },
         {
           onSuccess: () => {
-            setReview((s) => (s !== null ? reviewReducer(s, { type: "accept", revision: lite }) : s));
+            setReview((s) =>
+              s !== null ? reviewReducer(s, { type: "accept", revision: lite }) : s,
+            );
             setSections((prev) =>
               prev.map((s) =>
-                s.id === revision.sectionId ? { ...s, body: applyDiffOps(s.body, revision.diff) } : s,
+                s.id === revision.sectionId
+                  ? { ...s, body: applyDiffOps(s.body, revision.diff) }
+                  : s,
               ),
             );
           },
@@ -271,17 +278,22 @@ export function EditorScreen() {
         <div className="flex items-start gap-2 rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-900 dark:border-yellow-800 dark:bg-yellow-950 dark:text-yellow-200">
           <IconWarning size={15} className="mt-0.5 shrink-0" />
           <div>
-            <p className="font-medium">Quality gate {qualityReport.passed ? "notes" : "did not pass"}</p>
+            <p className="font-medium">
+              Quality gate {qualityReport.passed ? "notes" : "did not pass"}
+            </p>
             <ul className="mt-1 list-disc pl-5 text-xs">
               {!qualityReport.wordCountWithinTolerance ? (
                 <li>
-                  Word count {qualityReport.wordCount} vs target {qualityReport.targetWordCount} (±15%)
+                  Word count {qualityReport.wordCount} vs target {qualityReport.targetWordCount}{" "}
+                  (±15%)
                 </li>
               ) : null}
               {!qualityReport.readabilityOk ? (
                 <li>Flesch reading ease {qualityReport.fleschReadingEase.toFixed(1)} below 60</li>
               ) : null}
-              {!qualityReport.hookOk ? <li>Hook runs {qualityReport.hookSeconds}s (max 30s)</li> : null}
+              {!qualityReport.hookOk ? (
+                <li>Hook runs {qualityReport.hookSeconds}s (max 30s)</li>
+              ) : null}
               {qualityReport.warnings.map((w) => (
                 <li key={w}>{w}</li>
               ))}
@@ -341,7 +353,9 @@ export function EditorScreen() {
               section={section}
               isFirst={i === 0}
               isLast={i === sections.length - 1}
-              regenBusy={regenMutation.isPending && regenMutation.variables.sectionId === section.id}
+              regenBusy={
+                regenMutation.isPending && regenMutation.variables.sectionId === section.id
+              }
               onMove={(direction) => {
                 setSections((prev) => [...moveSection(prev, section.id as string, direction)]);
               }}

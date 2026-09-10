@@ -26,7 +26,11 @@ export function Dropdown({
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (rootRef.current !== null && e.target instanceof Node && !rootRef.current.contains(e.target)) {
+      if (
+        rootRef.current !== null &&
+        e.target instanceof Node &&
+        !rootRef.current.contains(e.target)
+      ) {
         setOpen(false);
       }
     };
@@ -91,7 +95,9 @@ export function DropdownItem({
         onSelect();
       }}
       className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-zinc-800 ${
-        selected ? "font-semibold text-emerald-700 dark:text-emerald-400" : "text-zinc-700 dark:text-zinc-300"
+        selected
+          ? "font-semibold text-emerald-700 dark:text-emerald-400"
+          : "text-zinc-700 dark:text-zinc-300"
       }`}
     >
       {children}

@@ -9,10 +9,10 @@ export default function PrivacyPage() {
     <LegalPage title="Privacy Policy" effective="September 10, 2026">
       <LegalSection heading="1. Who we are">
         <p>
-          {PRODUCT_NAME} (&ldquo;we&rdquo;, &ldquo;us&rdquo;, the &ldquo;Service&rdquo;) is an AI-assisted
-          scriptwriting platform for video creators. This policy explains what personal data we
-          collect, why we collect it, and the choices you have. It applies to the {PRODUCT_NAME} web
-          application and any related services we operate.
+          {PRODUCT_NAME} (&ldquo;we&rdquo;, &ldquo;us&rdquo;, the &ldquo;Service&rdquo;) is an
+          AI-assisted scriptwriting platform for video creators. This policy explains what personal
+          data we collect, why we collect it, and the choices you have. It applies to the{" "}
+          {PRODUCT_NAME} web application and any related services we operate.
         </p>
       </LegalSection>
 
@@ -20,8 +20,8 @@ export default function PrivacyPage() {
         <LegalList
           items={[
             <span key="a">
-              <strong>Account information</strong> — your email address, name, and profile image when
-              you sign in with an email link or a Google account.
+              <strong>Account information</strong> — your email address, name, and profile image
+              when you sign in with an email link or a Google account.
             </span>,
             <span key="b">
               <strong>Workspace content</strong> — the projects, research notes, uploads, scripts,
@@ -49,15 +49,15 @@ export default function PrivacyPage() {
       <LegalSection heading="3. Google user data">
         <p>
           When you connect a Google account, we request the minimum scopes needed: sign-in identity
-          and, only if you connect a YouTube channel, read-only access to that channel
-          (<code>youtube.readonly</code>). We use this access solely to display your channel in the
+          and, only if you connect a YouTube channel, read-only access to that channel (
+          <code>youtube.readonly</code>). We use this access solely to display your channel in the
           Service, analyze your published content to build your audience profile and voice profile,
           and keep channel statistics current. We do not use Google user data for advertising, and
           we do not sell it.
         </p>
         <p>
-          {PRODUCT_NAME}&rsquo;s use and transfer of information received from Google APIs adheres to
-          the{" "}
+          {PRODUCT_NAME}&rsquo;s use and transfer of information received from Google APIs adheres
+          to the{" "}
           <a
             className="text-emerald-700 underline dark:text-emerald-400"
             href="https://developers.google.com/terms/api-services-user-data-policy"
@@ -86,10 +86,10 @@ export default function PrivacyPage() {
       <LegalSection heading="5. Sharing">
         <p>
           We do not sell personal data. We share data only with service providers that help us run
-          the product — cloud hosting, payment processing (Stripe), email delivery, error monitoring,
-          product analytics, and AI model providers — each bound by contracts limiting their use of
-          the data to providing their service to us. We may disclose information if required by law
-          or to protect the rights, safety, or property of users or the public.
+          the product — cloud hosting, payment processing (Stripe), email delivery, error
+          monitoring, product analytics, and AI model providers — each bound by contracts limiting
+          their use of the data to providing their service to us. We may disclose information if
+          required by law or to protect the rights, safety, or property of users or the public.
         </p>
       </LegalSection>
 

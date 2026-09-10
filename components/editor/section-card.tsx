@@ -133,9 +133,15 @@ export function SectionCard({
         ) : (
           <h3 className="truncate text-sm font-semibold">{section.heading}</h3>
         )}
-        <span className="ml-auto text-xs text-zinc-400 tabular-nums" title="words · est runtime at 150 wpm (server estimate)">
+        <span
+          className="ml-auto text-xs text-zinc-400 tabular-nums"
+          title="words · est runtime at 150 wpm (server estimate)"
+        >
           {words}w · {fmtDuration(computedSeconds)}
-          <span className="text-zinc-300 dark:text-zinc-600"> / ~{fmtDuration(section.estSeconds)}</span>
+          <span className="text-zinc-300 dark:text-zinc-600">
+            {" "}
+            / ~{fmtDuration(section.estSeconds)}
+          </span>
         </span>
 
         <div className="flex items-center gap-0.5">

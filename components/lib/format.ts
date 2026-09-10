@@ -36,7 +36,11 @@ export function parseDuration(value: string): number | null {
 }
 
 export function fmtDate(d: Date): string {
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(d);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(d);
 }
 
 export function fmtDateTime(d: Date): string {

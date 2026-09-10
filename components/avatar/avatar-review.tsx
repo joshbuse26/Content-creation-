@@ -9,7 +9,14 @@ import { useWorkspace } from "@/components/providers/workspace-context";
 import { Button, IconButton } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Select, TextArea, TextInput } from "@/components/ui/field";
-import { IconCheck, IconPencil, IconPlus, IconRefresh, IconTrash, IconX } from "@/components/ui/icons";
+import {
+  IconCheck,
+  IconPencil,
+  IconPlus,
+  IconRefresh,
+  IconTrash,
+  IconX,
+} from "@/components/ui/icons";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
 import { fmtDateTime } from "@/components/lib/format";
 
@@ -281,7 +288,11 @@ function FieldHead({ label, onRegenerate }: { label: string; onRegenerate: () =>
   return (
     <div className="mb-1 flex items-center justify-between">
       <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">{label}</span>
-      <IconButton label={`Regenerate ${label.toLowerCase()}`} onClick={onRegenerate} className="h-5 w-5">
+      <IconButton
+        label={`Regenerate ${label.toLowerCase()}`}
+        onClick={onRegenerate}
+        className="h-5 w-5"
+      >
         <IconRefresh size={11} />
       </IconButton>
     </div>
@@ -363,7 +374,10 @@ function InlineTextField({
           <span className={value === "" ? "text-zinc-400 italic" : "whitespace-pre-wrap"}>
             {value === "" ? (placeholder ?? "Empty — click to edit") : value}
           </span>
-          <IconPencil size={12} className="mt-0.5 shrink-0 text-zinc-300 group-hover:text-zinc-500" />
+          <IconPencil
+            size={12}
+            className="mt-0.5 shrink-0 text-zinc-300 group-hover:text-zinc-500"
+          />
         </button>
       )}
       {hint !== undefined ? <p className="mt-1 text-[11px] text-zinc-400">{hint}</p> : null}
@@ -415,7 +429,10 @@ function EvidenceListField({
       <ul className="space-y-1.5">
         {rows.map((row, i) =>
           editingIndex === i ? (
-            <li key={i} className="rounded-md border border-emerald-400 p-2 dark:border-emerald-700">
+            <li
+              key={i}
+              className="rounded-md border border-emerald-400 p-2 dark:border-emerald-700"
+            >
               <RowEditor
                 nounSingular={nounSingular}
                 text={draftText}
