@@ -1,7 +1,7 @@
 "use client";
 
-import { GeneratePanel } from "@/components/generation/generate-panel";
+import { StagedGeneratePanel } from "@/components/generation/staged-generate-panel";
 
 export default function GeneratePage() {
-  return <GeneratePanel />;
+  return <StagedGeneratePanel />;
 }

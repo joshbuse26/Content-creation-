@@ -1,53 +1,60 @@
 import Link from "next/link";
 import { PRODUCT_NAME } from "@/lib/branding";
+import { ARCHETYPE_SEEDS } from "@/lib/archetypes";
+import {
+  displayCopy,
+  energyLabel,
+  HOOK_STYLE_LABELS,
+  paceLabel,
+} from "@/components/archetypes/presentation";
 
 const steps = [
   {
     n: "01",
-    title: "Feed it your channel",
-    body: "Connect with one click or paste a channel URL. We read your catalog and build an editable picture of who actually watches you.",
+    title: "Pick a style",
+    body: "Twelve original video styles — from calm explainer to high-stakes challenge — each a full style card: voice, pacing, hooks, CTA habits. Blend two if one isn't enough.",
   },
   {
     n: "02",
-    title: "Research with receipts",
-    body: "Pull web sources, competitor transcripts, and your own notes into one brief — every fact keeps its citation all the way into the script.",
+    title: "Choose the topic",
+    body: "Generated topic candidates ranked for your channel, or type your own. Research with receipts: every fact keeps its citation into the script.",
   },
   {
     n: "03",
-    title: "Frame the video",
-    body: "Four distinct angles for every idea. Pick one, tune the format, tone, and runtime, and lock the plan before a word is written.",
+    title: "Approve outline and hook",
+    body: "A per-section outline with target seconds, then three openers tagged by technique. You approve each stage — and only pay for the stages you run.",
   },
   {
     n: "04",
     title: "Watch the script assemble",
-    body: "A seven-stage writing engine drafts section by section, live — hooks, retention beats, your voice, and a fact-check pass at the end.",
+    body: "The draft streams in section by section — retention beats, the style's voice, a fact-check pass, and style gates checked by machine at the end.",
   },
 ];
 
 const features = [
   {
-    title: "Three hooks, tagged by tactic",
-    body: "Open loop, bold claim, stakes, in-medias-res — pick the opener that fits, keep the runners-up one click away.",
+    title: "Styles, not templates",
+    body: "Each archetype is a structured style card — point of view, sentence rhythm, energy, re-hook cadence — applied consistently across the whole script.",
+  },
+  {
+    title: "Crossover blends",
+    body: "Pick two styles and weight them. Calm authority with a shot of hype, storytelling with data-first rigor — the blend is deterministic, not vibes.",
+  },
+  {
+    title: "Pay per stage",
+    body: "Topics, outline, hooks, draft — each stage is metered separately. Type your own topic and skip the charge. One-click runs the whole chain.",
+  },
+  {
+    title: "Style gates, checked by code",
+    body: "Hook technique, CTA placement, reading level, and each style's banned-claims list are machine-checked on every script, with a per-gate report.",
   },
   {
     title: "Section-level control",
-    body: "Regenerate one section with a steering note. Lock the parts you love. Expand or condense without touching the rest.",
-  },
-  {
-    title: "Line-level revision passes",
-    body: "Suggested edits arrive as red/green diffs with a rationale. Accept or reject each one individually.",
-  },
-  {
-    title: "Claims you can defend",
-    body: "Every factual claim links back to a research source. Anything unsupported is highlighted before you record.",
-  },
-  {
-    title: "Retention-aware structure",
-    body: "Re-hooks every 60–90 seconds, open loops that actually close, and payoffs placed where viewers drift.",
+    body: "Regenerate one section with a steering note. Lock the parts you love. Line-level revision passes arrive as diffs you accept or reject.",
   },
   {
     title: "Packaging in the same breath",
-    body: "25 scored titles, three description styles, tags, and chapters — generated from the finished script, not from scratch.",
+    body: "25 scored titles, thumbnail concepts keyed to your style's preset, descriptions, tags, and chapters — generated from the finished script.",
   },
 ];
 
@@ -79,6 +86,27 @@ const tiers = [
   },
 ];
 
+function EnergyBars({ energy }: { energy: number }) {
+  return (
+    <span
+      className="inline-flex items-end gap-0.5"
+      role="img"
+      aria-label={`Energy ${energy} of 5 — ${energyLabel(energy)}`}
+    >
+      {[1, 2, 3, 4, 5].map((level) => (
+        <span
+          key={level}
+          aria-hidden="true"
+          style={{ height: `${4 + level * 2}px` }}
+          className={`w-1 rounded-sm ${
+            level <= energy ? "bg-emerald-600 dark:bg-emerald-400" : "bg-zinc-200 dark:bg-zinc-700"
+          }`}
+        />
+      ))}
+    </span>
+  );
+}
+
 export default function LandingPage() {
   return (
     <div>
@@ -88,12 +116,12 @@ export default function LandingPage() {
           AI scriptwriting for YouTube
         </p>
         <h1 className="mt-3 max-w-3xl font-(family-name:--font-display) text-4xl leading-tight font-semibold tracking-tight sm:text-6xl">
-          Scripts your audience actually finishes.
+          Pick a style. Get your next video.
         </h1>
         <p className="mt-5 max-w-2xl text-lg text-zinc-600 dark:text-zinc-400">
-          {PRODUCT_NAME} turns an idea into a fact-checked, retention-engineered script in your
-          voice — researched, framed, drafted, and packaged in minutes, with you in control of every
-          section.
+          {PRODUCT_NAME} ships with twelve original video styles — pick one (or blend two), and a
+          staged writing engine turns a topic into a fact-checked, retention-engineered script in
+          that style, with you approving every step.
         </p>
         <div className="mt-8 flex flex-wrap items-center gap-4">
           <Link
@@ -108,21 +136,80 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* How it works */}
+      {/* Archetype showcase */}
       <section className="border-y border-zinc-200 bg-white py-16 dark:border-zinc-800 dark:bg-zinc-900/40">
         <div className="mx-auto max-w-5xl px-6">
           <h2 className="font-(family-name:--font-display) text-2xl font-semibold sm:text-3xl">
-            Idea to record-ready, one pipeline
+            Twelve styles, one for every kind of video
           </h2>
-          <div className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-            {steps.map((s) => (
-              <div key={s.n}>
-                <span className="font-mono text-xs text-emerald-700 dark:text-emerald-400">
-                  {s.n}
-                </span>
-                <h3 className="mt-1 text-sm font-semibold">{s.title}</h3>
+          <p className="mt-2 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
+            Original archetypes built around how videos are made — pacing, hooks, energy — not
+            around any person. Blend any two with a weight slider.
+          </p>
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {ARCHETYPE_SEEDS.map((a) => (
+              <div
+                key={a.id}
+                className="flex flex-col rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold">{a.displayName}</h3>
+                  <EnergyBars energy={a.styleCard.energy} />
+                </div>
+                <p className="mt-1.5 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
+                  {displayCopy(a.pitch)}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-1 pt-1">
+                  <span className="rounded-full bg-zinc-200/70 px-2 py-0.5 text-[11px] font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                    {paceLabel(a.styleCard.pacing.wpmTarget)} pace
+                  </span>
+                  {a.styleCard.hookPatterns.map((p) => (
+                    <span
+                      key={p.technique}
+                      className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-800 dark:bg-sky-950 dark:text-sky-300"
+                    >
+                      {HOOK_STYLE_LABELS[p.technique]}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section className="mx-auto max-w-5xl px-6 py-16">
+        <h2 className="font-(family-name:--font-display) text-2xl font-semibold sm:text-3xl">
+          Idea to record-ready, one staged pipeline
+        </h2>
+        <div className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+          {steps.map((s) => (
+            <div key={s.n}>
+              <span className="font-mono text-xs text-emerald-700 dark:text-emerald-400">
+                {s.n}
+              </span>
+              <h3 className="mt-1 text-sm font-semibold">{s.title}</h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+                {s.body}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Features */}
+      <section className="border-t border-zinc-200 bg-white py-16 dark:border-zinc-800 dark:bg-zinc-900/40">
+        <div className="mx-auto max-w-5xl px-6">
+          <h2 className="font-(family-name:--font-display) text-2xl font-semibold sm:text-3xl">
+            An editor built for talking, not typing
+          </h2>
+          <div className="mt-8 grid gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
+            {features.map((f) => (
+              <div key={f.title}>
+                <h3 className="text-sm font-semibold">{f.title}</h3>
                 <p className="mt-1.5 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-                  {s.body}
+                  {f.body}
                 </p>
               </div>
             ))}
@@ -130,31 +217,15 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Features */}
-      <section className="mx-auto max-w-5xl px-6 py-16">
-        <h2 className="font-(family-name:--font-display) text-2xl font-semibold sm:text-3xl">
-          An editor built for talking, not typing
-        </h2>
-        <div className="mt-8 grid gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
-          {features.map((f) => (
-            <div key={f.title}>
-              <h3 className="text-sm font-semibold">{f.title}</h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-                {f.body}
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
-
       {/* Pricing */}
-      <section className="border-t border-zinc-200 bg-white py-16 dark:border-zinc-800 dark:bg-zinc-900/40">
+      <section className="border-t border-zinc-200 py-16 dark:border-zinc-800">
         <div className="mx-auto max-w-5xl px-6">
           <h2 className="font-(family-name:--font-display) text-2xl font-semibold sm:text-3xl">
             Pricing
           </h2>
           <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-            One credit system across everything: a full script is 6 credits, a revision pass is 2.
+            One credit system across everything: topics 1, outline 1, hooks 1, draft 4 — a full
+            script is 6 credits, a revision pass is 2. Each stage is charged only when you run it.
           </p>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {tiers.map((t) => (
@@ -201,6 +272,10 @@ export default function LandingPage() {
         <h2 className="font-(family-name:--font-display) text-3xl font-semibold">
           Your next video, scripted this afternoon.
         </h2>
+        <p className="mx-auto mt-3 max-w-xl text-sm text-zinc-500 dark:text-zinc-400">
+          Pick a style, approve the outline and hook, and record from a script your audience
+          actually finishes.
+        </p>
         <Link
           href="/login"
           className="mt-6 inline-block rounded-md bg-emerald-700 px-6 py-3 text-sm font-semibold text-white hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-500"
