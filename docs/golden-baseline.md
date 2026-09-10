@@ -1,22 +1,20 @@
-# Golden baseline — fixture mode
-
-> Generated 2026-09-10 via `PROVIDERS=fixture pnpm exec tsx scripts/golden-run.ts --out docs/golden-baseline.md`. Golden loop v2: briefs carry archetype/crossover targets and run the STAGED pipeline path (topics skipped — the brief is the topic; outline → hooks → draft through the stage handlers), the legacy brief runs the v1 7-stage pipeline, and the sheet carries the per-gate style columns from the frozen `styleGateReportSchema`. Fixture-mode output measures pipeline mechanics, not writing quality — regenerate with `PROVIDERS=live` once keys exist and score 1–5 per brief. Diff a new run against this file with `--compare docs/golden-baseline.md`. `n/e` columns (hookPattern, readingLevel) fill in when C1 lands the real staged pipeline.
-
 # Golden-set scoring sheet
 
-- Date: 2026-09-10T18:34:58.456Z
-- Providers: fixture · Prompt version: 2026-09-10.1
+> Baseline regenerated 2026-09-10 (wave-C integration) via `PROVIDERS=fixture pnpm exec tsx scripts/golden-run.ts --out docs/golden-baseline.md`. Golden loop v2 on the REAL staged pipeline (C1): archetype/crossover briefs run outline → hooks → draft through the production stage handlers (topics skipped — the brief is the topic), the legacy brief runs the v1 7-stage pipeline. HookPat/ReadLvl columns are now evaluated, and the meal-prep-myths CTA canary passes (fixture outline honors the card's ctaHabits placement). Fixture-mode output measures pipeline mechanics, not writing quality — regenerate with `PROVIDERS=live` once keys exist and score 1–5 per brief. Diff a new run against this file with `--compare docs/golden-baseline.md`.
+
+- Date: 2026-09-10T19:14:18.361Z
+- Providers: fixture · Prompt version: 2026-09-10.2
 - Scoring: 1 = unusable · 2 = heavy rewrite · 3 = usable with edits · 4 = light edits · 5 = shoot it as-is
 - Style gate columns (frozen styleGateReportSchema): HookPat = hook technique ∈ card.hookPatterns · CTA = placement matches ctaHabits · ReadLvl = reading grade in the card's band · Claims = bannedClaims scan. n/e = typed but not evaluated yet (C1 fills hookPattern/readingLevel); - = no style card in play.
 
-| Brief                  | Mode                                  | Hook (style)                                                                        | Words | Runtime | Gate | HookPat | CTA  | ReadLvl | Claims | Flags                                                       | Wall clock | Score (1-5) |
-| ---------------------- | ------------------------------------- | ----------------------------------------------------------------------------------- | ----- | ------- | ---- | ------- | ---- | ------- | ------ | ----------------------------------------------------------- | ---------- | ----------- |
-| budget-espresso        | data-storyteller                      | There is one result in this test I still cannot fully explain. Budget … (open_loop) | 1798  | 11:59   | pass | n/e     | pass | n/e     | pass   | none                                                        | 0.0s       |             |
-| learn-piano-adult      | friendly-coach                        | There is one result in this test I still cannot fully explain. Learnin… (open_loop) | 1503  | 10:01   | pass | n/e     | pass | n/e     | pass   | none                                                        | 0.0s       |             |
-| meal-prep-myths        | rapid-listicle                        | There is one result in this test I still cannot fully explain. Seven m… (open_loop) | 1209  | 8:04    | FAIL | n/e     | FAIL | n/e     | pass   | First CTA lands at ~93% of runtime; card targets 30% (±15). | 0.0s       |             |
-| shed-office-build      | hands-on-builder×calm-explainer (0.6) | There is one result in this test I still cannot fully explain. Turning… (open_loop) | 2114  | 14:06   | pass | n/e     | pass | n/e     | pass   | none                                                        | 0.0s       |             |
-| phone-battery-myths    | contrarian-essayist                   | There is one result in this test I still cannot fully explain. Why you… (open_loop) | 1361  | 9:04    | pass | n/e     | pass | n/e     | pass   | none                                                        | 0.0s       |             |
-| vintage-camera-revival | legacy                                | There is one result in this test I still cannot fully explain. I shot … (open_loop) | 1728  | 11:31   | pass | n/e     | pass | n/e     | pass   | 6 unsupported claim(s)                                      | 0.0s       |             |
+| Brief                  | Mode                                  | Hook (style)                                                                            | Words | Runtime | Gate | HookPat | CTA  | ReadLvl | Claims | Flags                                                                            | Wall clock | Score (1-5) |
+| ---------------------- | ------------------------------------- | --------------------------------------------------------------------------------------- | ----- | ------- | ---- | ------- | ---- | ------- | ------ | -------------------------------------------------------------------------------- | ---------- | ----------- |
+| budget-espresso        | data-storyteller                      | Most of what you have heard about this is wrong, and I can show you wh… (bold_claim)    | 1883  | 12:33   | pass | pass    | pass | pass    | pass   | Reading grade 3.2 sits below the card's grade 8-11 band — simpler than target (n | 0.1s       |             |
+| learn-piano-adult      | friendly-coach                        | There is one result in this test I still cannot fully explain. Learnin… (open_loop)     | 1517  | 10:07   | pass | pass    | pass | pass    | pass   | Reading grade 3.5 sits below the card's grade 5-8 band — simpler than target (no | 0.0s       |             |
+| meal-prep-myths        | rapid-listicle                        | Most of what you have heard about this is wrong, and I can show you wh… (bold_claim)    | 1232  | 8:13    | pass | pass    | pass | pass    | pass   | Reading grade 3.5 sits below the card's grade 5-7 band — simpler than target (no | 0.0s       |             |
+| shed-office-build      | hands-on-builder×calm-explainer (0.6) | Round three. The cheap one is still standing, the expensive one is smo… (in_medias_res) | 2203  | 14:41   | pass | pass    | pass | pass    | pass   | Reading grade 3.3 sits below the card's grade 6-9 band — simpler than target (no | 0.0s       |             |
+| phone-battery-myths    | contrarian-essayist                   | Most of what you have heard about this is wrong, and I can show you wh… (bold_claim)    | 1436  | 9:34    | pass | pass    | pass | pass    | pass   | Reading grade 3.3 sits below the card's grade 9-12 band — simpler than target (n | 0.0s       |             |
+| vintage-camera-revival | legacy                                | There is one result in this test I still cannot fully explain. I shot … (open_loop)     | 1750  | 11:40   | pass | pass    | pass | pass    | pass   | Reading grade 3.3 sits below the card's grade 6-9 band — simpler than target (no | 0.0s       |             |
 
 ---
 
@@ -24,9 +22,9 @@
 
 **Mode:** data-storyteller
 
-**Hook (open_loop):**
+**Hook (bold_claim):**
 
-> There is one result in this test I still cannot fully explain. Budget espresso setup vs. the $2k rig: I tested it under real conditions, and the winner is not the obvious one — that was the plan, anyway. By the time we hit the third round, the plan fell apart, and the reason why changes how you should think about every choice like this one.
+> Most of what you have heard about this is wrong, and I can show you where. Budget espresso setup vs. the $2k rig: I tested it under real conditions, and the winner is not the obvious one. I put that idea through a real test, wrote down every number, and the winner is not the one the internet keeps telling you to buy.
 
 **Top titles:**
 
@@ -36,10 +34,15 @@
 
 **Style gates:**
 
-- hookPattern: n/e
+- hookPattern: pass
 - ctaPlacement: pass (1 CTA)
-- readingLevel: n/e
+- readingLevel: pass (grade 3.2)
 - bannedClaims: pass
+
+**Flags:**
+
+- Reading grade 3.2 sits below the card's grade 8-11 band — simpler than target (not a failure).
+- 11 unsupported claim(s)
 
 **Notes / score:**
 
@@ -61,10 +64,15 @@ _(write here)_
 
 **Style gates:**
 
-- hookPattern: n/e
+- hookPattern: pass
 - ctaPlacement: pass (1 CTA)
-- readingLevel: n/e
+- readingLevel: pass (grade 3.5)
 - bannedClaims: pass
+
+**Flags:**
+
+- Reading grade 3.5 sits below the card's grade 5-8 band — simpler than target (not a failure).
+- 9 unsupported claim(s)
 
 **Notes / score:**
 
@@ -74,9 +82,9 @@ _(write here)_
 
 **Mode:** rapid-listicle
 
-**Hook (open_loop):**
+**Hook (bold_claim):**
 
-> There is one result in this test I still cannot fully explain. Seven meal prep rules I stopped following: I tested it under real conditions, and the winner is not the obvious one — that was the plan, anyway. By the time we hit the third round, the plan fell apart, and the reason why changes how you should think about every choice like this one.
+> Most of what you have heard about this is wrong, and I can show you where. Seven meal prep rules I stopped following: I tested it under real conditions, and the winner is not the obvious one. I put that idea through a real test, wrote down every number, and the winner is not the one the internet keeps telling you to buy.
 
 **Top titles:**
 
@@ -86,15 +94,15 @@ _(write here)_
 
 **Style gates:**
 
-- hookPattern: n/e
-- ctaPlacement: FAIL (1 CTA)
-- readingLevel: n/e
+- hookPattern: pass
+- ctaPlacement: pass (1 CTA)
+- readingLevel: pass (grade 3.5)
 - bannedClaims: pass
-  - First CTA lands at ~93% of runtime; card targets 30% (±15).
 
 **Flags:**
 
-- First CTA lands at ~93% of runtime; card targets 30% (±15).
+- Reading grade 3.5 sits below the card's grade 5-7 band — simpler than target (not a failure).
+- 13 unsupported claim(s)
 
 **Notes / score:**
 
@@ -104,9 +112,9 @@ _(write here)_
 
 **Mode:** hands-on-builder×calm-explainer (0.6)
 
-**Hook (open_loop):**
+**Hook (in_medias_res):**
 
-> There is one result in this test I still cannot fully explain. Turning a garden shed into an office for under $900: I tested it under real conditions, and the winner is not the obvious one — that was the plan, anyway. By the time we hit the third round, the plan fell apart, and the reason why changes how you should think about every choice like this one.
+> Round three. The cheap one is still standing, the expensive one is smoking, and I am staring at my notes wondering what I got wrong. Turning a garden shed into an office for under $900: I tested it under real conditions, and the winner is not the obvious one — that is how this started, three days and one ruined afternoon ago.
 
 **Top titles:**
 
@@ -116,10 +124,15 @@ _(write here)_
 
 **Style gates:**
 
-- hookPattern: n/e
+- hookPattern: pass
 - ctaPlacement: pass (1 CTA)
-- readingLevel: n/e
+- readingLevel: pass (grade 3.3)
 - bannedClaims: pass
+
+**Flags:**
+
+- Reading grade 3.3 sits below the card's grade 6-9 band — simpler than target (not a failure).
+- 14 unsupported claim(s)
 
 **Notes / score:**
 
@@ -129,9 +142,9 @@ _(write here)_
 
 **Mode:** contrarian-essayist
 
-**Hook (open_loop):**
+**Hook (bold_claim):**
 
-> There is one result in this test I still cannot fully explain. Why your phone battery advice is a decade out of date: I tested it under real conditions, and the winner is not the obvious one — that was the plan, anyway. By the time we hit the third round, the plan fell apart, and the reason why changes how you should think about every choice like this one.
+> Most of what you have heard about this is wrong, and I can show you where. Why your phone battery advice is a decade out of date: I tested it under real conditions, and the winner is not the obvious one. I put that idea through a real test, wrote down every number, and the winner is not the one the internet keeps telling you to buy.
 
 **Top titles:**
 
@@ -141,10 +154,15 @@ _(write here)_
 
 **Style gates:**
 
-- hookPattern: n/e
+- hookPattern: pass
 - ctaPlacement: pass (1 CTA)
-- readingLevel: n/e
+- readingLevel: pass (grade 3.3)
 - bannedClaims: pass
+
+**Flags:**
+
+- Reading grade 3.3 sits below the card's grade 9-12 band — simpler than target (not a failure).
+- 7 unsupported claim(s)
 
 **Notes / score:**
 
@@ -166,14 +184,15 @@ _(write here)_
 
 **Style gates:**
 
-- hookPattern: n/e
+- hookPattern: pass
 - ctaPlacement: pass (1 CTA)
-- readingLevel: n/e
+- readingLevel: pass (grade 3.3)
 - bannedClaims: pass
 
 **Flags:**
 
-- 6 unsupported claim(s)
+- Reading grade 3.3 sits below the card's grade 6-9 band — simpler than target (not a failure).
+- 9 unsupported claim(s)
 
 **Notes / score:**
 

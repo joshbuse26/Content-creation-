@@ -1,14 +1,22 @@
 # Gin Rummy
 
-AI scriptwriting for YouTube creators — research, frame, script, revise, and package, end-to-end.
+AI scriptwriting for YouTube creators — **pick a style, generate the next video in that voice.**
+Twelve original creator archetypes (or a weighted crossover blend of two) drive a staged script
+pipeline — topics → outline → hooks → draft, each step individually metered and reviewable — plus
+style-aware quality gates and archetype-keyed thumbnail presets. Research, frame, script, revise,
+and package, end-to-end.
 
-This is the integrated build from the 6-day sprint plus the v1.1 sprint: the Day-1 frozen skeleton
-(schema, contracts, authz, providers, queues), the four wave-2 tracks — channel connect + audience
-avatars (A1), the research → frame → script → revision → titles engine with SSE streaming (A2), the
-full frontend (A3), packaging + exports + rate limiting + ops (A4) — and the four v1.1 tracks:
-outlier index + daily idea feed (B1), the MCP server at `/api/mcp` with owner-managed API keys
-(B2), live Stripe billing with tier limits and metered overage (B3), and thumbnail image
-generation + description templates + free marketing tools at `/tools` (B4).
+This is the integrated build from the 6-day sprint, the v1.1 sprint, and wave C: the Day-1 frozen
+skeleton (schema, contracts, authz, providers, queues), the four wave-2 tracks — channel connect +
+audience avatars (A1), the research → frame → script → revision → titles engine with SSE streaming
+(A2), the full frontend (A3), packaging + exports + rate limiting + ops (A4) — the four v1.1
+tracks: outlier index + daily idea feed (B1), the MCP server at `/api/mcp` with owner-managed API
+keys (B2), live Stripe billing with tier limits and metered overage (B3), thumbnail image
+generation + description templates + free marketing tools at `/tools` (B4) — and the wave-C
+archetype product (per `docs/PRODUCT-CONTRACTS.md`): StyleCard v2 + 12 seeded archetypes (C0), the
+real staged Grok-backed pipeline with crossover merge rules and style gates (C1), the archetype
+picker, staged generation flow and style-gates panel (C2), and preset-driven thumbnails + golden
+loop v2 + seed-data guardrails (C3).
 
 ## Stack
 
@@ -87,6 +95,9 @@ StyleCard v2 (structured schema, migration 0005 transforms legacy cards), `arche
 `partners` tables, `generation_mode` enum + mode columns on projects/scripts, staged script
 procedures (`script.topics/outline/hooks/draft`) + `archetypes.list`, style-aware quality-gate
 extension (`styleGates`), `FEATURE_PARTNERED_NAMED` flag, and the named-creator copy-lint test.
+Two additive changes were approved at wave-C integration: `project.setGenerationTarget` (persists
+mode/archetype/crossover on the project row pre-draft) and `overlayText` on `thumbnails.generate`
+(preset word-cap enforced by the pipeline).
 
 - `db/schema.ts` (+ `db/migrations/*`)
 - `lib/types/ids.ts` — branded ID types
@@ -139,18 +150,23 @@ pipelines/
   avatar/                             §5.2: audience avatar generation
   ideation/                           §5.3/§5.4: outlier index + daily idea feed (B1)
   script/                             §5.7: 7-stage script engine, SSE events, engine store
+  stages/                             wave C: staged pipeline machinery — style resolver,
+                                      crossover merge rules, partner source, stage runners
   research/ revision/                 §5.5 / §5.8
   packaging/                          §5.11: descriptions, tags, chapters, thumbnail briefs
-  thumbnails/                         §5.10: thumbnail image generation (B4)
+  thumbnails/                         §5.10: thumbnail image generation (B4) + archetype presets
 prompts/                              versioned prompt templates (PROMPT_VERSION in input hashes)
 queue/                                BullMQ queues (script/sync/packaging) + PipelineRunner
 worker/index.ts                       worker entrypoint: all queues wired, nightly schedules
 db/                                   Drizzle schema + migrations           [FROZEN]
-lib/                                  config, authz, branded types, fixtures, providers, cache
-scripts/                              seed.ts (demo data) · golden-run.ts (quality eval)
-tests/                                544 tests: authz/tenancy, pipelines, exports, rate limits,
+lib/                                  config, authz, branded types, fixtures, providers, cache,
+                                      archetype seed catalog, style-card merge + gate helpers
+runbooks/                             ops runbooks (rollback, provider-down, partnered-mode…)
+scripts/                              seed.ts (demo data) · golden-run.ts (quality eval, staged)
+tests/                                657 tests: authz/tenancy, pipelines, exports, rate limits,
                                       ideation, MCP, billing/webhooks, thumbnails, free tools,
-                                      style cards/gates, staged script stubs, copy-lint…
+                                      style cards/gates, staged pipeline + metering, crossover,
+                                      thumbnail presets, golden sheet, seed lint, copy-lint…
 ```
 
 ## Authorization
@@ -208,12 +224,15 @@ git push -u origin main
 CI (`.github/workflows/ci.yml`) runs typecheck, lint, format check, tests, build and
 `pnpm audit --audit-level=high` on every push/PR. Keep it green — no red code handed off.
 
-## Verification status (wave-C C0 contracts handoff)
+## Verification status (wave-C integration pass, 2026-09-10)
 
-`pnpm typecheck` ✓ · `pnpm lint` ✓ · `pnpm format:check` ✓ · `pnpm test` ✓ (544 tests) ·
-`pnpm build` ✓ · migrations 0000–0005 + seed + legacy style-card transform verified against a
-live Postgres 16 · golden-run smoke ✓. (Previous v1.1 pass additionally verified
-`pnpm audit --audit-level=high` and the fixture-mode boot smoke — marketing + app pages, MCP
-`tools/list`, free-tool POST.)
+`pnpm typecheck` ✓ · `pnpm lint` ✓ · `pnpm format:check` ✓ · `pnpm test` ✓ (657 tests) ·
+`pnpm build` ✓ · `pnpm audit --audit-level=high` ✓ · fixture-mode boot smoke ✓ (landing,
+projects, project create with archetype → staged flow: topics → outline → hooks → draft SSE
+stream → editor style gates; thumbnails with `auto` pattern) · golden-run v2 executes the real
+staged pipeline, `--compare` against `docs/golden-baseline.md` ✓ (baseline regenerated on this
+tree; the meal-prep-myths CTA canary passes). (The C0 pass verified migrations 0000–0005 + seed
+
+- legacy style-card transform against a live Postgres 16.)
 
 Remaining scope is tracked in `OPEN-ITEMS.md`; integration decisions in `DECISIONS.md`.
