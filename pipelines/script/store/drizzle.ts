@@ -48,6 +48,20 @@ import type {
 } from "./types";
 
 /**
+ * True when the error (or anything in its cause chain) is a Postgres
+ * unique-constraint violation (SQLSTATE 23505). Drizzle may wrap the pg
+ * error, so the chain is walked.
+ */
+export function isUniqueViolation(err: unknown): boolean {
+  let current: unknown = err;
+  for (let depth = 0; depth < 5 && current !== null && typeof current === "object"; depth++) {
+    if ((current as { code?: unknown }).code === "23505") return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
+/**
  * Drizzle-backed EngineStore — production persistence for A2's pipelines.
  * Every query filters on the denormalized workspace_id (spec §3 convention).
  */
@@ -301,26 +315,35 @@ export class DrizzleEngineStore implements EngineStore {
     projectId: ProjectId;
     voiceProfileId: VoiceProfileId | null;
   }): Promise<Script> {
-    return await getDb().transaction(async (tx) => {
-      const versions = await tx
-        .select({ max: sql<number | null>`max(${schema.scripts.version})` })
-        .from(schema.scripts)
-        .where(eq(schema.scripts.projectId, params.projectId));
-      const nextVersion = (versions[0]?.max ?? 0) + 1;
-      const rows = await tx
-        .insert(schema.scripts)
-        .values({
-          workspaceId: params.workspaceId,
-          projectId: params.projectId,
-          version: nextVersion,
-          voiceProfileId: params.voiceProfileId,
-          status: "outlining",
-        })
-        .returning();
-      const row = rows[0];
-      if (row === undefined) throw new Error("insert into scripts returned no row");
-      return scriptSchema.parse(row);
-    });
+    const attempt = async (): Promise<Script> =>
+      await getDb().transaction(async (tx) => {
+        const versions = await tx
+          .select({ max: sql<number | null>`max(${schema.scripts.version})` })
+          .from(schema.scripts)
+          .where(eq(schema.scripts.projectId, params.projectId));
+        const nextVersion = (versions[0]?.max ?? 0) + 1;
+        const rows = await tx
+          .insert(schema.scripts)
+          .values({
+            workspaceId: params.workspaceId,
+            projectId: params.projectId,
+            version: nextVersion,
+            voiceProfileId: params.voiceProfileId,
+            status: "outlining",
+          })
+          .returning();
+        const row = rows[0];
+        if (row === undefined) throw new Error("insert into scripts returned no row");
+        return scriptSchema.parse(row);
+      });
+    try {
+      return await attempt();
+    } catch (err) {
+      // Version race: two concurrent creates computed the same max(version)
+      // and collided on scripts_project_version_uq. Recompute once and retry.
+      if (!isUniqueViolation(err)) throw err;
+      return await attempt();
+    }
   }
 
   async getScript(workspaceId: WorkspaceId, scriptId: ScriptId): Promise<Script | null> {
