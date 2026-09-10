@@ -86,6 +86,7 @@ export async function GET(req: Request): Promise<Response> {
     // 1. Exchange the code for tokens.
     const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
+      signal: AbortSignal.timeout(10_000),
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         code,
@@ -105,7 +106,10 @@ export async function GET(req: Request): Promise<Response> {
     // 2. Discover the user's own channel id with the fresh access token.
     const mineRes = await fetch(
       "https://www.googleapis.com/youtube/v3/channels?part=id&mine=true",
-      { headers: { Authorization: `Bearer ${tokens.access_token}` } },
+      {
+        signal: AbortSignal.timeout(10_000),
+        headers: { Authorization: `Bearer ${tokens.access_token}` },
+      },
     );
     if (!mineRes.ok) throw new Error(`channels.list mine failed (${String(mineRes.status)})`);
     const mine = channelsResponseSchema.parse(await mineRes.json());
