@@ -5,7 +5,7 @@ import { hashInput } from "@/queue/pipeline-runner";
  * Ideation prompts (§5.3 format tagging, §5.4 daily ideas) — versioned,
  * typed template functions. They live next to the pipeline (like the avatar
  * prompt) rather than in A2-owned prompts/*; move when convenient (noted in
- * REQUESTS-B1.md). Bump IDEATION_PROMPT_VERSION on any change — it is
+ * OPEN-ITEMS.md). Bump IDEATION_PROMPT_VERSION on any change — it is
  * folded into every ideation stage's input hash, so a prompt edit never
  * silently reuses stage output produced by older prompts.
  */

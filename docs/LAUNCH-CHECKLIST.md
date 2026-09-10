@@ -21,37 +21,41 @@ The project needs TWO services from this one repo plus data stores:
 
 - `web` — build with `railway.web.json` (config-as-code path in service settings). Public networking ON, healthcheck `/api/health`.
 - `worker` — same repo, `railway.worker.json`. No public networking.
-- Add **PostgreSQL** and **Redis** from the Railway catalog, and a **Storage Bucket** (not needed until thumbnails ship — can wait).
+- Add **PostgreSQL** and **Redis** from the Railway catalog, and a **Storage Bucket** — thumbnails persist generated images to it now (without the `S3_*` vars the app falls back to in-memory storage: it boots fine, but images don't survive restarts).
 
 ## 3. Environment variables
 
 Set on BOTH web and worker unless noted:
 
-| Var                                           | Value                                              | Notes                                                                                                                         |
-| --------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                                | ref → Postgres service                             | Railway reference variable                                                                                                    |
-| `REDIS_URL`                                   | ref → Redis service                                |                                                                                                                               |
-| `AUTH_SECRET`                                 | `openssl rand -base64 33`                          | web only; required to boot                                                                                                    |
-| `CHANNEL_TOKEN_SECRET`                        | `openssl rand -base64 33`                          | encrypts YouTube refresh tokens                                                                                               |
-| `PROVIDERS`                                   | `fixture` for first boot → `live` when keys are in | **production fail-fasts on `fixture` by design** — first boot must run with NODE_ENV≠production, or go straight to `live`     |
-| `NEXT_PUBLIC_FIXTURE_UI`                      | `1` only while PROVIDERS=fixture                   | web only, build-time                                                                                                          |
-| `LLM_BACKEND`                                 | `grok` (or `anthropic`)                            | which live LLM serves the pipeline                                                                                            |
-| `XAI_API_KEY`                                 | console.x.ai                                       | required when LLM_BACKEND=grok; verify tier model names (defaults grok-4.6 / grok-4.1-fast, override via XAI_MODEL_MAIN/FAST) |
-| `ANTHROPIC_API_KEY`                           | console.anthropic.com                              | required when LLM_BACKEND=anthropic                                                                                           |
-| `RESEND_API_KEY`                              | resend.com                                         | **required in production** — sign-in fails loudly without it                                                                  |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`   | GCP OAuth client                                   | login + channel connect                                                                                                       |
-| `GOOGLE_API_KEY`                              | GCP, YouTube Data API v3 enabled                   | public channel mode                                                                                                           |
-| `TRANSCRIPT_API_KEY`                          | Supadata (or compatible)                           | competitor/public transcripts                                                                                                 |
-| `SEARCH_API_KEY`                              | Brave Search                                       | research agent                                                                                                                |
-| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | Stripe                                             | checkout stub until live billing ships                                                                                        |
-| `SENTRY_DSN`                                  | sentry.io                                          | optional but do it                                                                                                            |
+| Var                                                                       | Value                                              | Notes                                                                                                                         |
+| ------------------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                                            | ref → Postgres service                             | Railway reference variable                                                                                                    |
+| `REDIS_URL`                                                               | ref → Redis service                                |                                                                                                                               |
+| `AUTH_SECRET`                                                             | `openssl rand -base64 33`                          | web only; required to boot                                                                                                    |
+| `CHANNEL_TOKEN_SECRET`                                                    | `openssl rand -base64 33`                          | encrypts YouTube refresh tokens                                                                                               |
+| `PROVIDERS`                                                               | `fixture` for first boot → `live` when keys are in | **production fail-fasts on `fixture` by design** — first boot must run with NODE_ENV≠production, or go straight to `live`     |
+| `NEXT_PUBLIC_FIXTURE_UI`                                                  | `1` only while PROVIDERS=fixture                   | web only, build-time                                                                                                          |
+| `LLM_BACKEND`                                                             | `grok` (or `anthropic`)                            | which live LLM serves the pipeline                                                                                            |
+| `XAI_API_KEY`                                                             | console.x.ai                                       | required when LLM_BACKEND=grok; verify tier model names (defaults grok-4.6 / grok-4.1-fast, override via XAI_MODEL_MAIN/FAST) |
+| `ANTHROPIC_API_KEY`                                                       | console.anthropic.com                              | required when LLM_BACKEND=anthropic                                                                                           |
+| `RESEND_API_KEY`                                                          | resend.com                                         | **required in production** — sign-in fails loudly without it                                                                  |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`                               | GCP OAuth client                                   | login + channel connect                                                                                                       |
+| `GOOGLE_API_KEY`                                                          | GCP, YouTube Data API v3 enabled                   | public channel mode                                                                                                           |
+| `TRANSCRIPT_API_KEY`                                                      | Supadata (or compatible)                           | competitor/public transcripts                                                                                                 |
+| `SEARCH_API_KEY`                                                          | Brave Search                                       | research agent                                                                                                                |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET`                             | Stripe                                             | live billing: checkout/portal/webhook go live when set; fixture URLs otherwise                                                |
+| `STRIPE_PRICE_STARTER` / `STRIPE_PRICE_TEAM` / `STRIPE_PRICE_AGENCY`      | Stripe price ids or lookup keys                    | one per paid tier — a tier without its var is not purchasable                                                                 |
+| `STRIPE_PRICE_OVERAGE`                                                    | Stripe metered price ($0.60/credit)                | attach to the Billing Meter `overage_credits`; overage is disabled without it                                                 |
+| `IMAGE_API_KEY`                                                           | image-generation provider (spec §2.5)              | required when PROVIDERS=live; thumbnails + MCP generate_thumbnail images                                                      |
+| `S3_ENDPOINT` / `S3_BUCKET` / `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | Railway Storage Bucket (S3 API)                    | BOTH services — thumbnail image persistence; in-memory fallback (with warning) if unset                                       |
+| `SENTRY_DSN`                                                              | sentry.io                                          | optional but do it                                                                                                            |
 
 After DB is up, run migrations + seed once (Railway shell on web service or locally against `DATABASE_URL`):
 `pnpm db:migrate && pnpm seed`
 
 ## 4. First boot check (5 min)
 
-Open the web URL: landing page loads → log in (magic link; with Resend key it emails, without it in non-prod the link is in logs) → projects page renders. Worker logs show the three nightly schedulers registered.
+Open the web URL: landing page loads → log in (magic link; with Resend key it emails, without it in non-prod the link is in logs) → projects page renders. Worker logs show the nightly schedulers registered (sync sweep, tracking, credit reconcile, outlier refresh, daily ideas).
 
 ## 5. Google Cloud (start TODAY — it gates public launch)
 
@@ -91,6 +95,8 @@ Subscribr permission letter in writing. Lawyer pass on the shipped /terms and /p
 
 Add 5–10 users as GCP test users + allowlist. Onboard each on a call. Watch them use it.
 
-## 12. What's deliberately NOT here (v1.1 backlog)
+## 12. What's deliberately NOT here (post-v1.1 backlog)
 
-Ideation/outlier engine, thumbnail image gen, MCP server, billing tiers + metering, free tools, multi-voice + licensed-voice guard, dashboard tracking UI. See OPEN-ITEMS.md. Next build shift picks these up once keys exist and live quality is ≥4.0.
+Shipped in v1.1: ideation/outlier engine, thumbnail image gen, MCP server + API keys, billing tiers + metering, free tools. Still pending: multi-voice + licensed-voice guard, dashboard tracking UI, face-photo thumbnails, embedding-based idea dedup, MCP SDK swap. See OPEN-ITEMS.md.
+
+Stripe dashboard setup for live billing (products/prices per tier, the `overage_credits` Billing Meter + metered price, and the webhook endpoint with its five event types) is summarized in OPEN-ITEMS.md → "Ops / launch checklist".

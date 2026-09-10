@@ -38,7 +38,7 @@ import type { UpsertNicheVideo } from "./store";
  * Runs are GLOBAL (niche_videos has no workspace) — pipeline_runs.workspace_id
  * is a workspaces FK, so these runs use an in-memory run store for the
  * runner's sequencing/retry mechanics only (same precedent as the original
- * sync pipeline; see REQUESTS-B1.md).
+ * sync pipeline; see OPEN-ITEMS.md).
  */
 
 export const OUTLIER_RATIO_THRESHOLD = 3;

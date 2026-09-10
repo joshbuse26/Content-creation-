@@ -2,10 +2,13 @@
 
 AI scriptwriting for YouTube creators — research, frame, script, revise, and package, end-to-end.
 
-This is the integrated build from the 6-day sprint: the Day-1 frozen skeleton (schema, contracts,
-authz, providers, queues) plus the four wave-2 tracks merged and wired — channel connect + audience
+This is the integrated build from the 6-day sprint plus the v1.1 sprint: the Day-1 frozen skeleton
+(schema, contracts, authz, providers, queues), the four wave-2 tracks — channel connect + audience
 avatars (A1), the research → frame → script → revision → titles engine with SSE streaming (A2), the
-full frontend (A3), and packaging + exports + rate limiting + ops (A4).
+full frontend (A3), packaging + exports + rate limiting + ops (A4) — and the four v1.1 tracks:
+outlier index + daily idea feed (B1), the MCP server at `/api/mcp` with owner-managed API keys
+(B2), live Stripe billing with tier limits and metered overage (B3), and thumbnail image
+generation + description templates + free marketing tools at `/tools` (B4).
 
 ## Stack
 
@@ -72,8 +75,12 @@ Branding: `PRODUCT_NAME` in `lib/branding.ts` is the single product-name constan
 ## The frozen layer (do not edit without approval)
 
 Per sprint plan §2 these files are frozen; changes go through Josh. Three were approved during
-integration: `"sync"` added to `PIPELINE_KINDS` (sync stages now persist to pipeline_runs),
-`script.reorderSections` added, and `hookCandidates` added to `script.get` output.
+v1 integration: `"sync"` added to `PIPELINE_KINDS` (sync stages now persist to pipeline_runs),
+`script.reorderSections` added, and `hookCandidates` added to `script.get` output. Two more in the
+v1.1 integration pass: `"overage"` added to `CREDIT_REASONS` (migration 0004 — first-class ledger
+reason for metered overage grants) and `CREDIT_COSTS.ideaBatch = 1` in `server/credits.ts`.
+B3's approved narrow-class migration 0003 added nullable Stripe billing columns on `workspaces`
+plus the `stripe_events` webhook-idempotency table.
 
 - `db/schema.ts` (+ `db/migrations/*`)
 - `lib/types/ids.ts` — branded ID types
@@ -94,6 +101,10 @@ app/
   api/trpc/[trpc]                     tRPC endpoint (fixture-session fallback in fixture mode)
   api/script-stream                   SSE: script pipeline events, full replay on reconnect
   api/channels/oauth/{start,callback} YouTube connect (incremental consent → connectOauthChannel)
+  api/mcp                             MCP server (streamable HTTP, API-key auth, 8 tools)
+  api/stripe/{webhook,billing-status} Stripe webhook + extended billing status
+  api/tools                           free-tools endpoint (no auth, per-IP limited)
+  api/thumbnail-image                 stored thumbnail bytes (session + row-level authz)
   api/health                          deploy healthcheck
 components/                           frontend (A3): shell, projects, editor, generation,
                                       channels, packaging, settings, ui kit
@@ -104,7 +115,13 @@ server/
   routers/_contracts.ts               frozen signatures; bodies wired to routers/impl/*
   routers/impl/                       real handlers: channel, avatar, research, frame, script,
                                       revision, titles, description, tags, chapters, dashboard,
-                                      workspace, project, billing
+                                      workspace, project, billing, ideas, apiKeys, thumbnails,
+                                      templates
+  billing/                            B3: tiers/limits, Stripe checkout/portal, webhook handlers,
+                                      overage metering (requireCreditsWithOverage)
+  mcp/                                B2: API keys (hashed, show-once), JSON-RPC protocol, tools
+  storage/                            B4: object storage (memory / S3 behind injectable client)
+  tools/                              B4: free-tool definitions + fast-tier runner
   channel/                            A1 domain: repos, crypto (token encryption), oauth, jobs
   workspace/                          workspace/membership store (fixture-mode fallback)
   export/                             canonical script exports: txt / md / docx / teleprompter
@@ -114,16 +131,19 @@ server/
 pipelines/
   sync/                               §5.1/§5.12: channel sync, nightly sweeps, quota breaker
   avatar/                             §5.2: audience avatar generation
+  ideation/                           §5.3/§5.4: outlier index + daily idea feed (B1)
   script/                             §5.7: 7-stage script engine, SSE events, engine store
   research/ revision/                 §5.5 / §5.8
   packaging/                          §5.11: descriptions, tags, chapters, thumbnail briefs
+  thumbnails/                         §5.10: thumbnail image generation (B4)
 prompts/                              versioned prompt templates (PROMPT_VERSION in input hashes)
 queue/                                BullMQ queues (script/sync/packaging) + PipelineRunner
 worker/index.ts                       worker entrypoint: all queues wired, nightly schedules
 db/                                   Drizzle schema + migrations           [FROZEN]
 lib/                                  config, authz, branded types, fixtures, providers, cache
 scripts/                              seed.ts (demo data) · golden-run.ts (quality eval)
-tests/                                226 tests: authz/tenancy, pipelines, exports, rate limits…
+tests/                                498 tests: authz/tenancy, pipelines, exports, rate limits,
+                                      ideation, MCP, billing/webhooks, thumbnails, free tools…
 ```
 
 ## Authorization
@@ -150,7 +170,8 @@ row per stage, retries each stage 2× with backoff, and resumes from the failed 
 re-enqueue. Queues: `script` (generate/revision/research/frames), `sync` (channel sync, avatar,
 post-publish tracking, credit reconciliation), `packaging` (titles/description/tags/chapters).
 Nightly repeatable jobs are registered in code at worker startup (spec §2.8): channel-sync sweep
-03:10 UTC, post-publish tracking 03:40 UTC, credit-ledger reconciliation 03:00 UTC.
+03:10 UTC, post-publish tracking 03:40 UTC, credit-ledger reconciliation 03:00 UTC, outlier-index
+refresh 04:10 UTC, daily idea feed 06:00 America/New_York.
 
 Script generation streams over SSE (`/api/script-stream?workspaceId&scriptId`) with the frozen
 `ScriptStreamEvent` union — full history replay on (re)connect, heartbeats every 15s.
@@ -180,11 +201,11 @@ git push -u origin main
 CI (`.github/workflows/ci.yml`) runs typecheck, lint, format check, tests, build and
 `pnpm audit --audit-level=high` on every push/PR. Keep it green — no red code handed off.
 
-## Verification status (integration handoff)
+## Verification status (v1.1 integration handoff)
 
-`pnpm typecheck` ✓ · `pnpm lint` ✓ · `pnpm format:check` ✓ · `pnpm test` ✓ (226 tests) ·
-`pnpm build` ✓ · `pnpm audit --audit-level=high` ✓ · fixture-mode boot smoke ✓ (pages, tRPC over
-HTTP, full script generation + SSE replay, worker job E2E on local Redis, seed against local
-Postgres).
+`pnpm typecheck` ✓ · `pnpm lint` ✓ · `pnpm format:check` ✓ · `pnpm test` ✓ (498 tests) ·
+`pnpm build` ✓ · `pnpm audit --audit-level=high` ✓ · fixture-mode boot smoke ✓ (marketing +
+app pages incl. /ideas, /tools, /settings/api-keys; MCP `tools/list` with the fixture key;
+free-tool POST returns results).
 
 Remaining scope is tracked in `OPEN-ITEMS.md`; integration decisions in `DECISIONS.md`.

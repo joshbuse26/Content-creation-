@@ -163,3 +163,57 @@ import), `lucide-react` (requested by A3; icon swap itself deferred), and the `s
 **One test intent updated.** `tests/trpc-authz.test.ts`'s stub-era spot check asserted the
 fixture quality report; with the real handler wired, a `drafting` script correctly has no
 quality report (computed for final scripts only) — the assertion now reflects that.
+
+## 2026-09-10 — v1.1 integration pass (B1–B4)
+
+**Merge order b1 → b2 → b3 → b4, all clean.** No track touched another's files;
+`server/routers/_contracts.ts` was edited only by B4 (thumbnails/templates stub-body swap —
+the established integration pattern, signatures untouched), so the "frozen file conflict"
+risk never materialized. `components/settings` (b3 billing-panel vs b2 api-keys-panel) and
+`components/packaging` (b4 only) stayed disjoint.
+
+**Stub bodies swapped for B1/B2/B3 in `_contracts.ts`.** ideas (5 procedures) → `ideasHandlers`,
+apiKeys (3) → `apiKeysImpl`, billing.checkout/portal → `billingHandlers` (which keep the exact
+fixture URLs when `STRIPE_SECRET_KEY` is unset, so zero-key boots are unchanged). The now-unused
+fixture imports and the local `queued` constant were removed.
+
+**`requireCredits` → `requireCreditsWithOverage` at the five generation dispatch sites**
+(script/revision/research/titles/avatar) — import-only swap; brings the 7-day read-only lockdown
+and allow-and-meter overage (200-credit/cycle ceiling) to all generation. Per-dispatch
+idempotency keys (recommended, optional) were NOT threaded through — the default random key is
+safe (retries can re-meter, bounded by the ceiling); revisit if retry double-metering shows up.
+
+**`"overage"` added to `CREDIT_REASONS`** (approved frozen-layer change; migration
+`0004_fixed_metal_master.sql`, `ALTER TYPE … ADD VALUE`). B3's documented workaround (reason
+`purchase` + `overage:` key prefix) was updated to write the first-class reason — the ripple was
+one line in `server/billing/overage.ts` plus one test expectation. `CREDIT_COSTS.ideaBatch = 1`
+also folded in; `pipelines/ideation`'s `IDEA_BATCH_CREDIT_COST` now aliases it.
+
+**Tier limits enforced at the three insert points.** `connectPublic` and the OAuth callback check
+`assertChannelLimit`/`checkChannelLimit` only for genuinely NEW channels, so idempotent
+reconnects are never blocked; the callback redirects with a new `channel_limit` connectError flag
+(human copy added to the channels screen) rather than surfacing a TRPCError in a redirect flow.
+`invite` checks `assertSeatLimit` before the membership insert in both the fixture and db
+branches; the plan comes from `getBillingStore().getWorkspace` (works in both modes).
+
+**S3 wired via a shared `server/storage/register-s3.ts`.** Both processes (web
+`instrumentation.ts`, worker startup) register the same `S3ClientLike` adapter built from
+`@aws-sdk/client-s3` per the snippet in `server/storage/s3.ts`. Registration is unconditional
+and lazy — no AWS client is constructed unless the `S3_*` quartet is set, so fixture boots stay
+on memory storage. `@modelcontextprotocol/sdk` deliberately NOT added (hand-rolled protocol
+stays; see OPEN-ITEMS.md).
+
+**MCP `generate_thumbnail` dispatches to the real pipeline only when the deployment can persist
+images** (`IMAGE_API_KEY` set AND `S3_*` configured); otherwise it keeps the zero-cost TEXT
+BRIEF fallback. Fixture/keyless boots therefore still get the brief — deliberate: an MCP agent
+should not spend 3 credits on images that die with the process, and the b2 contract tests keep
+their meaning.
+
+**Worker fully wired for v1.1.** sync queue `daily-ideas`/`outlier-refresh` → `processIdeationJob`
+with `registerIdeationSchedules()` at startup (outlier refresh 04:10 UTC after the 03:10 sync
+sweep; daily ideas 06:00 America/New_York); packaging queue `thumbnails` → `handleThumbnailsJob`.
+
+**`STRIPE_PRICE_STARTER/TEAM/AGENCY/OVERAGE` added to the Zod env schema** (optional strings)
+and `.env.example`; `server/billing/checkout.ts` still reads them via its `priceEnvValue`
+accessor (`process.env`) — pointing it at `getConfig()` is a mechanical follow-up, left as-is to
+keep the billing files untouched in this pass.

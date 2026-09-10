@@ -6,7 +6,7 @@
  * trigram Jaccard on normalized titles instead: similarity >= 0.6 = dup.
  * Deterministic, dependency-free, and mirrors pg_trgm's padded-trigram
  * scheme so a future move to `similarity()` in Postgres keeps behavior.
- * Embedding-based dedup is deferred (see REQUESTS-B1.md).
+ * Embedding-based dedup is deferred (see OPEN-ITEMS.md).
  */
 
 /** Duplicate threshold on trigram Jaccard similarity of normalized titles. */

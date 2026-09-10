@@ -3,7 +3,7 @@
  *
  * Worker wiring (A0): route the sync queue's `outlier-refresh` and
  * `daily-ideas` jobs to processIdeationJob and call
- * registerIdeationSchedules() at worker startup — see REQUESTS-B1.md.
+ * registerIdeationSchedules() at worker startup — wired in worker/index.ts.
  */
 export {
   runOutlierRefresh,

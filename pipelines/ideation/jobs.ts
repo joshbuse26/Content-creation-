@@ -8,7 +8,7 @@ import { runOutlierRefresh } from "./outliers";
 import { normalizeKeywordSet } from "./similarity";
 
 /**
- * Ideation job processing — INTEGRATOR WIRING POINT (A0, see REQUESTS-B1.md).
+ * Ideation job processing — wired into the worker sync-queue switch (A0).
  *
  * worker/index.ts's sync Worker should delegate its outlierRefresh and
  * dailyIdeas cases (currently v1.1 no-op acks) to processIdeationJob, and
