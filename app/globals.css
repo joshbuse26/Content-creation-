@@ -1,1 +1,41 @@
 @import "tailwindcss";
+
+@theme {
+  /* Display face for marketing headlines — system serif stack, no webfont fetch. */
+  --font-display:
+    "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+}
+
+::selection {
+  background-color: var(--color-emerald-200);
+  color: var(--color-zinc-900);
+}
+
+@media (prefers-color-scheme: dark) {
+  ::selection {
+    background-color: var(--color-emerald-800);
+    color: var(--color-zinc-50);
+  }
+}
+
+/* Keyboard-first: a consistent, visible focus ring everywhere. */
+:focus-visible {
+  outline: 2px solid var(--color-emerald-500);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Unsupported-claim highlight (fact-check stage). */
+mark.claim-unsupported {
+  background-color: var(--color-yellow-200);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+  box-decoration-break: clone;
+}
+
+@media (prefers-color-scheme: dark) {
+  mark.claim-unsupported {
+    background-color: color-mix(in srgb, var(--color-yellow-500) 30%, transparent);
+  }
+}

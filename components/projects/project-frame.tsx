@@ -1,0 +1,74 @@
+"use client";
+
+import Link from "next/link";
+import { useParams, usePathname } from "next/navigation";
+import type { ReactNode } from "react";
+import { skipToken } from "@tanstack/react-query";
+import type { ProjectId } from "@/lib/types/ids";
+import { trpc } from "@/components/providers/trpc";
+import { useWorkspace } from "@/components/providers/workspace-context";
+import { ProjectStatusBadge } from "./status-badge";
+
+const stageTabs = [
+  { slug: "research", label: "Research" },
+  { slug: "framing", label: "Framing" },
+  { slug: "generate", label: "Generate" },
+  { slug: "editor", label: "Editor" },
+  { slug: "packaging", label: "Packaging" },
+] as const;
+
+export function useProjectId(): ProjectId {
+  const params = useParams<{ projectId: string }>();
+  return params.projectId as ProjectId;
+}
+
+/** Shared header + stage nav for all /projects/[projectId]/* screens. */
+export function ProjectFrame({ children }: { children: ReactNode }) {
+  const projectId = useProjectId();
+  const pathname = usePathname();
+  const { workspaceId } = useWorkspace();
+
+  const projectQuery = trpc.project.get.useQuery(
+    workspaceId !== null ? { workspaceId, projectId } : skipToken,
+  );
+  const project = projectQuery.data;
+
+  return (
+    <div>
+      <div className="mb-1 text-xs">
+        <Link
+          href="/projects"
+          className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+        >
+          Projects
+        </Link>
+        <span className="mx-1 text-zinc-300 dark:text-zinc-600">/</span>
+      </div>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <h1 className="text-xl font-semibold tracking-tight">{project?.title ?? "…"}</h1>
+        {project !== undefined ? <ProjectStatusBadge status={project.status} /> : null}
+      </div>
+      <nav className="mb-6 flex flex-wrap items-center gap-1 border-b border-zinc-200 dark:border-zinc-800">
+        {stageTabs.map((tab) => {
+          const href = `/projects/${projectId}/${tab.slug}`;
+          const active = pathname.startsWith(href);
+          return (
+            <Link
+              key={tab.slug}
+              href={href}
+              aria-current={active ? "page" : undefined}
+              className={`-mb-px rounded-t-md border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+                active
+                  ? "border-emerald-600 text-emerald-700 dark:border-emerald-500 dark:text-emerald-400"
+                  : "border-transparent text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
+              }`}
+            >
+              {tab.label}
+            </Link>
+          );
+        })}
+      </nav>
+      {children}
+    </div>
+  );
+}

@@ -2,12 +2,17 @@
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
-import HomePage from "@/app/page";
+import LandingPage from "@/app/(marketing)/page";
 import { PRODUCT_NAME } from "@/lib/branding";
 
-describe("HomePage", () => {
-  it("renders the product name from the single branding constant", () => {
-    render(createElement(HomePage));
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(PRODUCT_NAME);
+// Updated by A3 when the placeholder home page became the marketing landing
+// page (app/(marketing)/page.tsx). Intent preserved: branding renders from
+// the single PRODUCT_NAME constant, never hardcoded.
+
+describe("LandingPage", () => {
+  it("renders a headline and the product name from the branding constant", () => {
+    render(createElement(LandingPage));
+    expect(screen.getByRole("heading", { level: 1 })).toBeTruthy();
+    expect(screen.getAllByText(new RegExp(PRODUCT_NAME)).length).toBeGreaterThan(0);
   });
 });

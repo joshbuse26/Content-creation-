@@ -1,0 +1,284 @@
+"use client";
+
+import Link from "next/link";
+import { useState } from "react";
+import { skipToken } from "@tanstack/react-query";
+import type { Frame } from "@/lib/types/entities";
+import { FRAME_FORMATS, FRAME_OUTCOMES } from "@/lib/types/enums";
+import { trpc } from "@/components/providers/trpc";
+import { useWorkspace } from "@/components/providers/workspace-context";
+import { useProjectId } from "@/components/projects/project-frame";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardBody } from "@/components/ui/card";
+import { Field, Select, TextArea, TextInput } from "@/components/ui/field";
+import { IconCheck, IconPencil, IconSparkle } from "@/components/ui/icons";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
+
+/** Framing: 4 proposals as cards, pick one, edit the frame fields as a form. */
+export function FramingPanel() {
+  const { workspaceId } = useWorkspace();
+  const projectId = useProjectId();
+  const utils = trpc.useUtils();
+
+  const listQuery = trpc.frame.list.useQuery(
+    workspaceId !== null ? { workspaceId, projectId } : skipToken,
+  );
+  const invalidate = () => {
+    if (workspaceId !== null) void utils.frame.list.invalidate({ workspaceId, projectId });
+  };
+  const proposeMutation = trpc.frame.propose.useMutation({ onSuccess: invalidate });
+  const chooseMutation = trpc.frame.choose.useMutation({ onSuccess: invalidate });
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  if (workspaceId === null || listQuery.isLoading) return <LoadingState label="Loading frames…" />;
+  if (listQuery.isError) {
+    return (
+      <ErrorState
+        onRetry={() => {
+          void listQuery.refetch();
+        }}
+      />
+    );
+  }
+
+  const frames = listQuery.data ?? [];
+  const chosen = frames.find((f) => f.chosen);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          Four distinct angles from your research and audience avatar. Pick one, then tune it.
+        </p>
+        <Button
+          busy={proposeMutation.isPending}
+          onClick={() => {
+            proposeMutation.mutate({ workspaceId, projectId });
+          }}
+        >
+          <IconSparkle size={14} /> {frames.length > 0 ? "Propose again" : "Propose frames"}
+        </Button>
+      </div>
+      {proposeMutation.isSuccess ? (
+        <p className="rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+          Proposals queued — cards refresh when the pipeline finishes.
+        </p>
+      ) : null}
+
+      {frames.length === 0 ? (
+        <EmptyState
+          title="No frames yet"
+          hint="Propose four angles from your research, or come back after adding sources."
+        />
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {frames.map((frame) => (
+            <Card
+              key={frame.id}
+              className={frame.chosen ? "ring-2 ring-emerald-600 dark:ring-emerald-500" : ""}
+            >
+              <CardBody className="flex h-full flex-col gap-3">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm leading-relaxed font-medium">{frame.angle}</p>
+                  {frame.chosen ? (
+                    <Badge tone="emerald">
+                      <IconCheck size={10} /> chosen
+                    </Badge>
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap gap-1.5 text-xs">
+                  <Badge tone="purple">{frame.format}</Badge>
+                  <Badge tone="blue">{frame.outcome.replace("_", " ")}</Badge>
+                  <Badge>{frame.targetMinutes} min</Badge>
+                  <Badge>{frame.tone}</Badge>
+                </div>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  For: {frame.audienceSegment}
+                </p>
+                <div className="mt-auto flex gap-2 pt-1">
+                  {!frame.chosen ? (
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      busy={
+                        chooseMutation.isPending && chooseMutation.variables.frameId === frame.id
+                      }
+                      onClick={() => {
+                        chooseMutation.mutate({ workspaceId, frameId: frame.id });
+                      }}
+                    >
+                      Pick this frame
+                    </Button>
+                  ) : null}
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setEditingId(editingId === frame.id ? null : frame.id);
+                    }}
+                  >
+                    <IconPencil size={12} /> {editingId === frame.id ? "Close" : "Edit"}
+                  </Button>
+                </div>
+                {editingId === frame.id ? (
+                  <FrameForm
+                    frame={frame}
+                    onSaved={() => {
+                      setEditingId(null);
+                      invalidate();
+                    }}
+                  />
+                ) : null}
+              </CardBody>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {chosen !== undefined ? (
+        <div className="flex justify-end">
+          <Link
+            href={`/projects/${projectId}/generate`}
+            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-emerald-700 px-3.5 text-sm font-medium text-white hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+          >
+            <IconSparkle size={14} /> Generate script from this frame
+          </Link>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** The 8 frame fields as an editable form (angle, format, outcome, audience, tone, minutes, keywords + chosen shown on the card). */
+function FrameForm({ frame, onSaved }: { frame: Frame; onSaved: () => void }) {
+  const { workspaceId } = useWorkspace();
+  const updateMutation = trpc.frame.update.useMutation({ onSuccess: onSaved });
+
+  const [angle, setAngle] = useState(frame.angle);
+  const [format, setFormat] = useState(frame.format);
+  const [outcome, setOutcome] = useState(frame.outcome);
+  const [audienceSegment, setAudienceSegment] = useState(frame.audienceSegment);
+  const [tone, setTone] = useState(frame.tone);
+  const [targetMinutes, setTargetMinutes] = useState(String(frame.targetMinutes));
+  const [keywords, setKeywords] = useState(frame.keywords.join(", "));
+
+  return (
+    <form
+      className="mt-2 space-y-3 border-t border-zinc-200 pt-3 dark:border-zinc-800"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (workspaceId === null) return;
+        const minutes = Number(targetMinutes);
+        updateMutation.mutate({
+          workspaceId,
+          frameId: frame.id,
+          fields: {
+            angle,
+            format,
+            outcome,
+            audienceSegment,
+            tone,
+            targetMinutes:
+              Number.isFinite(minutes) && minutes > 0
+                ? Math.min(120, Math.round(minutes))
+                : frame.targetMinutes,
+            keywords: keywords
+              .split(",")
+              .map((k) => k.trim())
+              .filter((k) => k !== ""),
+          },
+        });
+      }}
+    >
+      <Field label="Angle" htmlFor={`ff-angle-${frame.id}`}>
+        <TextArea
+          id={`ff-angle-${frame.id}`}
+          value={angle}
+          onChange={(e) => {
+            setAngle(e.target.value);
+          }}
+        />
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Format" htmlFor={`ff-format-${frame.id}`}>
+          <Select
+            id={`ff-format-${frame.id}`}
+            value={format}
+            onChange={(e) => {
+              setFormat(e.target.value as Frame["format"]);
+            }}
+          >
+            {FRAME_FORMATS.map((f) => (
+              <option key={f} value={f}>
+                {f}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Optimize for" htmlFor={`ff-outcome-${frame.id}`}>
+          <Select
+            id={`ff-outcome-${frame.id}`}
+            value={outcome}
+            onChange={(e) => {
+              setOutcome(e.target.value as Frame["outcome"]);
+            }}
+          >
+            {FRAME_OUTCOMES.map((o) => (
+              <option key={o} value={o}>
+                {o.replace("_", " ")}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Tone" htmlFor={`ff-tone-${frame.id}`}>
+          <TextInput
+            id={`ff-tone-${frame.id}`}
+            value={tone}
+            onChange={(e) => {
+              setTone(e.target.value);
+            }}
+          />
+        </Field>
+        <Field label="Target minutes" htmlFor={`ff-min-${frame.id}`}>
+          <TextInput
+            id={`ff-min-${frame.id}`}
+            type="number"
+            min={1}
+            max={120}
+            value={targetMinutes}
+            onChange={(e) => {
+              setTargetMinutes(e.target.value);
+            }}
+          />
+        </Field>
+      </div>
+      <Field label="Audience segment" htmlFor={`ff-aud-${frame.id}`}>
+        <TextInput
+          id={`ff-aud-${frame.id}`}
+          value={audienceSegment}
+          onChange={(e) => {
+            setAudienceSegment(e.target.value);
+          }}
+        />
+      </Field>
+      <Field label="Keywords" htmlFor={`ff-kw-${frame.id}`} hint="Comma-separated">
+        <TextInput
+          id={`ff-kw-${frame.id}`}
+          value={keywords}
+          onChange={(e) => {
+            setKeywords(e.target.value);
+          }}
+        />
+      </Field>
+      <div className="flex items-center gap-2">
+        <Button type="submit" size="sm" variant="primary" busy={updateMutation.isPending}>
+          Save frame
+        </Button>
+        {updateMutation.isError ? (
+          <p className="text-xs text-red-600 dark:text-red-400">Save failed.</p>
+        ) : null}
+      </div>
+    </form>
+  );
+}
