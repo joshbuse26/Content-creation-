@@ -19,6 +19,7 @@ import {
 import { regenerateSectionPrompt } from "@/prompts";
 import { requireCreditsWithOverage } from "@/server/billing";
 import { CREDIT_COSTS } from "@/server/credits";
+import { assertGenerationTargetAllowed } from "@/server/modes";
 import { exportScript } from "@/server/export";
 import { JOB_NAMES, QUEUE_NAMES } from "@/queue/queues";
 import { badRequest, jobAccepted, notFound, type HandlerOpts } from "./_shared";
@@ -58,17 +59,29 @@ async function qualityReportFor(
   const frames = await deps.store.listFrames(script.workspaceId, script.projectId);
   const frame = frames.find((f) => f.chosen);
   if (frame === undefined) return null;
+  const profile =
+    script.voiceProfileId === null
+      ? null
+      : await deps.store.getVoiceProfile(script.workspaceId, script.voiceProfileId);
   return computeQualityReport({
     sections,
     targetMinutes: frame.targetMinutes,
     tone: frame.tone,
+    // Wave C: recomputed reports carry the style gates too.
+    styleCard: profile?.styleCard ?? null,
   });
 }
 
 /** script router — build spec §5.7 / §6. */
 export const scriptImpl = {
-  /** Starts the 7-stage pipeline; 6 credits charged on completion. */
+  /**
+   * Composite generation — 6 credits charged on completion. Wave-C contract
+   * (PRODUCT-CONTRACTS §4): C1 turns this into an orchestrator over the
+   * staged procedures (outline 1 + hooks 1 + draft 4, itemized ledger); it
+   * may not bypass stage metering. Until then it runs the 7-stage pipeline.
+   */
   async generate({ ctx, input }: HandlerOpts<GenerateInput>) {
+    assertGenerationTargetAllowed(input.generation);
     await requireCreditsWithOverage(ctx.workspaceId, CREDIT_COSTS.scriptGeneration);
     const deps = await getEngineDeps();
     const project = await deps.store.getProject(ctx.workspaceId, input.projectId);
@@ -83,6 +96,10 @@ export const scriptImpl = {
       workspaceId: ctx.workspaceId,
       projectId: input.projectId,
       voiceProfileId: input.voiceProfileId,
+      generationMode: input.generation?.mode ?? null,
+      archetypeId: input.generation?.archetypeId ?? null,
+      crossover: input.generation?.crossover ?? null,
+      partnerId: input.generation?.partnerId ?? null,
     });
     await deps.store.updateProjectStatus(ctx.workspaceId, input.projectId, "scripting");
     const payload = {
@@ -90,6 +107,7 @@ export const scriptImpl = {
       projectId: input.projectId,
       frameId: input.frameId,
       voiceProfileId: input.voiceProfileId,
+      generation: input.generation,
       scriptId: script.id,
       actorUserId: ctx.userId as string,
     };

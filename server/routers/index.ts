@@ -1,6 +1,7 @@
 import { router } from "@/server/trpc";
 import {
   apiKeysRouter,
+  archetypesRouter,
   avatarRouter,
   billingRouter,
   channelRouter,
@@ -25,6 +26,7 @@ export const appRouter = router({
   workspace: workspaceRouter,
   channel: channelRouter,
   avatar: avatarRouter,
+  archetypes: archetypesRouter,
   ideas: ideasRouter,
   project: projectRouter,
   research: researchRouter,

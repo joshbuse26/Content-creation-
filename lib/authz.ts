@@ -35,6 +35,9 @@ export const RESOURCES = [
   "dashboard",
   "billing",
   "apiKey",
+  // Wave C: seeded archetype catalog — readable by every member, writable
+  // by no role (rows come from seed/fixture data only).
+  "archetype",
 ] as const;
 export type Resource = (typeof RESOURCES)[number];
 

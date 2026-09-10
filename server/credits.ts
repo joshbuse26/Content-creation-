@@ -16,9 +16,20 @@ import { getSharedWorkspaceStore } from "@/server/workspace/memory";
 /** Balance may never drop below this (0 for now — no overdraft). */
 export const OVERDRAFT_FLOOR = 0;
 
-/** Costs per generation action (spec §7). */
+/** Costs per generation action (spec §7 + PRODUCT-CONTRACTS §4). */
 export const CREDIT_COSTS = {
+  /**
+   * Composite script generation — equals scriptOutline + scriptHooks +
+   * scriptDraft (1+1+4). The `script.generate` orchestrator charges the
+   * stages itemized; this constant remains the summed cost and MUST stay
+   *  in sync with the three stage entries below.
+   */
   scriptGeneration: 6,
+  // -- staged script procedures (PRODUCT-CONTRACTS §4, wave C) -------------
+  scriptTopics: 1,
+  scriptOutline: 1,
+  scriptHooks: 1,
+  scriptDraft: 4,
   revisionPass: 2,
   researchRun: 1,
   titles: 1,

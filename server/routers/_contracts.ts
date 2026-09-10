@@ -1,5 +1,6 @@
 import {
   apiKeysContracts,
+  archetypesContracts,
   avatarContracts,
   billingContracts,
   channelContracts,
@@ -20,6 +21,7 @@ import {
 } from "@/lib/types/api";
 import { rateLimitMiddleware } from "@/server/ratelimit";
 import { apiKeysImpl } from "@/server/routers/impl/apiKeys";
+import { archetypesImpl } from "@/server/routers/impl/archetypes";
 import { avatarHandlers } from "@/server/routers/impl/avatar";
 import { billingHandlers } from "@/server/routers/impl/billing";
 import { channelHandlers } from "@/server/routers/impl/channel";
@@ -32,6 +34,7 @@ import { projectHandlers } from "@/server/routers/impl/project";
 import { researchImpl } from "@/server/routers/impl/research";
 import { revisionImpl } from "@/server/routers/impl/revision";
 import { scriptImpl } from "@/server/routers/impl/script";
+import { scriptStagesImpl } from "@/server/routers/impl/script-stages";
 import { tagsHandlers } from "@/server/routers/impl/tags";
 import { templatesImpl } from "@/server/routers/impl/templates";
 import { thumbnailsImpl } from "@/server/routers/impl/thumbnails";
@@ -273,12 +276,45 @@ export const frameRouter = router({
 });
 
 export const scriptRouter = router({
+  /**
+   * COMPOSITE generation (wave-C contract note, PRODUCT-CONTRACTS §4):
+   * `generate` remains for MCP/one-click use and BECOMES AN ORCHESTRATOR
+   * over the staged procedures below — outline (1cr) + hooks (1cr) +
+   * draft (4cr) in order, summed cost 6, itemized ledger entries; it may
+   * not bypass stage metering. C1 implements the orchestration; the frozen
+   * signature is unchanged apart from the additive `generation` param.
+   */
   generate: workspaceProcedure("script", "create")
     .use(general)
     .use(generation)
     .input(scriptContracts.generate.input)
     .output(scriptContracts.generate.output)
     .mutation((opts) => scriptImpl.generate(opts)),
+  // -- staged, individually metered procedures (PRODUCT-CONTRACTS §4) ------
+  topics: workspaceProcedure("script", "create")
+    .use(general)
+    .use(generation)
+    .input(scriptContracts.topics.input)
+    .output(scriptContracts.topics.output)
+    .mutation((opts) => scriptStagesImpl.topics(opts)),
+  outline: workspaceProcedure("script", "create")
+    .use(general)
+    .use(generation)
+    .input(scriptContracts.outline.input)
+    .output(scriptContracts.outline.output)
+    .mutation((opts) => scriptStagesImpl.outline(opts)),
+  hooks: workspaceProcedure("script", "create")
+    .use(general)
+    .use(generation)
+    .input(scriptContracts.hooks.input)
+    .output(scriptContracts.hooks.output)
+    .mutation((opts) => scriptStagesImpl.hooks(opts)),
+  draft: workspaceProcedure("script", "create")
+    .use(general)
+    .use(generation)
+    .input(scriptContracts.draft.input)
+    .output(scriptContracts.draft.output)
+    .mutation((opts) => scriptStagesImpl.draft(opts)),
   get: workspaceProcedure("script", "read")
     .use(general)
     .input(scriptContracts.get.input)
@@ -484,6 +520,15 @@ export const billingRouter = router({
     .input(billingContracts.portal.input)
     .output(billingContracts.portal.output)
     .mutation(({ ctx }) => billingHandlers.portal({ ctx })),
+});
+
+// archetypes — wave C (server/routers/impl/archetypes.ts): seeded catalog,
+// readable by any workspace member, never charged, never written by clients.
+export const archetypesRouter = router({
+  list: workspaceProcedure("archetype", "read")
+    .use(general)
+    .output(archetypesContracts.list.output)
+    .query(() => archetypesImpl.list()),
 });
 
 // apiKeys — B2 (server/routers/impl/apiKeys.ts): hashed show-once MCP keys

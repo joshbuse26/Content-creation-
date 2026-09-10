@@ -64,6 +64,16 @@ const envSchema = z
     STRIPE_PRICE_AGENCY: optionalString,
     STRIPE_PRICE_OVERAGE: optionalString,
 
+    /**
+     * partnered_named generation mode (PRODUCT-CONTRACTS §3). OFF by
+     * default; the server rejects partnered_named requests while off
+     * (server/modes.ts) and the UI hides the mode. May only ever be enabled
+     * for deployments with signed partner licenses on file.
+     */
+    FEATURE_PARTNERED_NAMED: z
+      .preprocess(emptyToUndefined, z.enum(["true", "false", "1", "0"]).default("false"))
+      .transform((v) => v === "true" || v === "1"),
+
     RESEND_API_KEY: optionalString,
     EMAIL_FROM: z.preprocess(emptyToUndefined, z.string().default("Gin Rummy <login@localhost>")),
 
