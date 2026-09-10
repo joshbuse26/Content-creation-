@@ -3,18 +3,41 @@
     "id": "budget-espresso",
     "title": "Budget espresso setup vs. the $2k rig",
     "researchQuery": "budget espresso machine performance vs prosumer machines blind taste tests",
-    "targetMinutes": 12
+    "targetMinutes": 12,
+    "archetypeId": "data-storyteller"
   },
   {
     "id": "learn-piano-adult",
     "title": "Learning piano from zero at 35 — what actually worked",
     "researchQuery": "adult beginner piano learning methods practice science habit formation",
-    "targetMinutes": 10
+    "targetMinutes": 10,
+    "archetypeId": "friendly-coach"
   },
   {
     "id": "meal-prep-myths",
     "title": "Seven meal prep rules I stopped following",
     "researchQuery": "meal prep food safety storage times nutrition retention batch cooking",
-    "targetMinutes": 8
+    "targetMinutes": 8,
+    "archetypeId": "rapid-listicle"
+  },
+  {
+    "id": "shed-office-build",
+    "title": "Turning a garden shed into an office for under $900",
+    "researchQuery": "shed office conversion insulation electrics budget diy mistakes",
+    "targetMinutes": 14,
+    "crossover": { "a": "hands-on-builder", "b": "calm-explainer", "weightA": 0.6 }
+  },
+  {
+    "id": "phone-battery-myths",
+    "title": "Why your phone battery advice is a decade out of date",
+    "researchQuery": "lithium ion battery degradation charging habits myths research",
+    "targetMinutes": 9,
+    "archetypeId": "contrarian-essayist"
+  },
+  {
+    "id": "vintage-camera-revival",
+    "title": "I shot a wedding on a $30 flea-market camera",
+    "researchQuery": "vintage film camera reliability wedding photography low budget results",
+    "targetMinutes": 11
   }
 ]
