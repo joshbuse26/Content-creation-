@@ -22,6 +22,12 @@ export function SiteNav() {
         </Link>
         <nav className="flex items-center gap-6 text-sm">
           <Link
+            href="/tools"
+            className="font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+          >
+            Free tools
+          </Link>
+          <Link
             href="/login"
             className="font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
           >
@@ -48,6 +54,9 @@ export function SiteFooter() {
           <p className="mt-1 text-xs">Scripts your audience actually finishes.</p>
         </div>
         <nav className="flex gap-6">
+          <Link href="/tools" className="hover:text-zinc-900 dark:hover:text-zinc-100">
+            Free tools
+          </Link>
           <Link href="/privacy" className="hover:text-zinc-900 dark:hover:text-zinc-100">
             Privacy
           </Link>
