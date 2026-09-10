@@ -14,7 +14,6 @@ import { Dropdown, DropdownItem } from "@/components/ui/dropdown";
 import { IconHistory, IconSparkle, IconWarning } from "@/components/ui/icons";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
 import { fmtDate, fmtDuration, fmtNumber } from "@/components/lib/format";
-import { fixtureHookCandidates } from "@/components/generation/stream-fixtures";
 import { loadHookCandidates } from "./hook-store";
 import { ExportMenu } from "./export-menu";
 import { HookSwitcher } from "./hook-switcher";
@@ -157,9 +156,9 @@ export function EditorScreen() {
   const { script, qualityReport } = scriptQuery.data;
   const totals = totalsFor(sections.map((s) => s.body));
   // Server-persisted candidates first (script.get), then the localStorage
-  // bridge (survives web-process restarts), then fixture defaults.
-  const hookCandidates =
-    scriptQuery.data.hookCandidates ?? loadHookCandidates(scriptId) ?? fixtureHookCandidates;
+  // bridge (survives web-process restarts). NEVER fixture defaults: demo
+  // copy must not be one click away from persisting into a real script.
+  const hookCandidates = scriptQuery.data.hookCandidates ?? loadHookCandidates(scriptId) ?? [];
   const pending = review !== null ? pendingCount(review) : 0;
 
   const saveSection = (section: ScriptSection, fields: { heading?: string; body?: string }) => {
@@ -421,13 +420,20 @@ export function EditorScreen() {
               }}
               hookSlot={
                 section.kind === "hook" ? (
-                  <HookSwitcher
-                    candidates={hookCandidates}
-                    currentBody={section.body}
-                    onPick={(candidate) => {
-                      saveSection(section, { body: candidate.body });
-                    }}
-                  />
+                  hookCandidates.length > 0 ? (
+                    <HookSwitcher
+                      candidates={hookCandidates}
+                      currentBody={section.body}
+                      onPick={(candidate) => {
+                        saveSection(section, { body: candidate.body });
+                      }}
+                    />
+                  ) : (
+                    <p className="mb-3 text-xs text-zinc-400 dark:text-zinc-500">
+                      Hook candidates unavailable for this script — they are captured during
+                      generation and will appear after the next run.
+                    </p>
+                  )
                 ) : undefined
               }
             />
