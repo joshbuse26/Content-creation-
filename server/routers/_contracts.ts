@@ -18,14 +18,7 @@ import {
   titlesContracts,
   workspaceContracts,
 } from "@/lib/types/api";
-import {
-  FIXTURE_IDS,
-  fixtureApiKey,
-  fixtureDescriptionTemplate,
-  fixtureIdea,
-  fixtureProject,
-  fixtureThumbnailConcept,
-} from "@/lib/fixtures";
+import { FIXTURE_IDS, fixtureApiKey, fixtureIdea, fixtureProject } from "@/lib/fixtures";
 import { rateLimitMiddleware } from "@/server/ratelimit";
 import { avatarHandlers } from "@/server/routers/impl/avatar";
 import { billingHandlers } from "@/server/routers/impl/billing";
@@ -39,6 +32,8 @@ import { researchImpl } from "@/server/routers/impl/research";
 import { revisionImpl } from "@/server/routers/impl/revision";
 import { scriptImpl } from "@/server/routers/impl/script";
 import { tagsHandlers } from "@/server/routers/impl/tags";
+import { templatesImpl } from "@/server/routers/impl/templates";
+import { thumbnailsImpl } from "@/server/routers/impl/thumbnails";
 import { titlesImpl } from "@/server/routers/impl/titles";
 import { workspaceHandlers } from "@/server/routers/impl/workspace";
 import { protectedProcedure, router, workspaceProcedure } from "@/server/trpc";
@@ -54,8 +49,10 @@ import { protectedProcedure, router, workspaceProcedure } from "@/server/trpc";
  *   description/tags/chapters/dashboard   → A4 (impl/*.ts)
  *   workspace/project/billing.summary     → A0 integration (impl/*.ts)
  *
+ *   thumbnails/templates                  → B4 (impl/{thumbnails,templates}.ts)
+ *
  * Still fixture stubs (cut features / need live Stripe — see OPEN-ITEMS.md):
- * ideas, thumbnails, templates, apiKeys, billing.checkout/portal.
+ * ideas, apiKeys, billing.checkout/portal.
  *
  * Rate limits (spec §6): every procedure carries the "general" policy;
  * generation endpoints additionally carry the stricter "generation" policy.
@@ -362,24 +359,24 @@ export const titlesRouter = router({
     .query((opts) => titlesImpl.latest(opts)),
 });
 
-// thumbnails — fixture stub (image generation cut to v1.1; see OPEN-ITEMS.md)
+// thumbnails — B4 (server/routers/impl/thumbnails.ts): image generation §5.10
 export const thumbnailsRouter = router({
   generate: workspaceProcedure("thumbnail", "create")
     .use(general)
     .use(generation)
     .input(thumbnailsContracts.generate.input)
     .output(thumbnailsContracts.generate.output)
-    .mutation(() => queued),
+    .mutation((opts) => thumbnailsImpl.generate(opts)),
   list: workspaceProcedure("thumbnail", "read")
     .use(general)
     .input(thumbnailsContracts.list.input)
     .output(thumbnailsContracts.list.output)
-    .query(() => [fixtureThumbnailConcept]),
+    .query((opts) => thumbnailsImpl.list(opts)),
   choose: workspaceProcedure("thumbnail", "update")
     .use(general)
     .input(thumbnailsContracts.choose.input)
     .output(thumbnailsContracts.choose.output)
-    .mutation(() => ({ ...fixtureThumbnailConcept, status: "chosen" as const })),
+    .mutation((opts) => thumbnailsImpl.choose(opts)),
 });
 
 export const descriptionRouter = router({
@@ -438,36 +435,28 @@ export const chaptersRouter = router({
     .mutation(({ ctx, input }) => chaptersHandlers.update({ ctx, input })),
 });
 
-// templates — fixture stub (description templates UI is v1.1; see OPEN-ITEMS.md)
+// templates — B4 (server/routers/impl/templates.ts): admin-managed, writer-used
 export const templatesRouter = router({
   list: workspaceProcedure("template", "read")
     .use(general)
     .input(templatesContracts.list.input)
     .output(templatesContracts.list.output)
-    .query(() => [fixtureDescriptionTemplate]),
+    .query((opts) => templatesImpl.list(opts)),
   create: workspaceProcedure("template", "create")
     .use(general)
     .input(templatesContracts.create.input)
     .output(templatesContracts.create.output)
-    .mutation(({ input }) => ({
-      ...fixtureDescriptionTemplate,
-      name: input.name,
-      body: input.body,
-    })),
+    .mutation((opts) => templatesImpl.create(opts)),
   update: workspaceProcedure("template", "update")
     .use(general)
     .input(templatesContracts.update.input)
     .output(templatesContracts.update.output)
-    .mutation(({ input }) => ({
-      ...fixtureDescriptionTemplate,
-      ...(input.name !== undefined ? { name: input.name } : {}),
-      ...(input.body !== undefined ? { body: input.body } : {}),
-    })),
+    .mutation((opts) => templatesImpl.update(opts)),
   remove: workspaceProcedure("template", "delete")
     .use(general)
     .input(templatesContracts.remove.input)
     .output(templatesContracts.remove.output)
-    .mutation(() => ({ removed: true })),
+    .mutation((opts) => templatesImpl.remove(opts)),
 });
 
 export const dashboardRouter = router({

@@ -2,39 +2,30 @@
 
 import { useState } from "react";
 import { skipToken } from "@tanstack/react-query";
+import { COMPOSITION_PATTERNS } from "@/pipelines/thumbnails/patterns";
 import { trpc } from "@/components/providers/trpc";
 import { useWorkspace } from "@/components/providers/workspace-context";
 import { useProjectId } from "@/components/projects/project-frame";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
-import { Field, Select, TextArea } from "@/components/ui/field";
+import { Field, TextArea } from "@/components/ui/field";
 import { IconCheck, IconSparkle } from "@/components/ui/icons";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
 import { PipelineStatusNote } from "@/components/ui/pipeline-note";
 import { useToast } from "@/components/ui/toast";
 import { usePipelinePoll } from "@/components/lib/use-pipeline-poll";
 
-/** v1: text thumbnail briefs only — image generation ships in v1.1. */
-const COMPOSITION_PATTERNS = [
-  "face + object",
-  "before / after",
-  "big text",
-  "split-screen",
-  "arrow focus",
-  "reaction inset",
-  "object closeup",
-  "versus grid",
-  "number stack",
-  "progress reveal",
-];
+/** Spec §7: 1 credit per image, 3 images per run. */
+const IMAGE_COUNT = 3;
+const CREDIT_COST = 3;
 
 export function ThumbsPanel() {
   const { workspaceId } = useWorkspace();
   const projectId = useProjectId();
   const utils = trpc.useUtils();
   const { toast } = useToast();
-  const [pattern, setPattern] = useState(COMPOSITION_PATTERNS[0] ?? "big text");
+  const [pattern, setPattern] = useState(COMPOSITION_PATTERNS[0]?.id ?? "big-text");
   const [subject, setSubject] = useState("");
 
   const listQuery = trpc.thumbnails.list.useQuery(
@@ -43,22 +34,29 @@ export function ThumbsPanel() {
   const invalidate = () => {
     if (workspaceId !== null) void utils.thumbnails.list.invalidate({ workspaceId, projectId });
   };
-  // Brief generation is a queued pipeline — poll until the concept lands.
+  // Image generation is a queued pipeline — poll until the concepts land.
   const generatePoll = usePipelinePoll(invalidate, listQuery.data);
   const generateMutation = trpc.thumbnails.generate.useMutation({
     onSuccess: () => {
       invalidate();
       generatePoll.begin();
     },
-    onError: () => {
-      toast("Could not queue the thumbnail brief — try again.");
+    onError: (err) => {
+      toast(
+        err.data?.code === "PRECONDITION_FAILED"
+          ? "Not enough credits for a thumbnail run (3 needed)."
+          : "Could not start thumbnail generation — try again.",
+      );
     },
   });
   const chooseMutation = trpc.thumbnails.choose.useMutation({
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      toast("Thumbnail chosen.", "success");
+    },
     onError: () => {
       invalidate();
-      toast("Could not mark that brief as chosen — nothing was changed.");
+      toast("Could not mark that thumbnail as chosen — nothing was changed.");
     },
   });
 
@@ -74,18 +72,48 @@ export function ThumbsPanel() {
   }
 
   const concepts = listQuery.data ?? [];
+  const selected = COMPOSITION_PATTERNS.find((p) => p.id === pattern);
 
   return (
     <div className="space-y-5">
-      <p className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
-        Thumbnail <strong>briefs</strong> for now — pick a composition pattern and describe the
-        subject; image generation arrives in the next release.
-      </p>
-
       <Card>
-        <CardBody>
+        <CardBody className="space-y-4">
+          <div>
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Composition pattern
+            </p>
+            <div
+              role="radiogroup"
+              aria-label="Composition pattern"
+              className="grid grid-cols-2 gap-2 sm:grid-cols-4"
+            >
+              {COMPOSITION_PATTERNS.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={p.id === pattern}
+                  title={p.note}
+                  onClick={() => {
+                    setPattern(p.id);
+                  }}
+                  className={`rounded-md border px-2.5 py-2 text-left text-xs font-medium transition-colors ${
+                    p.id === pattern
+                      ? "border-emerald-600 bg-emerald-50 text-emerald-900 ring-1 ring-emerald-600 dark:border-emerald-500 dark:bg-emerald-950/40 dark:text-emerald-200 dark:ring-emerald-500"
+                      : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:border-zinc-700 dark:hover:bg-zinc-900"
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            {selected !== undefined ? (
+              <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{selected.note}</p>
+            ) : null}
+          </div>
+
           <form
-            className="grid gap-3 sm:grid-cols-[200px_1fr_auto] sm:items-end"
+            className="space-y-3"
             onSubmit={(e) => {
               e.preventDefault();
               if (subject.trim() === "") return;
@@ -95,28 +123,12 @@ export function ThumbsPanel() {
                 compositionPattern: pattern,
                 subjectDescription: subject.trim(),
               });
-              setSubject("");
             }}
           >
-            <Field label="Composition pattern" htmlFor="th-pattern">
-              <Select
-                id="th-pattern"
-                value={pattern}
-                onChange={(e) => {
-                  setPattern(e.target.value);
-                }}
-              >
-                {COMPOSITION_PATTERNS.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </Select>
-            </Field>
             <Field label="Subject" htmlFor="th-subject">
               <TextArea
                 id="th-subject"
-                className="min-h-9 h-9 resize-y py-1.5"
+                className="min-h-16 resize-y"
                 placeholder="e.g. shocked creator holding tiny espresso machine, luxury machine looming behind"
                 value={subject}
                 onChange={(e) => {
@@ -124,25 +136,35 @@ export function ThumbsPanel() {
                 }}
               />
             </Field>
-            <Button type="submit" variant="primary" busy={generateMutation.isPending}>
-              <IconSparkle size={13} /> Draft brief
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button
+                type="submit"
+                variant="primary"
+                busy={generateMutation.isPending}
+                disabled={subject.trim() === ""}
+              >
+                <IconSparkle size={13} /> Generate {IMAGE_COUNT} images
+              </Button>
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                {CREDIT_COST} credits — 1 per image, charged when the run completes.
+              </span>
+            </div>
           </form>
         </CardBody>
       </Card>
 
       <PipelineStatusNote
         poll={generatePoll}
-        working="Brief queued — it appears below when the pipeline finishes."
+        working="Generating images — they appear below when the run finishes."
       />
 
       {concepts.length === 0 ? (
         <EmptyState
-          title="No thumbnail briefs yet"
-          hint="Pick a composition pattern, describe the subject, and draft a brief to hand your designer."
+          title="No thumbnail concepts yet"
+          hint="Pick a composition pattern, describe the subject, and generate three candidates."
         />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {concepts.map((c) => (
             <Card
               key={c.id}
@@ -150,6 +172,17 @@ export function ThumbsPanel() {
                 c.status === "chosen" ? "ring-2 ring-emerald-600 dark:ring-emerald-500" : ""
               }
             >
+              {c.imageKey !== null ? (
+                // Plain <img>: bytes come from our authed object-storage
+                // route; next/image's loader adds nothing here.
+                <img
+                  src={`/api/thumbnail-image?workspaceId=${workspaceId}&conceptId=${c.id}`}
+                  alt={`Thumbnail candidate — ${c.compositionPattern}`}
+                  width={1280}
+                  height={720}
+                  className="aspect-video w-full rounded-t-lg border-b border-zinc-200 object-cover dark:border-zinc-800"
+                />
+              ) : null}
               <CardBody className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Badge tone="purple">{c.compositionPattern}</Badge>
@@ -159,9 +192,17 @@ export function ThumbsPanel() {
                     </Badge>
                   ) : null}
                 </div>
-                <p className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
-                  {c.promptUsed}
-                </p>
+                {c.imageKey === null ? (
+                  // Text-brief fallback — concepts generated before image
+                  // generation was configured keep their designer brief.
+                  <p className="whitespace-pre-line text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
+                    {c.promptUsed}
+                  </p>
+                ) : (
+                  <p className="line-clamp-2 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+                    {c.promptUsed}
+                  </p>
+                )}
                 {c.status !== "chosen" ? (
                   <Button
                     size="sm"
@@ -173,7 +214,7 @@ export function ThumbsPanel() {
                       chooseMutation.mutate({ workspaceId, thumbnailConceptId: c.id });
                     }}
                   >
-                    Mark as chosen
+                    Use this one
                   </Button>
                 ) : null}
               </CardBody>

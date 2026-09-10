@@ -105,7 +105,13 @@ export async function findDescriptionTemplate(
   workspaceId: string,
   templateId: string,
 ): Promise<{ name: string; body: string } | null> {
-  if (!hasDb()) return null;
+  if (!hasDb()) {
+    // Fixture mode: templates live in the shared in-memory store the
+    // templates router writes to (B4) — created templates are immediately
+    // usable in description generation with zero env.
+    const { findTemplateInMemory } = await import("@/server/routers/impl/templates");
+    return findTemplateInMemory(workspaceId, templateId);
+  }
   const db = getDb();
   const rows = await db
     .select({ name: schema.descriptionTemplates.name, body: schema.descriptionTemplates.body })
