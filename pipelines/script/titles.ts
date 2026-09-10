@@ -105,9 +105,7 @@ export async function runTitlesPipeline(
         fixture: () => ({ scores: synthTitleScores(options) }),
       });
       if (scored.scores.length !== options.length) {
-        throw new Error(
-          `scored ${scored.scores.length} titles but generated ${options.length}`,
-        );
+        throw new Error(`scored ${scored.scores.length} titles but generated ${options.length}`);
       }
       saved = await deps.store.insertTitleSet({
         workspaceId: input.workspaceId,

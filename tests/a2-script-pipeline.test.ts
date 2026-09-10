@@ -1,8 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { fixtureFrame, fixtureProject, fixtureResearchDoc, fixtureVoiceProfile } from "@/lib/fixtures";
+import {
+  fixtureFrame,
+  fixtureProject,
+  fixtureResearchDoc,
+  fixtureVoiceProfile,
+} from "@/lib/fixtures";
 import { scriptSectionSchema } from "@/lib/types/entities";
-import { SCRIPT_STAGES, scriptStreamEventSchema, type ScriptStreamEvent } from "@/lib/types/pipeline";
+import {
+  SCRIPT_STAGES,
+  scriptStreamEventSchema,
+  type ScriptStreamEvent,
+} from "@/lib/types/pipeline";
 import { runScriptPipeline } from "@/pipelines/script/pipeline";
 import { makeDeps, fixtureCtx } from "./a2-helpers";
 

@@ -73,9 +73,7 @@ export const revisionImpl = {
     }
     // Recompute script stats with the new body in place.
     const sections = await deps.store.listSections(ctx.workspaceId, revision.scriptId);
-    const text = sections
-      .map((s) => (s.id === section.id ? newBody : s.body))
-      .join("\n\n");
+    const text = sections.map((s) => (s.id === section.id ? newBody : s.body)).join("\n\n");
     const words = countWords(text);
     return deps.store.applyRevision({
       workspaceId: ctx.workspaceId,

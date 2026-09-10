@@ -15,9 +15,7 @@ export function extractClaimSentences(body: string): string[] {
 }
 
 function contentWords(text: string): string[] {
-  return (text.toLowerCase().match(/[a-z0-9$][a-z0-9'.-]{2,}/g) ?? []).filter(
-    (w) => w.length > 3,
-  );
+  return (text.toLowerCase().match(/[a-z0-9$][a-z0-9'.-]{2,}/g) ?? []).filter((w) => w.length > 3);
 }
 
 export const SUPPORT_THRESHOLD = 0.55;

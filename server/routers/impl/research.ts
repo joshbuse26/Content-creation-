@@ -56,10 +56,7 @@ export const researchImpl = {
     return jobAccepted();
   },
 
-  async importTranscript({
-    ctx,
-    input,
-  }: HandlerOpts<ImportTranscriptInput>): Promise<ResearchDoc> {
+  async importTranscript({ ctx, input }: HandlerOpts<ImportTranscriptInput>): Promise<ResearchDoc> {
     const deps = await getEngineDeps();
     const project = await deps.store.getProject(ctx.workspaceId, input.projectId);
     if (project === null) notFound("project");

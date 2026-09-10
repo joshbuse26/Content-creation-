@@ -40,10 +40,7 @@ function truncateToWords(text: string, maxWords: number): string {
 function dropLastSentence(text: string): string {
   const sentences = text.match(/[^.!?]+[.!?]?/g) ?? [];
   if (sentences.length <= 2) return text;
-  return sentences
-    .slice(0, -1)
-    .join("")
-    .trim();
+  return sentences.slice(0, -1).join("").trim();
 }
 
 export function applyCodeAutoFix(

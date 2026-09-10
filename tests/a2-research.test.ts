@@ -10,7 +10,11 @@ import {
   SsrfBlockedError,
   type DnsLookupFn,
 } from "@/pipelines/research/ssrf";
-import { importTranscript, parseYoutubeVideoId, TranscriptImportError } from "@/pipelines/research/transcript";
+import {
+  importTranscript,
+  parseYoutubeVideoId,
+  TranscriptImportError,
+} from "@/pipelines/research/transcript";
 import { saveUpload, UploadCapError } from "@/pipelines/research/upload";
 import { setEngineDepsForTests } from "@/pipelines/script/deps";
 import { researchImpl } from "@/server/routers/impl/research";
@@ -54,9 +58,9 @@ describe("SSRF guard", () => {
     await expect(assertPublicUrl("https://internal.example.com/", privateLookup)).rejects.toThrow(
       SsrfBlockedError,
     );
-    await expect(
-      assertPublicUrl("https://example.com/page", publicLookup),
-    ).resolves.toBeInstanceOf(URL);
+    await expect(assertPublicUrl("https://example.com/page", publicLookup)).resolves.toBeInstanceOf(
+      URL,
+    );
   });
 
   it("re-checks redirect hops and blocks a redirect into private space", async () => {
@@ -76,8 +80,7 @@ describe("SSRF guard", () => {
 
   it("caps the response at maxBytes", async () => {
     const big = "a".repeat(10_000);
-    const fetchImpl: typeof fetch = () =>
-      Promise.resolve(new Response(big, { status: 200 }));
+    const fetchImpl: typeof fetch = () => Promise.resolve(new Response(big, { status: 200 }));
     const page = await guardedFetch("https://example.com/big", {
       lookup: publicLookup,
       fetchImpl,

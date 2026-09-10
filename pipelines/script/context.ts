@@ -34,10 +34,7 @@ export function relevanceScore(doc: ResearchDoc, frame: Frame): number {
   return hits / frameTerms.size + doc.fetchedAt.getTime() / 1e16;
 }
 
-export function trimResearch(
-  docs: ResearchDoc[],
-  frame: Frame,
-): ScriptContext["research"] {
+export function trimResearch(docs: ResearchDoc[], frame: Frame): ScriptContext["research"] {
   const ranked = [...docs].sort((a, b) => relevanceScore(b, frame) - relevanceScore(a, frame));
   const out: ScriptContext["research"] = [];
   let budget = RESEARCH_TOKEN_BUDGET;
@@ -65,15 +62,12 @@ export function summarizeAvatar(avatar: AudienceAvatar | null): string {
   if (avatar.sophistication !== null) parts.push(`${avatar.sophistication} sophistication`);
   const header = parts.length > 0 ? `${parts.join(", ")}.` : "";
   const pains =
-    avatar.pains.length > 0
-      ? `Pains: ${avatar.pains.map((p) => p.pain).join("; ")}.`
-      : "";
+    avatar.pains.length > 0 ? `Pains: ${avatar.pains.map((p) => p.pain).join("; ")}.` : "";
   const motivations =
     avatar.motivations.length > 0
       ? `Motivations: ${avatar.motivations.map((m) => m.motivation).join("; ")}.`
       : "";
-  const vocab =
-    avatar.vocabularyNotes !== null ? `Vocabulary: ${avatar.vocabularyNotes}` : "";
+  const vocab = avatar.vocabularyNotes !== null ? `Vocabulary: ${avatar.vocabularyNotes}` : "";
   return [header, pains, motivations, vocab].filter((s) => s !== "").join(" ");
 }
 

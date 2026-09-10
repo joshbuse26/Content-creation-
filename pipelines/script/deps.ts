@@ -2,10 +2,7 @@ import { getConfig } from "@/lib/config";
 import { getProviders } from "@/lib/providers";
 import type { LlmProvider, SearchProvider, TranscriptProvider } from "@/lib/providers/types";
 import { hasDb } from "@/db";
-import {
-  InMemoryPipelineRunStore,
-  type PipelineRunStore,
-} from "@/queue/pipeline-runner";
+import { InMemoryPipelineRunStore, type PipelineRunStore } from "@/queue/pipeline-runner";
 import { DrizzlePipelineRunStore } from "@/queue/store";
 import type { EngineMode } from "./llm-json";
 import { getScriptEventBus, type ScriptEventBus } from "./events";

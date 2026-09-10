@@ -46,9 +46,7 @@ describe("script SSE stream", () => {
     for (const event of sampleEvents) {
       await bus.publish(SCRIPT_ID, scriptStreamEventSchema.parse(event));
     }
-    const body = await readAll(
-      createScriptSseStream(bus, SCRIPT_ID, { heartbeatMs: 60_000 }),
-    );
+    const body = await readAll(createScriptSseStream(bus, SCRIPT_ID, { heartbeatMs: 60_000 }));
     const eventLines = body
       .split("\n")
       .filter((l) => l.startsWith("event: "))
@@ -69,9 +67,7 @@ describe("script SSE stream", () => {
 
   it("delivers live events published after subscription starts", async () => {
     const bus = new InProcessScriptEventBus();
-    const streamPromise = readAll(
-      createScriptSseStream(bus, SCRIPT_ID, { heartbeatMs: 60_000 }),
-    );
+    const streamPromise = readAll(createScriptSseStream(bus, SCRIPT_ID, { heartbeatMs: 60_000 }));
     // Publish after the stream is reading.
     await new Promise((resolve) => setTimeout(resolve, 10));
     for (const event of sampleEvents) {

@@ -1,10 +1,6 @@
 import { LLM_MODELS } from "@/lib/config";
 import type { Frame } from "@/lib/types/entities";
-import {
-  FRAME_STAGES,
-  proposedFramesSchema,
-  type FrameJobInput,
-} from "@/lib/types/pipeline";
+import { FRAME_STAGES, proposedFramesSchema, type FrameJobInput } from "@/lib/types/pipeline";
 import { proposeFramesPrompt } from "@/prompts";
 import { PipelineRunner, type PipelineResult } from "@/queue/pipeline-runner";
 import type { EngineDeps } from "./deps";

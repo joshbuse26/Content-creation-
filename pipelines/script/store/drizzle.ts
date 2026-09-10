@@ -64,9 +64,7 @@ export class DrizzleEngineStore implements EngineStore {
     const rows = await getDb()
       .select()
       .from(schema.projects)
-      .where(
-        and(eq(schema.projects.id, projectId), eq(schema.projects.workspaceId, workspaceId)),
-      )
+      .where(and(eq(schema.projects.id, projectId), eq(schema.projects.workspaceId, workspaceId)))
       .limit(1);
     const row = rows[0];
     return row === undefined ? null : projectSchema.parse(row);
@@ -80,9 +78,7 @@ export class DrizzleEngineStore implements EngineStore {
     await getDb()
       .update(schema.projects)
       .set({ status })
-      .where(
-        and(eq(schema.projects.id, projectId), eq(schema.projects.workspaceId, workspaceId)),
-      );
+      .where(and(eq(schema.projects.id, projectId), eq(schema.projects.workspaceId, workspaceId)));
   }
 
   async getAvatarForChannel(channelId: ChannelId): Promise<AudienceAvatar | null> {
@@ -325,9 +321,7 @@ export class DrizzleEngineStore implements EngineStore {
           })),
         )
         .returning();
-      return rows
-        .map((r) => scriptSectionSchema.parse(r))
-        .sort((a, b) => a.position - b.position);
+      return rows.map((r) => scriptSectionSchema.parse(r)).sort((a, b) => a.position - b.position);
     });
   }
 
@@ -395,10 +389,7 @@ export class DrizzleEngineStore implements EngineStore {
       .select()
       .from(schema.revisions)
       .where(
-        and(
-          eq(schema.revisions.scriptId, scriptId),
-          eq(schema.revisions.workspaceId, workspaceId),
-        ),
+        and(eq(schema.revisions.scriptId, scriptId), eq(schema.revisions.workspaceId, workspaceId)),
       )
       .orderBy(schema.revisions.createdAt);
     return rows.map((r) => revisionSchema.parse(r));

@@ -34,7 +34,10 @@ export function isPrivateIpv4(ip: string): boolean {
 }
 
 export function isPrivateIp(ip: string): boolean {
-  const normalized = ip.trim().toLowerCase().replace(/^\[|\]$/g, "");
+  const normalized = ip
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "");
   if (normalized.includes(":")) {
     // IPv6
     if (normalized === "::" || normalized === "::1") return true;
@@ -42,7 +45,7 @@ export function isPrivateIp(ip: string): boolean {
     const v4 = /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/.exec(normalized);
     if (v4?.[1] !== undefined) return isPrivateIpv4(v4[1]);
     const head = normalized.split(":")[0] ?? "";
-    if (head === "" ) return true; // starts with :: — loopback/unspecified space
+    if (head === "") return true; // starts with :: — loopback/unspecified space
     const firstHextet = parseInt(head, 16);
     if (Number.isNaN(firstHextet)) return true;
     if ((firstHextet & 0xfe00) === 0xfc00) return true; // fc00::/7 ULA
@@ -85,7 +88,12 @@ export async function assertPublicUrl(
     throw new SsrfBlockedError(`blocked protocol: ${url.protocol}`);
   }
   const host = url.hostname.toLowerCase();
-  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) {
+  if (
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host.endsWith(".local") ||
+    host.endsWith(".internal")
+  ) {
     throw new SsrfBlockedError(`blocked host: ${host}`);
   }
   if (IP_LITERAL.test(host)) {
@@ -146,7 +154,10 @@ export async function guardedFetch(
       const response = await fetchImpl(url.toString(), {
         redirect: "manual",
         signal: controller.signal,
-        headers: { "user-agent": "GinRummyResearch/1.0 (+research-agent)", accept: "text/html,text/plain,*/*" },
+        headers: {
+          "user-agent": "GinRummyResearch/1.0 (+research-agent)",
+          accept: "text/html,text/plain,*/*",
+        },
       });
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get("location");

@@ -191,7 +191,9 @@ export interface EngineStore {
    * accepted, bumps the script version and updates stats. Rolls back as a
    * unit on failure (DB transaction in production).
    */
-  applyRevision(params: ApplyRevisionParams): Promise<{ revision: Revision; section: ScriptSection }>;
+  applyRevision(
+    params: ApplyRevisionParams,
+  ): Promise<{ revision: Revision; section: ScriptSection }>;
   rejectRevision(workspaceId: WorkspaceId, revisionId: RevisionId): Promise<Revision | null>;
 
   // Titles

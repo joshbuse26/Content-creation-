@@ -196,7 +196,9 @@ export function synthSectionBody(
   section: Outline["sections"][number],
   sectionIndex: number,
 ): string {
-  const rand = mulberry32(fnv1a(`section|${context.frame.angle}|${sectionIndex}|${section.heading}`));
+  const rand = mulberry32(
+    fnv1a(`section|${context.frame.angle}|${sectionIndex}|${section.heading}`),
+  );
   const targetWords = Math.round(section.targetSeconds * 2.5);
   if (section.kind === "cta") {
     return "If this test just saved you from an expensive mistake, the subscribe button is the cheapest thanks there is. One click, and you get the next test the day it lands.";
@@ -208,7 +210,10 @@ export function synthSectionBody(
   if (section.kind === "chapter") {
     // Weave one cited research fact into chapters so the fact-check stage
     // has real claims to match against research docs.
-    const doc = context.research[(sectionIndex + context.research.length) % Math.max(1, context.research.length)];
+    const doc =
+      context.research[
+        (sectionIndex + context.research.length) % Math.max(1, context.research.length)
+      ];
     if (doc !== undefined) {
       const fact = factSentenceFrom(doc.excerpt);
       if (fact !== null) {
@@ -305,10 +310,7 @@ export function synthBrief(
   return { title: `Research brief: ${query}`, content, facts };
 }
 
-export function synthFrames(input: {
-  projectTitle: string;
-  keywords: string[];
-}): ProposedFrame[] {
+export function synthFrames(input: { projectTitle: string; keywords: string[] }): ProposedFrame[] {
   const kw = input.keywords.slice(0, 6);
   const title = input.projectTitle.replace(/[.?!]+$/, "");
   return [
@@ -424,7 +426,8 @@ export function synthRevisionSuggestions(
       sectionIndex: index,
       lineStart: 1,
       lineEnd: 1,
-      replacement: `${head.trim().replace(/\.$/, "")} — and this part is measurable. ${sentences.slice(1).join(". ")}`.trim(),
+      replacement:
+        `${head.trim().replace(/\.$/, "")} — and this part is measurable. ${sentences.slice(1).join(". ")}`.trim(),
       suggestion: "Sharpen the opening line with a concrete promise.",
       rationale: "First line carries the section; a measurable promise beats a general one.",
     });

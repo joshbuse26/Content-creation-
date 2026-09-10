@@ -57,7 +57,9 @@ export function titlesPrompt(input: TitlesPromptInput): PromptTemplate {
       `Angle: ${input.frameAngle}`,
       `Format: ${input.format}`,
       input.keywords.length > 0 ? `Keywords: ${input.keywords.join(", ")}` : "",
-      input.hookBody !== null ? `The video's hook (the title must set this up): ${input.hookBody}` : "",
+      input.hookBody !== null
+        ? `The video's hook (the title must set this up): ${input.hookBody}`
+        : "",
       input.nicheTitleExamples.length > 0
         ? `Titles currently outperforming in this niche:\n${input.nicheTitleExamples.map((t) => `- ${t}`).join("\n")}`
         : "",
@@ -99,9 +101,7 @@ export function scoreTitlesPrompt(input: ScoreTitlesPromptInput): PromptTemplate
       "Titles to score, in order:",
       input.titles.map((t, i) => `${i + 1}. [${t.patternFamily}] ${t.text}`).join("\n"),
       "",
-      jsonOnly(
-        `{"scores": [<int 0-100>, ...]} — one score per title, in the same order as listed`,
-      ),
+      jsonOnly(`{"scores": [<int 0-100>, ...]} — one score per title, in the same order as listed`),
     ]
       .filter((l) => l !== "")
       .join("\n"),

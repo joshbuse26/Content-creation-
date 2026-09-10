@@ -40,7 +40,12 @@ import { matchClaims } from "./fact-match";
 import { stageInputHash } from "./hash";
 import { generateJson } from "./llm-json";
 import { computeQualityReport, gateViolations } from "./quality-gate";
-import { estimateSeconds, estimateSecondsForText, countWords, fleschReadingEase } from "./readability";
+import {
+  estimateSeconds,
+  estimateSecondsForText,
+  countWords,
+  fleschReadingEase,
+} from "./readability";
 import type { NewSection } from "./store";
 
 /**
@@ -73,7 +78,12 @@ export interface ScriptPipelineParams {
 
 const hookCandidatesSchema = z.object({
   candidates: z
-    .array(z.object({ style: z.enum(["open_loop", "bold_claim", "stakes", "in_medias_res"]), body: z.string().min(1) }))
+    .array(
+      z.object({
+        style: z.enum(["open_loop", "bold_claim", "stakes", "in_medias_res"]),
+        body: z.string().min(1),
+      }),
+    )
     .length(3),
 });
 
@@ -140,10 +150,7 @@ export async function runScriptPipeline(
     return state.sections;
   };
 
-  const persistSections = async (
-    sections: WorkingSection[],
-    factRefs?: Map<number, FactRef[]>,
-  ) => {
+  const persistSections = async (sections: WorkingSection[], factRefs?: Map<number, FactRef[]>) => {
     const rows: NewSection[] = sections.map((s, position) => ({
       position,
       kind: s.kind,
@@ -159,7 +166,13 @@ export async function runScriptPipeline(
   /** Rewrite stages must not change section count/kinds — validate + carry. */
   const acceptRewrite = (
     current: WorkingSection[],
-    rewritten: { kind: string; heading: string; body: string; estSeconds: number; retentionNote: string | null }[],
+    rewritten: {
+      kind: string;
+      heading: string;
+      body: string;
+      estSeconds: number;
+      retentionNote: string | null;
+    }[],
     stage: string,
   ): WorkingSection[] => {
     if (rewritten.length !== current.length) {
@@ -279,7 +292,10 @@ export async function runScriptPipeline(
           heading: planned.heading,
           body,
           estSeconds: estimateSecondsForText(body),
-          retentionNote: planned.retentionNote !== "" ? planned.retentionNote : synthRetentionNote(planned.kind, i),
+          retentionNote:
+            planned.retentionNote !== ""
+              ? planned.retentionNote
+              : synthRetentionNote(planned.kind, i),
         };
         sections.push(section);
         await publish({ type: "section", section, position: i });
@@ -407,9 +423,7 @@ export async function runScriptPipeline(
         state.sections = sections;
         // Re-persist while preserving the fact refs computed in stage 6.
         const persisted = await deps.store.listSections(input.workspaceId, scriptId);
-        const factRefs = new Map<number, FactRef[]>(
-          persisted.map((row, i) => [i, row.factRefs]),
-        );
+        const factRefs = new Map<number, FactRef[]>(persisted.map((row, i) => [i, row.factRefs]));
         await persistSections(sections, factRefs);
         report = computeQualityReport(gateInput(), { autoFixAttempted: true });
       }

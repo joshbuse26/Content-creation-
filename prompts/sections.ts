@@ -160,7 +160,9 @@ export function regenerateSectionPrompt(input: RegenerateSectionPromptInput): Pr
       "Following sections (must still flow from your rewrite):",
       input.followingSections.map((s) => `## ${s.heading}\n${s.body}`).join("\n\n") || "(none)",
       "",
-      input.guidance !== null ? `The creator's instruction for this rewrite: ${input.guidance}` : "",
+      input.guidance !== null
+        ? `The creator's instruction for this rewrite: ${input.guidance}`
+        : "",
       `Length: about ${targetWords} words.`,
       "",
       jsonOnly(`{"body": "<the rewritten spoken text>"}`),

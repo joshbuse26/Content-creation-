@@ -102,7 +102,9 @@ export function gateViolations(report: QualityGateReport): string[] {
     );
   }
   if (!report.hookOk) {
-    violations.push(`Hook runs ~${report.hookSeconds} spoken seconds; tighten to under 30 (~75 words).`);
+    violations.push(
+      `Hook runs ~${report.hookSeconds} spoken seconds; tighten to under 30 (~75 words).`,
+    );
   }
   return violations;
 }

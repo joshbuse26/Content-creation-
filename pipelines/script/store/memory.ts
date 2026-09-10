@@ -51,8 +51,8 @@ import type {
   SectionPatch,
 } from "./types";
 
-const clone = <T,>(value: T): T => structuredClone(value);
-const cloneOrNull = <T,>(value: T | undefined): T | null =>
+const clone = <T>(value: T): T => structuredClone(value);
+const cloneOrNull = <T>(value: T | undefined): T | null =>
   value === undefined ? null : structuredClone(value);
 
 /**
@@ -129,9 +129,7 @@ export class InMemoryEngineStore implements EngineStore {
     projectId: ProjectId,
     status: ProjectStatus,
   ): Promise<void> {
-    const project = this.projects.find(
-      (p) => p.id === projectId && p.workspaceId === workspaceId,
-    );
+    const project = this.projects.find((p) => p.id === projectId && p.workspaceId === workspaceId);
     if (project !== undefined) {
       project.status = status;
       project.updatedAt = new Date();
@@ -317,24 +315,22 @@ export class InMemoryEngineStore implements EngineStore {
   ): Promise<ScriptSection[]> {
     this.sections = this.sections.filter((s) => s.scriptId !== scriptId);
     const now = new Date();
-    const rows = sections.map(
-      (s): ScriptSection => ({
-        id: scriptSectionIdSchema.parse(randomUUID()),
-        workspaceId,
-        scriptId,
-        position: s.position,
-        kind: s.kind,
-        heading: s.heading,
-        body: s.body,
-        voiceProfileId: null,
-        locked: false,
-        estSeconds: s.estSeconds,
-        retentionNote: s.retentionNote,
-        factRefs: s.factRefs,
-        createdAt: now,
-        updatedAt: now,
-      }),
-    );
+    const rows = sections.map((s): ScriptSection => ({
+      id: scriptSectionIdSchema.parse(randomUUID()),
+      workspaceId,
+      scriptId,
+      position: s.position,
+      kind: s.kind,
+      heading: s.heading,
+      body: s.body,
+      voiceProfileId: null,
+      locked: false,
+      estSeconds: s.estSeconds,
+      retentionNote: s.retentionNote,
+      factRefs: s.factRefs,
+      createdAt: now,
+      updatedAt: now,
+    }));
     this.sections.push(...rows);
     return Promise.resolve(clone(rows));
   }
@@ -360,9 +356,7 @@ export class InMemoryEngineStore implements EngineStore {
     sectionId: ScriptSectionId,
     patch: SectionPatch,
   ): Promise<ScriptSection | null> {
-    const section = this.sections.find(
-      (s) => s.id === sectionId && s.workspaceId === workspaceId,
-    );
+    const section = this.sections.find((s) => s.id === sectionId && s.workspaceId === workspaceId);
     if (section === undefined) return Promise.resolve(null);
     if (patch.heading !== undefined) section.heading = patch.heading;
     if (patch.body !== undefined) section.body = patch.body;
@@ -378,15 +372,13 @@ export class InMemoryEngineStore implements EngineStore {
 
   insertRevisions(revisions: NewRevision[]): Promise<Revision[]> {
     const now = new Date();
-    const rows = revisions.map(
-      (r): Revision => ({
-        id: revisionIdSchema.parse(randomUUID()),
-        ...r,
-        status: "pending",
-        createdAt: now,
-        updatedAt: now,
-      }),
-    );
+    const rows = revisions.map((r): Revision => ({
+      id: revisionIdSchema.parse(randomUUID()),
+      ...r,
+      status: "pending",
+      createdAt: now,
+      updatedAt: now,
+    }));
     this.revisions.push(...rows);
     return Promise.resolve(clone(rows));
   }

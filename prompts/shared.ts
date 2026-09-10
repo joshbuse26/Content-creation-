@@ -25,7 +25,7 @@ export function renderStyleCard(card: StyleCard | null): string {
   if (card === null) {
     return [
       "No creator voice profile is set. Write in a natural, conversational",
-      "spoken register: contractions, direct address (\"you\"), first person,",
+      'spoken register: contractions, direct address ("you"), first person,',
       "sentences a person can say in one breath.",
     ].join(" ");
   }

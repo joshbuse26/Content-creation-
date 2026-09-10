@@ -81,7 +81,7 @@ export async function runRevisionPipeline(
               ).map((s) => {
                 const section = sections[s.sectionIndex];
                 return {
-                  sectionId: (section?.id ?? ""),
+                  sectionId: section?.id ?? "",
                   lineStart: s.lineStart,
                   lineEnd: s.lineEnd,
                   replacement: s.replacement,

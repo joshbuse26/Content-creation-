@@ -63,13 +63,9 @@ async function qualityReportFor(
 }
 
 function buildDocxBase64(title: string, sections: ScriptSection[]): Promise<string> {
-  const children: Paragraph[] = [
-    new Paragraph({ text: title, heading: HeadingLevel.TITLE }),
-  ];
+  const children: Paragraph[] = [new Paragraph({ text: title, heading: HeadingLevel.TITLE })];
   for (const section of sections) {
-    children.push(
-      new Paragraph({ text: section.heading, heading: HeadingLevel.HEADING_1 }),
-    );
+    children.push(new Paragraph({ text: section.heading, heading: HeadingLevel.HEADING_1 }));
     for (const line of section.body.split("\n")) {
       children.push(new Paragraph({ children: [new TextRun(line)] }));
     }
@@ -243,11 +239,9 @@ export const scriptImpl = {
         return {
           filename: `${base}.md`,
           mimeType: "text/markdown",
-          content: [
-            `# ${title}`,
-            "",
-            ...sections.map((s) => `## ${s.heading}\n\n${s.body}`),
-          ].join("\n\n"),
+          content: [`# ${title}`, "", ...sections.map((s) => `## ${s.heading}\n\n${s.body}`)].join(
+            "\n\n",
+          ),
           encoding: "utf8",
         };
       case "txt":
@@ -268,8 +262,7 @@ export const scriptImpl = {
       case "docx":
         return {
           filename: `${base}.docx`,
-          mimeType:
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           content: await buildDocxBase64(title, sections),
           encoding: "base64",
         };

@@ -9,7 +9,10 @@ import { countWords } from "@/pipelines/script/readability";
 import { fixtureCtx, makeDeps } from "./a2-helpers";
 
 const longBody = (words: number) =>
-  Array.from({ length: Math.ceil(words / 8) }, () => "The result held up on every single run we tried.").join(" ");
+  Array.from(
+    { length: Math.ceil(words / 8) },
+    () => "The result held up on every single run we tried.",
+  ).join(" ");
 
 function bloatedSections() {
   return [
@@ -124,7 +127,9 @@ describe("quality-gate failure inside the pipeline triggers the auto-fix loop", 
 
     const result = await runScriptPipeline(deps, params);
     expect(result.status).toBe("done");
-    expect(result.status === "done" && result.skippedStages).toEqual([...SCRIPT_STAGES.slice(0, 6)]);
+    expect(result.status === "done" && result.skippedStages).toEqual([
+      ...SCRIPT_STAGES.slice(0, 6),
+    ]);
 
     const report = deps.store.getCachedQualityReport(script.id);
     expect(report?.autoFixAttempted).toBe(true);

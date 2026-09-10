@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { fixtureFrame, fixtureProject, fixtureResearchDoc } from "@/lib/fixtures";
 import { SCRIPT_STAGES } from "@/lib/types/pipeline";
-import { extractClaimSentences, findSupportingDoc, matchClaims } from "@/pipelines/script/fact-match";
+import {
+  extractClaimSentences,
+  findSupportingDoc,
+  matchClaims,
+} from "@/pipelines/script/fact-match";
 import { stageInputHash } from "@/pipelines/script/hash";
 import { runScriptPipeline } from "@/pipelines/script/pipeline";
 import { fixtureCtx, makeDeps } from "./a2-helpers";
