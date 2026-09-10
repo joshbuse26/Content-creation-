@@ -11,30 +11,31 @@ import { getConfig } from "@/lib/config";
  * (worker, jobs) or a per-request child logger.
  */
 
-/** Paths pino censors — both top-level and one level deep. */
-export const REDACTION_PATHS: string[] = [
+/** Sensitive keys, censored at the top level and one and two levels deep. */
+const SENSITIVE_KEYS = [
   "authorization",
-  "*.authorization",
-  'headers["authorization"]',
   "cookie",
-  "*.cookie",
   "cookies",
-  "*.cookies",
-  '*["set-cookie"]',
   "password",
-  "*.password",
   "token",
-  "*.token",
   "accessToken",
-  "*.accessToken",
   "refreshToken",
-  "*.refreshToken",
   "apiKey",
-  "*.apiKey",
   "secret",
-  "*.secret",
+  "magicLink",
   "email",
-  "*.email",
+] as const;
+
+/**
+ * Paths pino censors. SINGLE SOURCE for the whole codebase — lib/logger.ts
+ * (the shared instance) and createOpsLogger both use this list.
+ */
+export const REDACTION_PATHS: string[] = [
+  ...SENSITIVE_KEYS,
+  ...SENSITIVE_KEYS.map((k) => `*.${k}`),
+  ...SENSITIVE_KEYS.map((k) => `*.*.${k}`),
+  'headers["authorization"]',
+  '*["set-cookie"]',
 ];
 
 export const REDACTION_CENSOR = "[redacted]";

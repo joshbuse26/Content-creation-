@@ -42,5 +42,8 @@ export async function sendMagicLinkEmail(params: {
     throw new Error("Email sign-in is not configured (RESEND_API_KEY missing)");
   }
   // Dev transport: log the link. Identifier is intentionally not logged.
-  logger.info({ magicLink: params.url }, "DEV magic link (no RESEND_API_KEY set)");
+  // The URL goes into the message string on purpose: `magicLink` object
+  // keys are redacted globally (server/ops/logging.ts), and this line is
+  // the one deliberate, non-production exception.
+  logger.info(`DEV magic link (no RESEND_API_KEY set): ${params.url}`);
 }

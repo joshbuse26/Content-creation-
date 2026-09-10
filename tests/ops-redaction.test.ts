@@ -91,8 +91,42 @@ describe("ops logger redaction", () => {
 
   it("covers the required redaction categories in the path list", () => {
     const flat = REDACTION_PATHS.join(" ");
-    for (const needle of ["authorization", "cookie", "token", "email"]) {
+    for (const needle of ["authorization", "cookie", "token", "email", "magicLink", "secret"]) {
       expect(flat).toContain(needle);
     }
+  });
+
+  it("redacts two levels deep (wildcard * . * . key)", () => {
+    const { lines, logger } = makeCapture();
+    logger.info(
+      {
+        req: { auth: { token: "tok_deep", refreshToken: "rt_deep", secret: "sec_deep" } },
+        ctx: { user: { email: "deep@example.com" } },
+      },
+      "deep",
+    );
+    for (const leaked of ["tok_deep", "rt_deep", "sec_deep", "deep@example.com"]) {
+      expect(lines[0]).not.toContain(leaked);
+    }
+  });
+
+  it("redacts magicLink keys at any covered depth", () => {
+    const { lines, logger } = makeCapture();
+    logger.info(
+      { magicLink: "https://x/1?token=a", mail: { magicLink: "https://x/2?token=b" } },
+      "links",
+    );
+    expect(lines[0]).not.toContain("token=a");
+    expect(lines[0]).not.toContain("token=b");
+  });
+
+  it("the shared lib/logger uses the same redaction list", async () => {
+    const { REDACTION_PATHS: opsPaths } = await import("@/server/ops/logging");
+    const loggerSource = await import("node:fs/promises").then((fs) =>
+      fs.readFile("lib/logger.ts", "utf8"),
+    );
+    expect(loggerSource).toContain("REDACTION_PATHS");
+    expect(opsPaths).toContain("*.*.token");
+    expect(opsPaths).toContain("accessToken");
   });
 });

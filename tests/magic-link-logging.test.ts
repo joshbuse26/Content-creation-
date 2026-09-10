@@ -51,10 +51,9 @@ describe("magic-link transport", () => {
       identifier: "user@example.com",
       url: "https://app.example.com/magic?token=abc",
     });
-    expect(infoSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ magicLink: expect.stringContaining("token=abc") as unknown }),
-      expect.stringContaining("DEV magic link"),
-    );
+    // The link rides in the message string — object keys named magicLink
+    // are globally redacted, and this is the one deliberate dev exception.
+    expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining("token=abc"));
   });
 
   it("fails loudly (and never logs the link) in production without RESEND_API_KEY", async () => {
