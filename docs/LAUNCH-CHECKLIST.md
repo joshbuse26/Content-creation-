@@ -27,22 +27,24 @@ The project needs TWO services from this one repo plus data stores:
 
 Set on BOTH web and worker unless noted:
 
-| Var                                           | Value                                              | Notes                                                                                                                     |
-| --------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                                | ref → Postgres service                             | Railway reference variable                                                                                                |
-| `REDIS_URL`                                   | ref → Redis service                                |                                                                                                                           |
-| `AUTH_SECRET`                                 | `openssl rand -base64 33`                          | web only; required to boot                                                                                                |
-| `CHANNEL_TOKEN_SECRET`                        | `openssl rand -base64 33`                          | encrypts YouTube refresh tokens                                                                                           |
-| `PROVIDERS`                                   | `fixture` for first boot → `live` when keys are in | **production fail-fasts on `fixture` by design** — first boot must run with NODE_ENV≠production, or go straight to `live` |
-| `NEXT_PUBLIC_FIXTURE_UI`                      | `1` only while PROVIDERS=fixture                   | web only, build-time                                                                                                      |
-| `ANTHROPIC_API_KEY`                           | console.anthropic.com                              | required for live                                                                                                         |
-| `RESEND_API_KEY`                              | resend.com                                         | **required in production** — sign-in fails loudly without it                                                              |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`   | GCP OAuth client                                   | login + channel connect                                                                                                   |
-| `GOOGLE_API_KEY`                              | GCP, YouTube Data API v3 enabled                   | public channel mode                                                                                                       |
-| `TRANSCRIPT_API_KEY`                          | Supadata (or compatible)                           | competitor/public transcripts                                                                                             |
-| `SEARCH_API_KEY`                              | Brave Search                                       | research agent                                                                                                            |
-| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | Stripe                                             | checkout stub until live billing ships                                                                                    |
-| `SENTRY_DSN`                                  | sentry.io                                          | optional but do it                                                                                                        |
+| Var                                           | Value                                              | Notes                                                                                                                         |
+| --------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                | ref → Postgres service                             | Railway reference variable                                                                                                    |
+| `REDIS_URL`                                   | ref → Redis service                                |                                                                                                                               |
+| `AUTH_SECRET`                                 | `openssl rand -base64 33`                          | web only; required to boot                                                                                                    |
+| `CHANNEL_TOKEN_SECRET`                        | `openssl rand -base64 33`                          | encrypts YouTube refresh tokens                                                                                               |
+| `PROVIDERS`                                   | `fixture` for first boot → `live` when keys are in | **production fail-fasts on `fixture` by design** — first boot must run with NODE_ENV≠production, or go straight to `live`     |
+| `NEXT_PUBLIC_FIXTURE_UI`                      | `1` only while PROVIDERS=fixture                   | web only, build-time                                                                                                          |
+| `LLM_BACKEND`                                 | `grok` (or `anthropic`)                            | which live LLM serves the pipeline                                                                                            |
+| `XAI_API_KEY`                                 | console.x.ai                                       | required when LLM_BACKEND=grok; verify tier model names (defaults grok-4.6 / grok-4.1-fast, override via XAI_MODEL_MAIN/FAST) |
+| `ANTHROPIC_API_KEY`                           | console.anthropic.com                              | required when LLM_BACKEND=anthropic                                                                                           |
+| `RESEND_API_KEY`                              | resend.com                                         | **required in production** — sign-in fails loudly without it                                                                  |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`   | GCP OAuth client                                   | login + channel connect                                                                                                       |
+| `GOOGLE_API_KEY`                              | GCP, YouTube Data API v3 enabled                   | public channel mode                                                                                                           |
+| `TRANSCRIPT_API_KEY`                          | Supadata (or compatible)                           | competitor/public transcripts                                                                                                 |
+| `SEARCH_API_KEY`                              | Brave Search                                       | research agent                                                                                                                |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | Stripe                                             | checkout stub until live billing ships                                                                                        |
+| `SENTRY_DSN`                                  | sentry.io                                          | optional but do it                                                                                                            |
 
 After DB is up, run migrations + seed once (Railway shell on web service or locally against `DATABASE_URL`):
 `pnpm db:migrate && pnpm seed`

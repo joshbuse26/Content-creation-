@@ -42,7 +42,14 @@ const envSchema = z
     CHANNEL_TOKEN_SECRET: optionalString,
 
     GOOGLE_API_KEY: optionalString,
+    /** Which live LLM backend serves the pipeline tiers in LLM_MODELS. */
+    LLM_BACKEND: z.enum(["anthropic", "grok"]).default("anthropic"),
     ANTHROPIC_API_KEY: optionalString,
+    XAI_API_KEY: optionalString,
+    /** Grok model serving the "sonnet" (main/generative) tier. */
+    XAI_MODEL_MAIN: z.preprocess(emptyToUndefined, z.string().default("grok-4.6")),
+    /** Grok model serving the "haiku" (fast/classification) tier. */
+    XAI_MODEL_FAST: z.preprocess(emptyToUndefined, z.string().default("grok-4.1-fast")),
     TRANSCRIPT_API_KEY: optionalString,
     SEARCH_API_KEY: optionalString,
     IMAGE_API_KEY: optionalString,
@@ -80,7 +87,7 @@ const envSchema = z
     }
     if (env.PROVIDERS === "live") {
       const required: (keyof typeof env)[] = [
-        "ANTHROPIC_API_KEY",
+        env.LLM_BACKEND === "grok" ? "XAI_API_KEY" : "ANTHROPIC_API_KEY",
         "GOOGLE_API_KEY",
         "TRANSCRIPT_API_KEY",
         "SEARCH_API_KEY",

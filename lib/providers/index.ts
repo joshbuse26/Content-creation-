@@ -19,16 +19,19 @@ export async function getProviders(): Promise<Providers> {
     cached = createFixtureProviders();
     return cached;
   }
-  const [{ AnthropicLlm }, { LiveYoutube }, { LiveTranscript }, { LiveSearch }, { LiveImage }] =
+  const { LLM_BACKEND } = getConfig();
+  const [llm, { LiveYoutube }, { LiveTranscript }, { LiveSearch }, { LiveImage }] =
     await Promise.all([
-      import("./live/llm"),
+      LLM_BACKEND === "grok"
+        ? import("./live/grok").then(({ GrokLlm }) => new GrokLlm())
+        : import("./live/llm").then(({ AnthropicLlm }) => new AnthropicLlm()),
       import("./live/youtube"),
       import("./live/transcript"),
       import("./live/search"),
       import("./live/image"),
     ]);
   cached = {
-    llm: new AnthropicLlm(),
+    llm,
     youtube: new LiveYoutube(),
     transcript: new LiveTranscript(),
     search: new LiveSearch(),
