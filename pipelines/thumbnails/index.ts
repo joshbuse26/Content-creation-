@@ -11,6 +11,19 @@ export {
   type ThumbnailPromptInput,
 } from "./prompt";
 export {
+  AUTO_COMPOSITION_PATTERN,
+  contrastRuleNote,
+  countOverlayWords,
+  DEFAULT_MAX_OVERLAY_WORDS,
+  enforceOverlayWordCap,
+  faceRequirementNote,
+  OverlayTextTooLongError,
+  paletteTemperatureNote,
+  resolveCompositionPattern,
+  resolveThumbnailPreset,
+  type GenerationModeFields,
+} from "./presets";
+export {
   runThumbnailPipeline,
   thumbnailInputHash,
   THUMBNAIL_CREDIT_COST,

@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import { getArchetypeSeed } from "@/lib/archetypes";
 import type { GeneratedImage, ImageProvider } from "@/lib/providers/types";
 import type { ThumbnailConcept } from "@/lib/types/entities";
 import { THUMBNAIL_STAGES, type ThumbnailJobInput } from "@/lib/types/pipeline";
@@ -44,11 +45,30 @@ export interface ThumbnailPipelineDeps {
 export interface ThumbnailPipelineParams {
   input: ThumbnailJobInput;
   actorUserId: string | null;
+  /**
+   * Archetype id whose thumbnail preset (PRODUCT-CONTRACTS §5) is folded
+   * into the prompt — resolved by the router from the project's mode fields
+   * (crossover: heavier archetype wins). Null/omitted = legacy prompt.
+   */
+  presetArchetypeId?: string | null;
+  /**
+   * Exact overlay text, enforced against the preset's word cap in the
+   * prompt builder. Null/omitted = the model picks its own short overlay.
+   */
+  overlayText?: string | null;
 }
 
-/** Fold the prompt version into the hash so a prompt edit is new work. */
-export function thumbnailInputHash(input: ThumbnailJobInput): string {
-  return hashInput({ promptVersion: THUMBNAIL_PROMPT_VERSION, input });
+/** Fold the prompt version + preset inputs into the hash so a change is new work. */
+export function thumbnailInputHash(
+  input: ThumbnailJobInput,
+  extras: { presetArchetypeId?: string | null; overlayText?: string | null } = {},
+): string {
+  return hashInput({
+    promptVersion: THUMBNAIL_PROMPT_VERSION,
+    input,
+    presetArchetypeId: extras.presetArchetypeId ?? null,
+    overlayText: extras.overlayText ?? null,
+  });
 }
 
 async function defaultFetchBytes(url: string): Promise<Uint8Array> {
@@ -84,40 +104,42 @@ export async function runThumbnailPipeline(
   params: ThumbnailPipelineParams,
 ): Promise<{ result: PipelineResult; concepts: ThumbnailConcept[] }> {
   const { input } = params;
+  const presetArchetypeId = params.presetArchetypeId ?? null;
+  const overlayText = params.overlayText ?? null;
   const loadContext = deps.loadContext ?? loadPackagingContext;
   const fetchBytes = deps.fetchBytes ?? defaultFetchBytes;
-  const inputHash = thumbnailInputHash(input);
+  const inputHash = thumbnailInputHash(input, { presetArchetypeId, overlayText });
+  const preset =
+    presetArchetypeId === null
+      ? null
+      : (getArchetypeSeed(presetArchetypeId)?.thumbnailPreset ?? null);
+
+  const buildPrompt = async (): Promise<string> => {
+    const ctx = await loadContext(input.workspaceId, input.projectId);
+    return buildThumbnailImagePrompt(ctx, {
+      compositionPattern: input.compositionPattern,
+      subjectDescription: input.subjectDescription,
+      faceReferenceNote:
+        input.faceImageKey === null
+          ? null
+          : `uploaded face photo on file (key ${input.faceImageKey})`,
+      preset,
+      overlayText,
+    });
+  };
 
   const state: { prompt?: string } = {};
   let concepts: ThumbnailConcept[] = [];
 
   const stageBodies: Record<(typeof THUMBNAIL_STAGES)[number], () => Promise<void>> = {
     build_prompt: async () => {
-      const ctx = await loadContext(input.workspaceId, input.projectId);
-      state.prompt = buildThumbnailImagePrompt(ctx, {
-        compositionPattern: input.compositionPattern,
-        subjectDescription: input.subjectDescription,
-        faceReferenceNote:
-          input.faceImageKey === null
-            ? null
-            : `uploaded face photo on file (key ${input.faceImageKey})`,
-      });
+      state.prompt = await buildPrompt();
     },
 
     generate_images: async () => {
       // A resumed run skips build_prompt (it is pure), so rebuild here when
       // the state is empty rather than failing the stage.
-      if (state.prompt === undefined) {
-        const ctx = await loadContext(input.workspaceId, input.projectId);
-        state.prompt = buildThumbnailImagePrompt(ctx, {
-          compositionPattern: input.compositionPattern,
-          subjectDescription: input.subjectDescription,
-          faceReferenceNote:
-            input.faceImageKey === null
-              ? null
-              : `uploaded face photo on file (key ${input.faceImageKey})`,
-        });
-      }
+      state.prompt ??= await buildPrompt();
       const prompt = state.prompt;
       const images = await deps.image.generate({
         prompt,
