@@ -52,7 +52,7 @@ export function LoginForm({ fixtureMode }: { fixtureMode: boolean }) {
         Continue with Google
       </button>
 
-      <div className="my-5 flex items-center gap-3 text-[11px] tracking-wide text-zinc-400 uppercase">
+      <div className="my-5 flex items-center gap-3 text-[11px] tracking-wide text-zinc-500 uppercase dark:text-zinc-400">
         <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
         or
         <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
@@ -111,7 +111,7 @@ export function LoginForm({ fixtureMode }: { fixtureMode: boolean }) {
         </div>
       ) : null}
 
-      <p className="mt-8 text-xs text-zinc-400 dark:text-zinc-500">
+      <p className="mt-8 text-xs text-zinc-500 dark:text-zinc-400">
         By continuing you agree to our{" "}
         <Link href="/terms" className="underline">
           Terms

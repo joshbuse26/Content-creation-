@@ -38,7 +38,9 @@ export function WorkspaceSwitcher() {
               }}
             >
               <span className="truncate">{w.name}</span>
-              <span className="ml-auto text-[10px] text-zinc-400 uppercase">{w.role}</span>
+              <span className="ml-auto text-[10px] text-zinc-500 uppercase dark:text-zinc-400">
+                {w.role}
+              </span>
             </DropdownItem>
           ))}
           <div className="my-1 border-t border-zinc-200 dark:border-zinc-800" />

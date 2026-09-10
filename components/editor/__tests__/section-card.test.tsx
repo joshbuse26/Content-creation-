@@ -62,6 +62,14 @@ describe("SectionCard", () => {
     ).toBe(true);
   });
 
+  it("is keyboard-reachable: the card itself is focusable", () => {
+    renderCard();
+    const card = screen.getByLabelText(chapter.heading);
+    expect(card.getAttribute("tabindex")).toBe("0");
+    card.focus();
+    expect(document.activeElement).toBe(card);
+  });
+
   it("Alt+arrow reorders an unlocked section but respects locked (like the buttons)", () => {
     const onMove = vi.fn();
     const { unmount } = renderCard({ onMove });

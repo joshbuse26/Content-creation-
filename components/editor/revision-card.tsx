@@ -56,7 +56,9 @@ export function RevisionCard({
     >
       <div className="flex items-start justify-between gap-3 px-4 py-3">
         <div className="min-w-0">
-          <p className="text-xs font-medium text-zinc-400 uppercase">{sectionHeading}</p>
+          <p className="text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">
+            {sectionHeading}
+          </p>
           <p className="mt-0.5 text-sm font-medium" title={revision.rationale}>
             {revision.suggestion}
           </p>

@@ -81,6 +81,7 @@ export function SectionCard({
     <section
       data-testid={`section-${section.id}`}
       aria-label={section.heading}
+      tabIndex={0}
       onKeyDown={(e) => {
         // Match the move buttons: locked sections cannot be reordered.
         if (e.altKey && e.key === "ArrowUp" && !isFirst && !locked) {
@@ -125,6 +126,7 @@ export function SectionCard({
         <Badge tone={section.kind === "hook" ? "emerald" : "neutral"}>{section.kind}</Badge>
         {editing ? (
           <TextInput
+            aria-label="Section heading"
             className="h-7 max-w-xs text-sm font-semibold"
             value={draftHeading}
             onChange={(e) => {
@@ -135,14 +137,11 @@ export function SectionCard({
           <h3 className="truncate text-sm font-semibold">{section.heading}</h3>
         )}
         <span
-          className="ml-auto text-xs text-zinc-400 tabular-nums"
+          className="ml-auto text-xs text-zinc-500 tabular-nums dark:text-zinc-400"
           title="words · est runtime at 150 wpm (server estimate)"
         >
           {words}w · {fmtDuration(computedSeconds)}
-          <span className="text-zinc-300 dark:text-zinc-600">
-            {" "}
-            / ~{fmtDuration(section.estSeconds)}
-          </span>
+          <span> / ~{fmtDuration(section.estSeconds)}</span>
         </span>
 
         <div className="flex items-center gap-0.5">
@@ -217,6 +216,7 @@ export function SectionCard({
         >
           <TextInput
             autoFocus
+            aria-label="Steering note"
             className="h-8 flex-1 text-xs"
             placeholder="Steer the rewrite — e.g. 'lead with the price reveal, drop the anecdote'"
             value={steeringNote}
@@ -239,6 +239,7 @@ export function SectionCard({
         {editing ? (
           <TextArea
             autoFocus
+            aria-label="Section body"
             className="min-h-32 text-sm"
             value={draftBody}
             onChange={(e) => {

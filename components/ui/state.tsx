@@ -49,7 +49,7 @@ export function EmptyState({
     <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-zinc-300 py-12 text-center dark:border-zinc-700">
       <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{title}</p>
       {hint !== undefined ? (
-        <p className="max-w-sm text-xs text-zinc-500 dark:text-zinc-500">{hint}</p>
+        <p className="max-w-sm text-xs text-zinc-500 dark:text-zinc-400">{hint}</p>
       ) : null}
       {action !== undefined ? <div className="mt-2">{action}</div> : null}
     </div>

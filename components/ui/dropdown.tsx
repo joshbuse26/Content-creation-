@@ -6,6 +6,8 @@ import { IconChevronDown } from "./icons";
 /**
  * Minimal headless dropdown: trigger button + floating panel.
  * Closes on outside click and Escape. Panel content is caller-rendered.
+ * Keyboard: Escape (and item selection via the provided `close`) returns
+ * focus to the trigger; ArrowUp/ArrowDown move between menu items.
  */
 export function Dropdown({
   trigger,
@@ -22,6 +24,19 @@ export function Dropdown({
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  const menuItems = (): HTMLButtonElement[] =>
+    rootRef.current === null
+      ? []
+      : Array.from(rootRef.current.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).filter(
+          (el) => !el.disabled,
+        );
+
+  const closeAndRestore = () => {
+    setOpen(false);
+    triggerRef.current?.focus();
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -31,11 +46,15 @@ export function Dropdown({
         e.target instanceof Node &&
         !rootRef.current.contains(e.target)
       ) {
+        // Pointer moved elsewhere — close without stealing focus back.
         setOpen(false);
       }
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
     };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
@@ -45,9 +64,30 @@ export function Dropdown({
     };
   }, [open]);
 
+  const onMenuKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    const items = menuItems();
+    if (items.length === 0) return;
+    e.preventDefault();
+    const current = items.indexOf(document.activeElement as HTMLButtonElement);
+    const delta = e.key === "ArrowDown" ? 1 : -1;
+    const next =
+      current === -1
+        ? delta === 1
+          ? 0
+          : items.length - 1
+        : (current + delta + items.length) % items.length;
+    items[next]?.focus();
+  };
+
   return (
-    <div ref={rootRef} className="relative inline-block">
+    <div
+      ref={rootRef}
+      className="relative inline-block"
+      onKeyDown={open ? onMenuKeyDown : undefined}
+    >
       <button
+        ref={triggerRef}
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -66,9 +106,7 @@ export function Dropdown({
             align === "right" ? "right-0" : "left-0"
           }`}
         >
-          {children(() => {
-            setOpen(false);
-          })}
+          {children(closeAndRestore)}
         </div>
       ) : null}
     </div>

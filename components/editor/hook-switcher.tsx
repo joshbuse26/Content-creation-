@@ -50,7 +50,7 @@ export function HookSwitcher({
         })}
       </div>
       {activeIndex === -1 ? (
-        <p className="mt-1.5 text-[11px] text-emerald-700/80 dark:text-emerald-400/80">
+        <p className="mt-1.5 text-[11px] text-emerald-800 dark:text-emerald-300">
           Custom hook in use — pick a candidate to swap it in.
         </p>
       ) : null}

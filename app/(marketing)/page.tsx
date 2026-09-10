@@ -190,7 +190,7 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
-          <p className="mt-4 text-xs text-zinc-400 dark:text-zinc-500">
+          <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
             Alpha pricing — plans and limits may change before public launch.
           </p>
         </div>

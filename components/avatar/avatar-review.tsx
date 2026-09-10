@@ -77,6 +77,7 @@ export function AvatarReview({ channelId }: { channelId: ChannelId }) {
   if (avatarQuery.isError) {
     return (
       <ErrorState
+        message="Couldn't load the audience avatar — retry in a moment."
         onRetry={() => {
           void avatarQuery.refetch();
         }}
@@ -267,6 +268,7 @@ export function AvatarReview({ channelId }: { channelId: ChannelId }) {
               }}
             />
             <Select
+              aria-label="Sophistication"
               value={avatar.sophistication ?? ""}
               onChange={(e) => {
                 const v = e.target.value;
@@ -378,6 +380,7 @@ function InlineTextField({
         multiline ? (
           <TextArea
             autoFocus
+            aria-label={label}
             value={draft}
             placeholder={placeholder}
             onChange={(e) => {
@@ -394,6 +397,7 @@ function InlineTextField({
         ) : (
           <TextInput
             autoFocus
+            aria-label={label}
             value={draft}
             placeholder={placeholder}
             onChange={(e) => {
@@ -418,7 +422,11 @@ function InlineTextField({
           }}
           className="group flex w-full cursor-text items-start justify-between gap-2 rounded-md border border-transparent px-2 py-1.5 text-left text-sm hover:border-zinc-300 hover:bg-zinc-50 dark:hover:border-zinc-700 dark:hover:bg-zinc-800/60"
         >
-          <span className={value === "" ? "text-zinc-400 italic" : "whitespace-pre-wrap"}>
+          <span
+            className={
+              value === "" ? "text-zinc-500 italic dark:text-zinc-400" : "whitespace-pre-wrap"
+            }
+          >
             {value === "" ? (placeholder ?? "Empty — click to edit") : value}
           </span>
           <IconPencil
@@ -427,7 +435,9 @@ function InlineTextField({
           />
         </button>
       )}
-      {hint !== undefined ? <p className="mt-1 text-[11px] text-zinc-400">{hint}</p> : null}
+      {hint !== undefined ? (
+        <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">{hint}</p>
+      ) : null}
     </div>
   );
 }
@@ -503,7 +513,7 @@ function EvidenceListField({
                   Evidence: {row.evidence === "" ? "—" : row.evidence}
                 </p>
               </div>
-              <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+              <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                 <IconButton
                   label={`Edit ${nounSingular}`}
                   onClick={() => {
@@ -577,6 +587,7 @@ function RowEditor({
     <div className="space-y-1.5">
       <TextInput
         autoFocus
+        aria-label={`The ${nounSingular}`}
         placeholder={`The ${nounSingular}…`}
         value={text}
         onChange={(e) => {
@@ -588,6 +599,7 @@ function RowEditor({
         }}
       />
       <TextInput
+        aria-label="Evidence"
         placeholder="Evidence (comments, search queries, retention data…)"
         value={evidence}
         onChange={(e) => {
