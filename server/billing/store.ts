@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { getDb, hasDb, schema } from "@/db";
 import type { CreditReason, Plan } from "@/lib/types/enums";
 import type { UserId, WorkspaceId } from "@/lib/types/ids";
@@ -59,6 +59,18 @@ export interface BillingStore {
   /** Idempotent ledger entry + balance adjustment; false ⇒ key already written. */
   recordCredits(write: CreditWrite): Promise<boolean>;
   /**
+   * Atomic overage grant (adversarial F3): ONE unit of work covering the
+   * idempotent ledger entry, the balance top-up and the conditional
+   * `overage_used` increment (`overage_used + delta <= ceiling`, evaluated
+   * on the CURRENT row, never a stale read). Outcomes:
+   *  - "granted"   — everything committed; the caller may meter to Stripe.
+   *  - "duplicate" — the idempotency key was already written (retry of the
+   *                  same dispatch); nothing changed, nothing to meter.
+   *  - "ceiling"   — the increment would exceed the ceiling; nothing
+   *                  changed (the ledger write rolls back with it).
+   */
+  grantOverage(write: CreditWrite, ceiling: number): Promise<"granted" | "duplicate" | "ceiling">;
+  /**
    * Monthly expiry (no rollover): write a ledger entry zeroing the current
    * balance. Idempotent on the key; returns the number of credits expired
    * (0 when the balance was already 0 or the key was seen before).
@@ -74,6 +86,13 @@ export interface BillingStore {
 // ---------------------------------------------------------------------------
 // Drizzle (production)
 // ---------------------------------------------------------------------------
+
+/** Internal sentinel: aborts the grantOverage transaction on a full cycle. */
+class OverageCeilingReached extends Error {
+  constructor() {
+    super("overage ceiling reached");
+  }
+}
 
 type WorkspaceRow = typeof schema.workspaces.$inferSelect;
 
@@ -155,6 +174,52 @@ export class DrizzleBillingStore implements BillingStore {
         .where(eq(schema.workspaces.id, write.workspaceId));
       return true;
     });
+  }
+
+  async grantOverage(
+    write: CreditWrite,
+    ceiling: number,
+  ): Promise<"granted" | "duplicate" | "ceiling"> {
+    try {
+      return await getDb().transaction(async (tx) => {
+        const inserted = await tx
+          .insert(schema.creditLedger)
+          .values({
+            workspaceId: write.workspaceId,
+            delta: write.delta,
+            reason: write.reason,
+            actorUserId: write.actorUserId ?? null,
+            idempotencyKey: write.idempotencyKey,
+          })
+          .onConflictDoNothing({
+            target: schema.creditLedger.idempotencyKey,
+            where: sql`${schema.creditLedger.idempotencyKey} IS NOT NULL`,
+          })
+          .returning({ id: schema.creditLedger.id });
+        if (inserted.length === 0) return "duplicate";
+        // Conditional increment on the live row (row lock serializes
+        // concurrent grants); 0 rows ⇒ the ceiling would be exceeded.
+        const updated = await tx
+          .update(schema.workspaces)
+          .set({
+            creditBalance: sql`${schema.workspaces.creditBalance} + ${write.delta}`,
+            overageUsed: sql`coalesce(${schema.workspaces.overageUsed}, 0) + ${write.delta}`,
+          })
+          .where(
+            and(
+              eq(schema.workspaces.id, write.workspaceId),
+              sql`coalesce(${schema.workspaces.overageUsed}, 0) + ${write.delta} <= ${ceiling}`,
+            ),
+          )
+          .returning({ id: schema.workspaces.id });
+        if (updated.length === 0) throw new OverageCeilingReached();
+        return "granted";
+      });
+    } catch (err) {
+      // The throw rolled the ledger insert back with the transaction.
+      if (err instanceof OverageCeilingReached) return "ceiling";
+      throw err;
+    }
   }
 
   async expireRemainder(
@@ -283,6 +348,22 @@ export class InMemoryBillingStore implements BillingStore {
     this.ledger.push({ ...write, createdAt: new Date() });
     workspace.creditBalance += write.delta;
     return Promise.resolve(true);
+  }
+
+  grantOverage(write: CreditWrite, ceiling: number): Promise<"granted" | "duplicate" | "ceiling"> {
+    // Fully synchronous (no await between check and write) — atomic under
+    // concurrent async callers, mirroring the single-UPDATE Drizzle path.
+    if (this.ledger.some((e) => e.idempotencyKey === write.idempotencyKey)) {
+      return Promise.resolve("duplicate");
+    }
+    const workspace = getSharedWorkspaceStore().workspaces.find((w) => w.id === write.workspaceId);
+    if (workspace === undefined) throw new Error("workspace not found for overage grant");
+    const extras = this.extrasFor(write.workspaceId);
+    if (extras.overageUsed + write.delta > ceiling) return Promise.resolve("ceiling");
+    this.ledger.push({ ...write, createdAt: new Date() });
+    workspace.creditBalance += write.delta;
+    extras.overageUsed += write.delta;
+    return Promise.resolve("granted");
   }
 
   async expireRemainder(

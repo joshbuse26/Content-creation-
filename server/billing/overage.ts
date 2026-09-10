@@ -88,7 +88,23 @@ export async function requireCreditsWithOverage(
   }
 
   const shortfall = cost - Math.max(workspace.creditBalance, 0);
-  if (workspace.overageUsed + shortfall > OVERAGE_CEILING_CREDITS) {
+  const idempotencyKey = `overage:${workspaceId}:${options.idempotencyKey ?? randomUUID()}`;
+  // Atomic grant (adversarial F3): the ledger entry, balance top-up and the
+  // conditional `overage_used` increment commit as one unit, with the
+  // ceiling evaluated on the LIVE row — concurrent 1-credit dispatches can
+  // never exceed the cap or lose increments to a stale read-modify-write.
+  const outcome = await store.grantOverage(
+    {
+      workspaceId,
+      delta: shortfall,
+      reason: "overage", // first-class reason (integration pass approved the enum member)
+      idempotencyKey,
+      actorUserId: options.actorUserId ?? null,
+    },
+    OVERAGE_CEILING_CREDITS,
+  );
+  if (outcome === "duplicate") return; // key already granted (retry of the same dispatch) — already metered too
+  if (outcome === "ceiling") {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
       message:
@@ -98,18 +114,7 @@ export async function requireCreditsWithOverage(
     });
   }
 
-  const idempotencyKey = `overage:${workspaceId}:${options.idempotencyKey ?? randomUUID()}`;
-  const granted = await store.recordCredits({
-    workspaceId,
-    delta: shortfall,
-    reason: "overage", // first-class reason (integration pass approved the enum member)
-    idempotencyKey,
-    actorUserId: options.actorUserId ?? null,
-  });
-  if (!granted) return; // key already granted (retry of the same dispatch) — already metered too
-
-  await store.updateBilling(workspaceId, { overageUsed: workspace.overageUsed + shortfall });
-
+  // Stripe meter event only AFTER the increment landed.
   const meter = options.meter ?? (await defaultMeter());
   try {
     await meter.record(workspace.stripeCustomerId, shortfall, idempotencyKey);

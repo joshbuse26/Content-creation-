@@ -121,6 +121,26 @@ describe("allow-and-meter (spec §7 overage)", () => {
     expect((await store.getWorkspace(WORKSPACE_ID))?.overageUsed).toBe(OVERAGE_CEILING_CREDITS);
   });
 
+  it("two concurrent 1-credit grants at ceiling-1: exactly one succeeds (atomic increment)", async () => {
+    setWorkspace("starter", 0);
+    await store.updateBilling(WORKSPACE_ID, { overageUsed: OVERAGE_CEILING_CREDITS - 1 });
+    const results = await Promise.allSettled([
+      gate(1, { idempotencyKey: "dispatch_a" }),
+      gate(1, { idempotencyKey: "dispatch_b" }),
+    ]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const rejected = results.find((r) => r.status === "rejected");
+    expect(rejected?.status).toBe("rejected");
+    if (rejected?.status === "rejected") {
+      expect(isPrecondition(rejected.reason)).toBe(true);
+      expect((rejected.reason as TRPCError).message).toMatch(/Overage cap reached/);
+    }
+    // No lost increment, no cap breach, exactly one grant + meter event.
+    expect((await store.getWorkspace(WORKSPACE_ID))?.overageUsed).toBe(OVERAGE_CEILING_CREDITS);
+    expect(store.ledger).toHaveLength(1);
+    expect(metered).toHaveLength(1);
+  });
+
   it("keeps generating when the meter itself fails (logged, bounded by the cap)", async () => {
     setWorkspace("starter", 0);
     const failingMeter: OverageMeter = {
