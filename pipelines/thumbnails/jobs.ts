@@ -20,6 +20,10 @@ import { runThumbnailPipeline, type ThumbnailPipelineDeps } from "./pipeline";
 export const thumbnailsJobDataSchema = z.object({
   ...thumbnailJobInputSchema.shape,
   actorUserId: z.string().nullable().default(null),
+  /** Archetype whose thumbnail preset drives the prompt (PRODUCT-CONTRACTS §5). */
+  presetArchetypeId: z.string().nullable().default(null),
+  /** Exact overlay text; cap-enforced against the preset in the prompt builder. */
+  overlayText: z.string().max(200).nullable().default(null),
 });
 export type ThumbnailsJobData = z.infer<typeof thumbnailsJobDataSchema>;
 
@@ -36,9 +40,14 @@ export async function getThumbnailPipelineDeps(): Promise<ThumbnailPipelineDeps>
 
 export async function handleThumbnailsJob(data: unknown): Promise<void> {
   const parsed = thumbnailsJobDataSchema.parse(data);
-  const { actorUserId, ...input } = parsed;
+  const { actorUserId, presetArchetypeId, overlayText, ...input } = parsed;
   const deps = await getThumbnailPipelineDeps();
-  const { result } = await runThumbnailPipeline(deps, { input, actorUserId });
+  const { result } = await runThumbnailPipeline(deps, {
+    input,
+    actorUserId,
+    presetArchetypeId,
+    overlayText,
+  });
   if (result.status === "failed") {
     // Surface the failure to BullMQ so its job-level retry safety net and
     // the worker's failure reporting both see it.
