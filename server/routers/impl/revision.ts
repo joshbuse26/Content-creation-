@@ -1,0 +1,104 @@
+import type { z } from "zod";
+import type { revisionContracts } from "@/lib/types/api";
+import type { Revision, ScriptSection } from "@/lib/types/entities";
+import { applyDiffOps, DiffApplyError } from "@/pipelines/revision/apply";
+import { getEngineDeps } from "@/pipelines/script/deps";
+import { dispatchPipelineJob } from "@/pipelines/script/execute";
+import { handleRevisionPassJob } from "@/pipelines/script/jobs";
+import {
+  countWords,
+  estimateSeconds,
+  estimateSecondsForText,
+  fleschReadingEase,
+} from "@/pipelines/script/readability";
+import { JOB_NAMES, QUEUE_NAMES } from "@/queue/queues";
+import { badRequest, jobAccepted, notFound, type HandlerOpts } from "./_shared";
+
+type RunInput = z.output<typeof revisionContracts.run.input>;
+type ListInput = z.output<typeof revisionContracts.list.input>;
+type AcceptInput = z.output<typeof revisionContracts.accept.input>;
+type RejectInput = z.output<typeof revisionContracts.reject.input>;
+
+/** revision router — build spec §5.8 / §6. */
+export const revisionImpl = {
+  /** Runs the revision pass; 2 credits charged on completion. */
+  async run({ ctx, input }: HandlerOpts<RunInput>) {
+    const deps = await getEngineDeps();
+    const script = await deps.store.getScript(ctx.workspaceId, input.scriptId);
+    if (script === null) notFound("script");
+    const payload = {
+      workspaceId: input.workspaceId,
+      scriptId: input.scriptId,
+      ...(input.guidance !== undefined ? { guidance: input.guidance } : {}),
+      actorUserId: ctx.userId as string,
+    };
+    await dispatchPipelineJob(QUEUE_NAMES.script, JOB_NAMES.revisionPass, payload, () =>
+      handleRevisionPassJob(payload),
+    );
+    return jobAccepted();
+  },
+
+  async list({ ctx, input }: HandlerOpts<ListInput>): Promise<Revision[]> {
+    const deps = await getEngineDeps();
+    const script = await deps.store.getScript(ctx.workspaceId, input.scriptId);
+    if (script === null) notFound("script");
+    return deps.store.listRevisions(ctx.workspaceId, input.scriptId);
+  },
+
+  /**
+   * Accept one suggestion: diff ops applied to the section body, revision
+   * marked accepted, script version++ and stats refreshed — atomically.
+   */
+  async accept({
+    ctx,
+    input,
+  }: HandlerOpts<AcceptInput>): Promise<{ revision: Revision; section: ScriptSection }> {
+    const deps = await getEngineDeps();
+    const revision = await deps.store.getRevision(ctx.workspaceId, input.revisionId);
+    if (revision === null) notFound("revision");
+    if (revision.status !== "pending") {
+      badRequest(`revision is already ${revision.status}`);
+    }
+    const section = await deps.store.getSection(ctx.workspaceId, revision.sectionId);
+    if (section === null) notFound("section");
+    if (section.locked) badRequest("section is locked — unlock it before applying revisions");
+    let newBody: string;
+    try {
+      newBody = applyDiffOps(section.body, revision.diff);
+    } catch (err) {
+      if (err instanceof DiffApplyError) {
+        badRequest(`suggestion no longer applies: ${err.message}`);
+      }
+      throw err;
+    }
+    // Recompute script stats with the new body in place.
+    const sections = await deps.store.listSections(ctx.workspaceId, revision.scriptId);
+    const text = sections.map((s) => (s.id === section.id ? newBody : s.body)).join("\n\n");
+    const words = countWords(text);
+    return deps.store.applyRevision({
+      workspaceId: ctx.workspaceId,
+      revisionId: revision.id,
+      sectionId: section.id,
+      scriptId: revision.scriptId,
+      newBody,
+      newEstSeconds: estimateSecondsForText(newBody),
+      newStats: {
+        words,
+        estRuntimeS: estimateSeconds(words),
+        readability: fleschReadingEase(text),
+      },
+    });
+  },
+
+  async reject({ ctx, input }: HandlerOpts<RejectInput>): Promise<Revision> {
+    const deps = await getEngineDeps();
+    const existing = await deps.store.getRevision(ctx.workspaceId, input.revisionId);
+    if (existing === null) notFound("revision");
+    if (existing.status !== "pending") {
+      badRequest(`revision is already ${existing.status}`);
+    }
+    const revision = await deps.store.rejectRevision(ctx.workspaceId, input.revisionId);
+    if (revision === null) notFound("revision");
+    return revision;
+  },
+} as const;
