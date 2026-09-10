@@ -1,0 +1,1 @@
+ALTER TYPE "public"."credit_reason" ADD VALUE 'overage' BEFORE 'plan_grant';

@@ -113,6 +113,7 @@ export const CREDIT_REASONS = [
   "research_run",
   "avatar_regen",
   "purchase",
+  "overage",
   "plan_grant",
   "refund",
   "adjustment",

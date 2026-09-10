@@ -97,7 +97,7 @@ export const workspaces = pgTable(
     creditBalance: integer("credit_balance").notNull().default(0),
     billingCycleAnchor: timestamp("billing_cycle_anchor", { withTimezone: true }),
     // -- B3 billing columns (approved narrow frozen-layer change: nullable
-    //    columns on workspaces only — see REQUESTS-B3.md) ------------------
+    //    columns on workspaces only — approved narrow class, v1.1) ---------
     /** Active Stripe subscription backing the paid plan. */
     stripeSubscriptionId: text("stripe_subscription_id"),
     /** End of the current billing period (from Stripe); cycle progress + downgrade boundary. */

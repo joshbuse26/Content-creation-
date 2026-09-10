@@ -23,6 +23,8 @@ export const CREDIT_COSTS = {
   researchRun: 1,
   titles: 1,
   avatarRegen: 1,
+  /** Extra user-requested idea batch (spec §7; daily scheduled runs are free). */
+  ideaBatch: 1,
 } as const;
 
 /** Current balance, or null when the workspace does not exist. */

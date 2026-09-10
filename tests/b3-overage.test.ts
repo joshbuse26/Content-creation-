@@ -82,7 +82,7 @@ describe("allow-and-meter (spec §7 overage)", () => {
     expect(metered[0]?.idempotencyKey).toMatch(/^overage:/);
 
     expect(store.ledger).toHaveLength(1);
-    expect(store.ledger[0]).toMatchObject({ delta: 4, reason: "purchase" });
+    expect(store.ledger[0]).toMatchObject({ delta: 4, reason: "overage" });
     expect(balance()).toBe(6); // topped up so the completion charge lands at 0
 
     const workspace = await store.getWorkspace(WORKSPACE_ID);

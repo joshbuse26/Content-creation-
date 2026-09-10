@@ -9,6 +9,7 @@ import {
 } from "@/lib/types/pipeline";
 import { generateJson } from "@/pipelines/script/llm-json";
 import { PipelineRunner } from "@/queue/pipeline-runner";
+import { CREDIT_COSTS } from "@/server/credits";
 import type { IdeationDeps } from "./deps";
 import { synthIdeas } from "./fixture-content";
 import { dailyIdeasPrompt, ideationStageHash } from "./prompts";
@@ -33,7 +34,7 @@ export const OUTLIER_CONTEXT_LIMIT = 20;
 /** "Fresh" outliers = published inside this window. */
 export const FRESH_OUTLIER_DAYS = 90;
 export const DEDUP_WINDOW_DAYS = 30;
-export const IDEA_BATCH_CREDIT_COST = 1;
+export const IDEA_BATCH_CREDIT_COST = CREDIT_COSTS.ideaBatch;
 
 export interface DailyIdeasParams {
   input: unknown;
