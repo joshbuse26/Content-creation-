@@ -1,0 +1,31 @@
+{
+  "comment": "Reviewed FALSE POSITIVES of the capitalized-name heuristic in tests/c3-seed-lint.test.ts — fictional personas, title-case headline phrases, and archetype display names. NONE of these may be a real person or creator; review every addition.",
+  "allowlist": [
+    "Stakes Challenge",
+    "Calm Explainer",
+    "Data Storyteller",
+    "Investigative Narrator",
+    "Rapid Listicle",
+    "Contrarian Essayist",
+    "Friendly Coach",
+    "Deadpan Comedian",
+    "Hype Gamer",
+    "Cozy Vlogger",
+    "Time Confessional",
+    "Casey Rivera",
+    "Deep Dive",
+    "Budget Grinders",
+    "Espresso Setup",
+    "Blind Test",
+    "Tested Budget",
+    "Test Results",
+    "Espresso Money",
+    "Actually Goes",
+    "Premium Pick",
+    "Mistake Cost",
+    "Actually Matter",
+    "Full Test",
+    "Blind Testing",
+    "Pick Won"
+  ]
+}
