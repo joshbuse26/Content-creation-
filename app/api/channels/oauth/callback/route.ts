@@ -57,7 +57,9 @@ export async function GET(req: Request): Promise<Response> {
   if (code === null || state === null) {
     return redirectToChannels(config.APP_URL, "missing_code");
   }
-  const rawWorkspaceId = verifyOauthState(state);
+  // Verified against the signature, a 10-minute expiry, and the initiating
+  // user — a state minted for someone else's session is rejected.
+  const rawWorkspaceId = verifyOauthState(state, sessionUserId);
   const parsedWorkspace = workspaceIdSchema.safeParse(rawWorkspaceId);
   if (rawWorkspaceId === null || !parsedWorkspace.success) {
     return redirectToChannels(config.APP_URL, "bad_state");

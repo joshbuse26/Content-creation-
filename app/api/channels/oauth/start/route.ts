@@ -67,6 +67,6 @@ export async function GET(req: Request): Promise<Response> {
   consent.searchParams.set("access_type", "offline");
   consent.searchParams.set("prompt", "consent");
   consent.searchParams.set("include_granted_scopes", "true");
-  consent.searchParams.set("state", signOauthState(workspaceId));
+  consent.searchParams.set("state", signOauthState(workspaceId, sessionUserId));
   return NextResponse.redirect(consent);
 }
