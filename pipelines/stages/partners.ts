@@ -74,14 +74,15 @@ export function setPartnerSourceForTests(source: PartnerSource | undefined): voi
 }
 
 /**
- * Resolve an enabled partner's style card or throw a clear, typed error:
+ * Record-level partner checks (existence + enabled), shared by generation
+ * dispatch (via resolvePartnerCard) and project.setGenerationTarget:
  * unknown id → NOT_FOUND; disabled (= unlicensed, per the DB CHECK) →
- * FORBIDDEN; enabled but no card authored yet → PRECONDITION_FAILED.
+ * FORBIDDEN.
  */
-export async function resolvePartnerCard(
+export async function requireEnabledPartner(
   partnerId: string,
   source: PartnerSource = getPartnerSource(),
-): Promise<StyleCard> {
+): Promise<PartnerRecord> {
   const partner = await source.get(partnerId);
   if (partner === null) {
     throw new TRPCError({ code: "NOT_FOUND", message: "partner not found" });
@@ -92,6 +93,19 @@ export async function resolvePartnerCard(
       message: "This partner voice is not enabled — a signed license is required first.",
     });
   }
+  return partner;
+}
+
+/**
+ * Resolve an enabled partner's style card or throw a clear, typed error:
+ * unknown id → NOT_FOUND; disabled (= unlicensed, per the DB CHECK) →
+ * FORBIDDEN; enabled but no card authored yet → PRECONDITION_FAILED.
+ */
+export async function resolvePartnerCard(
+  partnerId: string,
+  source: PartnerSource = getPartnerSource(),
+): Promise<StyleCard> {
+  const partner = await requireEnabledPartner(partnerId, source);
   if (partner.styleCard === null) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",

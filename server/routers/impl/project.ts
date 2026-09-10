@@ -2,9 +2,11 @@ import { TRPCError } from "@trpc/server";
 import type { z } from "zod";
 import { hasDb } from "@/db";
 import { getArchetypeSeed } from "@/lib/archetypes";
+import { generationTargetColumns } from "@/lib/generation-target";
 import type { projectContracts } from "@/lib/types/api";
 import type { Project } from "@/lib/types/entities";
 import { getEngineDeps } from "@/pipelines/script/deps";
+import { requireEnabledPartner } from "@/pipelines/stages/partners";
 import { DrizzleChannelRepo, getSharedMemoryStore } from "@/server/channel/repo";
 import type { ProjectPatch } from "@/pipelines/script/store";
 import { assertGenerationTargetAllowed } from "@/server/modes";
@@ -97,15 +99,14 @@ export const projectHandlers = {
         throw new TRPCError({ code: "NOT_FOUND", message: "archetype not found" });
       }
     }
-    const patch: ProjectPatch =
-      generation === null
-        ? { generationMode: null, archetypeId: null, crossover: null, partnerId: null }
-        : {
-            generationMode: generation.mode,
-            archetypeId: generation.archetypeId,
-            crossover: generation.crossover,
-            partnerId: generation.partnerId,
-          };
+    // Partner ids get the SAME record-level checks the dispatch sites run
+    // (adversarial F8): the flag guard above cannot verify the row — an
+    // unknown or unlicensed partner must never land in a project row.
+    if (generation !== null && generation.mode === "partnered_named" && generation.partnerId !== null) {
+      await requireEnabledPartner(generation.partnerId);
+    }
+    // Normalized: fields outside the target's mode are stored NULL.
+    const patch: ProjectPatch = generationTargetColumns(generation);
     const deps = await getEngineDeps();
     const project = await deps.store.updateProject(ctx.workspaceId, input.projectId, patch);
     if (project === null) notFound("project");

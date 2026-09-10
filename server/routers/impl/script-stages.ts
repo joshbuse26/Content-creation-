@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { LLM_MODELS } from "@/lib/config";
+import { generationTargetColumns } from "@/lib/generation-target";
 import type { Channel, Frame, GenerationTarget, StyleCard } from "@/lib/types/entities";
 import {
   topicCandidateSchema,
@@ -299,10 +300,8 @@ export const scriptStagesImpl = {
       workspaceId: ctx.workspaceId,
       projectId: input.projectId,
       voiceProfileId: input.voiceProfileId,
-      generationMode: input.generation?.mode ?? null,
-      archetypeId: input.generation?.archetypeId ?? null,
-      crossover: input.generation?.crossover ?? null,
-      partnerId: input.generation?.partnerId ?? null,
+      // Normalized mode columns (F8): no cross-mode residue on script rows.
+      ...generationTargetColumns(input.generation),
     });
     await store.updateProjectStatus(ctx.workspaceId, input.projectId, "scripting");
 
