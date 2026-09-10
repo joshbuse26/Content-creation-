@@ -9,6 +9,7 @@ import { trpc } from "@/components/providers/trpc";
 import { useWorkspace } from "@/components/providers/workspace-context";
 import { ErrorState } from "@/components/ui/state";
 import { ProjectStatusBadge } from "./status-badge";
+import { ProjectStyleRow } from "./project-style";
 
 const stageTabs = [
   { slug: "research", label: "Research" },
@@ -90,7 +91,10 @@ export function ProjectFrame({ children }: { children: ReactNode }) {
           }}
         />
       ) : (
-        children
+        <>
+          <ProjectStyleRow projectId={projectId} />
+          {children}
+        </>
       )}
     </div>
   );
