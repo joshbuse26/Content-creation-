@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { skipToken } from "@tanstack/react-query";
 import { SCRIPT_STAGES, type ScriptStage } from "@/lib/types/pipeline";
 import { trpc } from "@/components/providers/trpc";
@@ -29,13 +30,39 @@ const stageLabels: Record<ScriptStage, string> = {
 export function GeneratePanel() {
   const { workspaceId } = useWorkspace();
   const projectId = useProjectId();
-  const { state, elapsedS, simulated, start } = useScriptStream();
+  const { state, elapsedS, simulated, start, retry } = useScriptStream();
+  const [resuming, setResuming] = useState(false);
+  const resumeTriedRef = useRef(false);
 
   const framesQuery = trpc.frame.list.useQuery(
     workspaceId !== null ? { workspaceId, projectId } : skipToken,
   );
+  // Re-attach to an in-flight generation: if the project's latest script is
+  // still being generated, open its SSE stream (the replay endpoint restores
+  // history) instead of showing a pay-again button.
+  const versionsQuery = trpc.script.listVersions.useQuery(
+    workspaceId !== null ? { workspaceId, projectId } : skipToken,
+  );
+  const latestScript = useMemo(
+    () => [...(versionsQuery.data ?? [])].sort((a, b) => b.version - a.version)[0],
+    [versionsQuery.data],
+  );
+  useEffect(() => {
+    if (resumeTriedRef.current || workspaceId === null || state.phase !== "idle") return;
+    if (
+      latestScript !== undefined &&
+      (latestScript.status === "outlining" || latestScript.status === "drafting")
+    ) {
+      resumeTriedRef.current = true;
+      setResuming(true);
+      start(latestScript.id, workspaceId);
+    }
+  }, [latestScript, workspaceId, state.phase, start]);
+
   const generateMutation = trpc.script.generate.useMutation({
     onSuccess: (res, variables) => {
+      resumeTriedRef.current = true; // a fresh run supersedes any resume
+      setResuming(false);
       start(res.scriptId, variables.workspaceId);
     },
   });
@@ -98,6 +125,7 @@ export function GeneratePanel() {
           <Button
             variant="primary"
             busy={generateMutation.isPending || running}
+            disabled={state.phase === "stalled"}
             onClick={() => {
               generateMutation.mutate({
                 workspaceId,
@@ -111,7 +139,9 @@ export function GeneratePanel() {
             {state.phase === "complete" || state.phase === "failed"
               ? "Generate again (6 credits)"
               : running
-                ? "Writing…"
+                ? resuming
+                  ? "Resuming…"
+                  : "Writing…"
                 : "Generate script (6 credits)"}
           </Button>
         </div>
@@ -125,6 +155,11 @@ export function GeneratePanel() {
       {simulated ? (
         <p className="text-xs text-zinc-400 dark:text-zinc-500">
           Fixture replay — live stream endpoint not available in this environment.
+        </p>
+      ) : null}
+      {resuming && running ? (
+        <p className="text-xs text-emerald-700 dark:text-emerald-400">
+          Resuming — reconnected to a generation that was already in progress.
         </p>
       ) : null}
 
@@ -154,6 +189,21 @@ export function GeneratePanel() {
 
           {/* Streaming sections */}
           <div className="space-y-3">
+            {state.phase === "stalled" ? (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+                <IconWarning size={16} className="mt-0.5 shrink-0" />
+                <div className="flex-1">
+                  <p className="font-medium">Live connection lost</p>
+                  <p className="mt-0.5">
+                    The pipeline may still be running server-side. Reconnect to pick up where it
+                    left off — no credits are charged for reconnecting.
+                  </p>
+                  <Button size="sm" variant="primary" className="mt-2" onClick={retry}>
+                    Reconnect
+                  </Button>
+                </div>
+              </div>
+            ) : null}
             {state.failure !== null ? (
               <div className="flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
                 <IconWarning size={16} className="mt-0.5 shrink-0" />

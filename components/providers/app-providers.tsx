@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
 import superjson from "superjson";
+import { ToastProvider } from "@/components/ui/toast";
 import { trpc } from "./trpc";
 import { WorkspaceProvider } from "./workspace-context";
 
@@ -34,7 +35,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
-        <WorkspaceProvider>{children}</WorkspaceProvider>
+        <ToastProvider>
+          <WorkspaceProvider>{children}</WorkspaceProvider>
+        </ToastProvider>
       </QueryClientProvider>
     </trpc.Provider>
   );

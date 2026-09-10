@@ -10,6 +10,7 @@ import { Button, IconButton } from "@/components/ui/button";
 import { TextInput } from "@/components/ui/field";
 import { IconCopy, IconPlus, IconSparkle, IconTrash } from "@/components/ui/icons";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
+import { useToast } from "@/components/ui/toast";
 import { fmtDuration, parseDuration } from "@/components/lib/format";
 
 /** Editable chapter list (derived from section runtimes, then hand-tuned). */
@@ -17,6 +18,7 @@ export function ChaptersPanel() {
   const { workspaceId } = useWorkspace();
   const projectId = useProjectId();
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const [draft, setDraft] = useState<{ ts: string; label: string }[] | null>(null);
   const [parseError, setParseError] = useState(false);
 
@@ -31,11 +33,17 @@ export function ChaptersPanel() {
       setDraft(null);
       invalidate();
     },
+    onError: () => {
+      toast("Could not derive chapters — try again.");
+    },
   });
   const updateMutation = trpc.chapters.update.useMutation({
     onSuccess: () => {
       setDraft(null);
       invalidate();
+    },
+    onError: () => {
+      toast("Could not save the chapters — your edits are still in the editor.");
     },
   });
 

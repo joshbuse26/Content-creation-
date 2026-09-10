@@ -8,19 +8,36 @@ import { SyncStatusBadge } from "@/components/projects/status-badge";
 import { Button } from "@/components/ui/button";
 import { IconRefresh, IconTrash } from "@/components/ui/icons";
 import { LoadingState } from "@/components/ui/state";
+import { PipelineStatusNote } from "@/components/ui/pipeline-note";
+import { useToast } from "@/components/ui/toast";
 import { fmtDateTime } from "@/components/lib/format";
+import { usePipelinePoll } from "@/components/lib/use-pipeline-poll";
 
 export function ChannelsSettingsPanel() {
   const { workspaceId, channels, selectChannel } = useWorkspace();
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const invalidate = () => {
     if (workspaceId !== null) void utils.channel.list.invalidate({ workspaceId });
   };
-  const syncMutation = trpc.channel.sync.useMutation({ onSuccess: invalidate });
+  // Channel sync runs as a queued pipeline — poll until statuses change.
+  const syncPoll = usePipelinePoll(invalidate, channels);
+  const syncMutation = trpc.channel.sync.useMutation({
+    onSuccess: () => {
+      invalidate();
+      syncPoll.begin();
+    },
+    onError: () => {
+      toast("Could not start the channel sync — try again.");
+    },
+  });
   const disconnectMutation = trpc.channel.disconnect.useMutation({
     onSuccess: () => {
       selectChannel(null);
       invalidate();
+    },
+    onError: () => {
+      toast("Could not disconnect the channel — it is still connected.");
     },
   });
 
@@ -28,6 +45,10 @@ export function ChannelsSettingsPanel() {
 
   return (
     <div className="space-y-6">
+      <PipelineStatusNote
+        poll={syncPoll}
+        working="Sync queued — statuses refresh when the pipeline finishes."
+      />
       <ul className="divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200 bg-white dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">
         {channels.length === 0 ? (
           <li className="px-4 py-6 text-center text-sm text-zinc-400">No channels connected.</li>

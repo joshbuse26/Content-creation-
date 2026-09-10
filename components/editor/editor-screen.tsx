@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { skipToken } from "@tanstack/react-query";
 import type { Revision, ScriptSection } from "@/lib/types/entities";
 import type { ScriptId } from "@/lib/types/ids";
@@ -13,20 +13,24 @@ import { Button } from "@/components/ui/button";
 import { Dropdown, DropdownItem } from "@/components/ui/dropdown";
 import { IconHistory, IconSparkle, IconWarning } from "@/components/ui/icons";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
+import { PipelineStatusNote } from "@/components/ui/pipeline-note";
+import { useToast } from "@/components/ui/toast";
 import { fmtDate, fmtDuration, fmtNumber } from "@/components/lib/format";
-import { fixtureHookCandidates } from "@/components/generation/stream-fixtures";
+import { usePipelinePoll } from "@/components/lib/use-pipeline-poll";
 import { loadHookCandidates } from "./hook-store";
 import { ExportMenu } from "./export-menu";
 import { HookSwitcher } from "./hook-switcher";
 import { RevisionCard } from "./revision-card";
 import { SectionCard } from "./section-card";
-import { applyDiffOps } from "./logic/diff";
 import { moveSection } from "./logic/reorder";
 import {
   initReviewState,
+  isRevisionStale,
   pendingCount,
+  previewBodyFor,
   reviewReducer,
   type Decision,
+  type RevisionLite,
   type RevisionReviewState,
 } from "./logic/revision-state";
 import { totalsFor } from "./logic/stats";
@@ -37,6 +41,7 @@ export function EditorScreen() {
   const { workspaceId } = useWorkspace();
   const projectId = useProjectId();
   const utils = trpc.useUtils();
+  const { toast } = useToast();
 
   // ---- versions -----------------------------------------------------------
   const versionsQuery = trpc.script.listVersions.useQuery(
@@ -47,6 +52,11 @@ export function EditorScreen() {
     [versionsQuery.data],
   );
   const [pickedScriptId, setPickedScriptId] = useState<ScriptId | null>(null);
+  // A picked version belongs to one project — reset it when the project
+  // changes so another project never renders a stale script.
+  useEffect(() => {
+    setPickedScriptId(null);
+  }, [projectId]);
   const scriptId = pickedScriptId ?? versions[0]?.id ?? null;
 
   // ---- script + sections (local overlay for reorder/edits) ---------------
@@ -67,51 +77,109 @@ export function EditorScreen() {
   );
   const revisions = useMemo(() => revisionsQuery.data ?? [], [revisionsQuery.data]);
   const [review, setReview] = useState<RevisionReviewState | null>(null);
+  // Latest review state for mutation callbacks (avoids side effects inside
+  // setState updaters and stale closures across sequential accepts).
+  const reviewRef = useRef<RevisionReviewState | null>(null);
   useEffect(() => {
-    if (revisions.length === 0) {
+    reviewRef.current = review;
+  }, [review]);
+  useEffect(() => {
+    if (revisions.length === 0 || scriptQuery.data === undefined) {
       setReview(null);
       return;
     }
-    setSections((current) => {
-      const bodies = Object.fromEntries(current.map((s) => [s.id as string, s.body]));
-      const serverDecisions = Object.fromEntries(revisions.map((r) => [r.id as string, r.status]));
-      setReview(
-        initReviewState(
-          revisions.map((r) => ({ id: r.id, sectionId: r.sectionId, diff: r.diff })),
-          bodies,
-          serverDecisions,
-        ),
-      );
-      return current;
-    });
-  }, [revisions]);
+    // Baseline bodies come from the server payload: revision diff ops target
+    // the persisted section bodies, and already-accepted revisions are baked
+    // into them server-side.
+    const bodies = Object.fromEntries(
+      scriptQuery.data.sections.map((s) => [s.id as string, s.body]),
+    );
+    const serverDecisions = Object.fromEntries(revisions.map((r) => [r.id as string, r.status]));
+    setReview(
+      initReviewState(
+        revisions.map((r) => ({ id: r.id, sectionId: r.sectionId, diff: r.diff })),
+        bodies,
+        serverDecisions,
+      ),
+    );
+  }, [revisions, scriptQuery.data]);
 
   // ---- mutations ----------------------------------------------------------
+  const invalidateScript = () => {
+    if (workspaceId !== null && scriptId !== null) {
+      void utils.script.get.invalidate({ workspaceId, scriptId });
+    }
+  };
+  const invalidateRevisions = () => {
+    if (workspaceId !== null && scriptId !== null) {
+      void utils.revision.list.invalidate({ workspaceId, scriptId });
+    }
+  };
+  // Section regeneration and revision passes run as queued pipelines — poll
+  // until their results land (fixture mode updates synchronously; the
+  // invalidate covers that, the poll covers queued mode).
+  const regenPoll = usePipelinePoll(invalidateScript, scriptQuery.data);
+  const revisionPoll = usePipelinePoll(invalidateRevisions, revisionsQuery.data);
+
+  // Explicit rollback for optimistic section edits: reset local overlay from
+  // the cached server payload (an invalidate alone is not enough — identical
+  // refetched data keeps its reference, so the sync effect would not refire).
+  const rollbackSections = () => {
+    if (workspaceId !== null && scriptId !== null) {
+      const cached = utils.script.get.getData({ workspaceId, scriptId });
+      if (cached !== undefined) {
+        setSections([...cached.sections].sort((a, b) => a.position - b.position));
+      }
+    }
+    invalidateScript();
+  };
+
   const updateSectionMutation = trpc.script.updateSection.useMutation({
     onError: () => {
-      if (workspaceId !== null && scriptId !== null) {
-        void utils.script.get.invalidate({ workspaceId, scriptId });
-      }
+      rollbackSections();
+      toast("Could not save the section — your change was reverted.");
     },
   });
-  const lockMutation = trpc.script.setSectionLock.useMutation();
+  const lockMutation = trpc.script.setSectionLock.useMutation({
+    onError: () => {
+      rollbackSections();
+      toast("Could not change the section lock — reverted.");
+    },
+  });
   const reorderMutation = trpc.script.reorderSections.useMutation({
     onError: () => {
-      if (workspaceId !== null && scriptId !== null) {
-        void utils.script.get.invalidate({ workspaceId, scriptId });
-      }
+      rollbackSections();
+      toast("Could not save the new section order — reverted.");
     },
   });
-  const regenMutation = trpc.script.regenerateSection.useMutation();
+  const regenMutation = trpc.script.regenerateSection.useMutation({
+    onSuccess: () => {
+      invalidateScript();
+      regenPoll.begin();
+    },
+    onError: () => {
+      toast("Could not queue the section regeneration — try again.");
+    },
+  });
   const runRevisionMutation = trpc.revision.run.useMutation({
     onSuccess: () => {
-      if (workspaceId !== null && scriptId !== null) {
-        void utils.revision.list.invalidate({ workspaceId, scriptId });
-      }
+      invalidateRevisions();
+      revisionPoll.begin();
+    },
+    onError: () => {
+      toast("Could not start the revision pass — try again.");
     },
   });
-  const acceptMutation = trpc.revision.accept.useMutation();
-  const rejectMutation = trpc.revision.reject.useMutation();
+  const acceptMutation = trpc.revision.accept.useMutation({
+    onError: () => {
+      toast("Could not accept the suggestion — nothing was applied.");
+    },
+  });
+  const rejectMutation = trpc.revision.reject.useMutation({
+    onError: () => {
+      toast("Could not reject the suggestion — it stays pending.");
+    },
+  });
 
   if (workspaceId === null || versionsQuery.isLoading)
     return <LoadingState label="Loading script…" />;
@@ -140,6 +208,16 @@ export function EditorScreen() {
       />
     );
   }
+  if (scriptQuery.isError) {
+    return (
+      <ErrorState
+        message="Could not load the script."
+        onRetry={() => {
+          void scriptQuery.refetch();
+        }}
+      />
+    );
+  }
   if (scriptQuery.isLoading || scriptQuery.data === undefined) {
     return <LoadingState label="Loading script…" />;
   }
@@ -147,9 +225,9 @@ export function EditorScreen() {
   const { script, qualityReport } = scriptQuery.data;
   const totals = totalsFor(sections.map((s) => s.body));
   // Server-persisted candidates first (script.get), then the localStorage
-  // bridge (survives web-process restarts), then fixture defaults.
-  const hookCandidates =
-    scriptQuery.data.hookCandidates ?? loadHookCandidates(scriptId) ?? fixtureHookCandidates;
+  // bridge (survives web-process restarts). NEVER fixture defaults: demo
+  // copy must not be one click away from persisting into a real script.
+  const hookCandidates = scriptQuery.data.hookCandidates ?? loadHookCandidates(scriptId) ?? [];
   const pending = review !== null ? pendingCount(review) : 0;
 
   const saveSection = (section: ScriptSection, fields: { heading?: string; body?: string }) => {
@@ -158,26 +236,31 @@ export function EditorScreen() {
   };
 
   const decide = (revision: Revision, decision: "accepted" | "rejected") => {
-    const lite = {
-      id: revision.id as string,
-      sectionId: revision.sectionId as string,
+    const lite: RevisionLite = {
+      id: revision.id,
+      sectionId: revision.sectionId,
       diff: revision.diff,
     };
     if (decision === "accepted") {
+      // Never send an accept for a suggestion that no longer applies cleanly.
+      if (reviewRef.current !== null && isRevisionStale(reviewRef.current, lite)) return;
       acceptMutation.mutate(
         { workspaceId, revisionId: revision.id },
         {
           onSuccess: () => {
-            setReview((s) =>
-              s !== null ? reviewReducer(s, { type: "accept", revision: lite }) : s,
-            );
-            setSections((prev) =>
-              prev.map((s) =>
-                s.id === revision.sectionId
-                  ? { ...s, body: applyDiffOps(s.body, revision.diff) }
-                  : s,
-              ),
-            );
+            const current = reviewRef.current;
+            if (current === null) return;
+            // The reducer rebases: it reapplies all accepted ops (original
+            // line coordinates) against the original body, so earlier
+            // accepts never shift this one's line numbers.
+            const next = reviewReducer(current, { type: "accept", revision: lite });
+            setReview(next);
+            const body = next.bodies[lite.sectionId];
+            if (body !== undefined) {
+              setSections((prev) =>
+                prev.map((s) => (s.id === revision.sectionId ? { ...s, body } : s)),
+              );
+            }
           },
         },
       );
@@ -277,11 +360,10 @@ export function EditorScreen() {
         <ExportMenu workspaceId={workspaceId} scriptId={scriptId} />
       </div>
 
-      {runRevisionMutation.isSuccess ? (
-        <p className="rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-          Revision pass queued — suggestions appear in revision mode when ready.
-        </p>
-      ) : null}
+      <PipelineStatusNote
+        poll={revisionPoll}
+        working="Revision pass queued — suggestions appear in revision mode when ready."
+      />
 
       {/* Quality gate warnings */}
       {qualityReport !== null && (!qualityReport.passed || qualityReport.warnings.length > 0) ? (
@@ -324,9 +406,16 @@ export function EditorScreen() {
             />
           ) : (
             revisions.map((rev) => {
+              const lite: RevisionLite = {
+                id: rev.id,
+                sectionId: rev.sectionId,
+                diff: rev.diff,
+              };
               const section = sections.find((s) => s.id === rev.sectionId);
               const body = review?.bodies[rev.sectionId as string] ?? section?.body ?? "";
               const decision: Decision = review?.decisions[rev.id as string] ?? "pending";
+              const stale =
+                decision === "pending" && review !== null && isRevisionStale(review, lite);
               const busy =
                 (acceptMutation.isPending && acceptMutation.variables.revisionId === rev.id) ||
                 (rejectMutation.isPending && rejectMutation.variables.revisionId === rev.id);
@@ -336,7 +425,9 @@ export function EditorScreen() {
                   revision={rev}
                   sectionHeading={section?.heading ?? "Section"}
                   sectionBody={body}
+                  revisedBody={review !== null && !stale ? previewBodyFor(review, lite) : undefined}
                   decision={decision}
+                  stale={stale}
                   busy={busy}
                   onAccept={() => {
                     decide(rev, "accepted");
@@ -352,11 +443,10 @@ export function EditorScreen() {
       ) : (
         /* ---- Write mode ---- */
         <div className="space-y-3">
-          {regenMutation.isSuccess ? (
-            <p className="rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-              Section regeneration queued — it refreshes in place when the pipeline finishes.
-            </p>
-          ) : null}
+          <PipelineStatusNote
+            poll={regenPoll}
+            working="Section regeneration queued — it refreshes in place when the pipeline finishes."
+          />
           {sections.map((section, i) => (
             <SectionCard
               key={section.id}
@@ -367,15 +457,15 @@ export function EditorScreen() {
                 regenMutation.isPending && regenMutation.variables.sectionId === section.id
               }
               onMove={(direction) => {
-                setSections((prev) => {
-                  const moved = moveSection(prev, section.id as string, direction);
-                  if (moved === prev) return prev; // no-op (already at an edge)
-                  reorderMutation.mutate({
-                    workspaceId,
-                    scriptId,
-                    sectionIds: [...moved].sort((a, b) => a.position - b.position).map((s) => s.id),
-                  });
-                  return [...moved];
+                // Compute the next order from current state, THEN set state
+                // and fire the mutation — no side effects inside updaters.
+                const moved = moveSection(sections, section.id as string, direction);
+                if (moved === sections) return; // no-op (already at an edge)
+                setSections([...moved]);
+                reorderMutation.mutate({
+                  workspaceId,
+                  scriptId,
+                  sectionIds: [...moved].sort((a, b) => a.position - b.position).map((s) => s.id),
                 });
               }}
               onToggleLock={() => {
@@ -397,13 +487,20 @@ export function EditorScreen() {
               }}
               hookSlot={
                 section.kind === "hook" ? (
-                  <HookSwitcher
-                    candidates={hookCandidates}
-                    currentBody={section.body}
-                    onPick={(candidate) => {
-                      saveSection(section, { body: candidate.body });
-                    }}
-                  />
+                  hookCandidates.length > 0 ? (
+                    <HookSwitcher
+                      candidates={hookCandidates}
+                      currentBody={section.body}
+                      onPick={(candidate) => {
+                        saveSection(section, { body: candidate.body });
+                      }}
+                    />
+                  ) : (
+                    <p className="mb-3 text-xs text-zinc-400 dark:text-zinc-500">
+                      Hook candidates unavailable for this script — they are captured during
+                      generation and will appear after the next run.
+                    </p>
+                  )
                 ) : undefined
               }
             />

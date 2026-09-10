@@ -10,7 +10,12 @@ import {
 /** Pure reducer over the frozen SSE event union (lib/types/pipeline.ts). */
 
 export type StageStatus = "pending" | "running" | "done" | "failed";
-export type StreamPhase = "idle" | "running" | "complete" | "failed";
+/**
+ * "stalled": the SSE connection died mid-run (or could not be established in
+ * live mode) — the pipeline may still be running server-side; the UI offers a
+ * retry that re-opens the stream (the replay endpoint restores history).
+ */
+export type StreamPhase = "idle" | "running" | "complete" | "failed" | "stalled";
 
 export type StreamedSection = DraftOutput["sections"][number] & { position: number };
 

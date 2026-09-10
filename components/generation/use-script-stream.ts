@@ -10,8 +10,14 @@ import { buildFixtureStream } from "./stream-fixtures";
  * Consumes the script pipeline SSE stream
  * (GET /api/script-stream?workspaceId=…&scriptId=…, A2's route). Events
  * arrive with the SSE `event:` field set to the ScriptStreamEvent type and
- * the full JSON event in `data:`. If the endpoint errors before the first
- * event, the stream is replayed from fixtures with realistic pacing.
+ * the full JSON event in `data:`.
+ *
+ * Resilience: transient mid-stream errors are left to EventSource's
+ * auto-reconnect (the route replays history, so nothing is lost). After
+ * MAX_CONSECUTIVE_ERRORS without an event in between — or a terminal close —
+ * the phase surfaces as "stalled" with retry() re-opening the stream. The
+ * fixture replay runs ONLY under an explicit fixture-UI signal
+ * (NEXT_PUBLIC_FIXTURE_UI), never merely because the endpoint errored.
  */
 
 const STREAM_EVENT_TYPES = [
@@ -24,6 +30,13 @@ const STREAM_EVENT_TYPES = [
   "failed",
   "complete",
 ] as const;
+
+const MAX_CONSECUTIVE_ERRORS = 5;
+
+/** Explicit, build-time fixture-mode signal — never inferred from errors. */
+const FIXTURE_UI =
+  process.env.NEXT_PUBLIC_FIXTURE_UI === "1" || process.env.NEXT_PUBLIC_FIXTURE_UI === "true";
+
 export function useScriptStream() {
   const [state, setState] = useState<StreamState>(initialStreamState());
   const [elapsedS, setElapsedS] = useState(0);
@@ -33,7 +46,9 @@ export function useScriptStream() {
   const timersRef = useRef<number[]>([]);
   const startedAtRef = useRef<number | null>(null);
   const gotEventRef = useRef(false);
+  const errorCountRef = useRef(0);
   const scriptIdRef = useRef<string | null>(null);
+  const lastArgsRef = useRef<{ scriptId: string; workspaceId: string } | null>(null);
 
   const cleanup = useCallback(() => {
     sourceRef.current?.close();
@@ -57,15 +72,23 @@ export function useScriptStream() {
     };
   }, [state.phase]);
 
-  const dispatch = useCallback((raw: unknown) => {
-    const parsed = scriptStreamEventSchema.safeParse(raw);
-    if (!parsed.success) return;
-    const event = parsed.data;
-    if (event.type === "hooks" && scriptIdRef.current !== null) {
-      storeHookCandidates(scriptIdRef.current, event.candidates);
-    }
-    setState((s) => applyStreamEvent(s, event));
-  }, []);
+  const dispatch = useCallback(
+    (raw: unknown) => {
+      const parsed = scriptStreamEventSchema.safeParse(raw);
+      if (!parsed.success) return;
+      const event = parsed.data;
+      if (event.type === "hooks" && scriptIdRef.current !== null) {
+        storeHookCandidates(scriptIdRef.current, event.candidates);
+      }
+      if (event.type === "complete" || event.type === "failed") {
+        // The run is over — close before the server drop triggers
+        // EventSource's auto-reconnect loop.
+        cleanup();
+      }
+      setState((s) => applyStreamEvent(s, event));
+    },
+    [cleanup],
+  );
 
   const runSimulation = useCallback(() => {
     setSimulated(true);
@@ -79,11 +102,18 @@ export function useScriptStream() {
     }
   }, [dispatch]);
 
+  const markStalled = useCallback(() => {
+    // Never leave a spinner + timer running against a dead source.
+    setState((s) => (s.phase === "running" ? { ...s, phase: "stalled" } : s));
+  }, []);
+
   const start = useCallback(
     (scriptId: string, workspaceId: string) => {
       cleanup();
       gotEventRef.current = false;
+      errorCountRef.current = 0;
       scriptIdRef.current = scriptId;
+      lastArgsRef.current = { scriptId, workspaceId };
       startedAtRef.current = Date.now();
       setElapsedS(0);
       setSimulated(false);
@@ -95,12 +125,14 @@ export function useScriptStream() {
           `/api/script-stream?workspaceId=${encodeURIComponent(workspaceId)}&scriptId=${encodeURIComponent(scriptId)}`,
         );
       } catch {
-        runSimulation();
+        if (FIXTURE_UI) runSimulation();
+        else markStalled();
         return;
       }
       sourceRef.current = source;
       const onEvent = (msg: MessageEvent<string>) => {
         gotEventRef.current = true;
+        errorCountRef.current = 0;
         try {
           dispatch(JSON.parse(msg.data));
         } catch {
@@ -113,16 +145,37 @@ export function useScriptStream() {
         source.addEventListener(type, onEvent);
       }
       source.onerror = () => {
-        source.close();
-        sourceRef.current = null;
         if (!gotEventRef.current) {
-          // Endpoint not available — fall back to the fixture replay.
-          runSimulation();
+          // Could not establish the stream at all.
+          source.close();
+          sourceRef.current = null;
+          if (FIXTURE_UI) runSimulation();
+          else markStalled();
+          return;
         }
+        errorCountRef.current += 1;
+        if (
+          source.readyState === EventSource.CLOSED ||
+          errorCountRef.current >= MAX_CONSECUTIVE_ERRORS
+        ) {
+          // Terminal failure (or too many reconnect attempts) — surface it.
+          source.close();
+          sourceRef.current = null;
+          markStalled();
+          return;
+        }
+        // Transient mid-stream error: leave the source open and let
+        // EventSource auto-reconnect (the route replays history).
       };
     },
-    [cleanup, dispatch, runSimulation],
+    [cleanup, dispatch, markStalled, runSimulation],
   );
 
-  return { state, elapsedS, simulated, start };
+  /** Re-open the stream after a stall — the replay endpoint restores history. */
+  const retry = useCallback(() => {
+    const args = lastArgsRef.current;
+    if (args !== null) start(args.scriptId, args.workspaceId);
+  }, [start]);
+
+  return { state, elapsedS, simulated, start, retry };
 }

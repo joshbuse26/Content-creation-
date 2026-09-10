@@ -12,7 +12,9 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { TextInput, Label } from "@/components/ui/field";
 import { IconDoc, IconLink, IconSearch, IconTrash, IconUpload } from "@/components/ui/icons";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
+import { PipelineStatusNote } from "@/components/ui/pipeline-note";
 import { fmtDateTime, fmtNumber } from "@/components/lib/format";
+import { usePipelinePoll } from "@/components/lib/use-pipeline-poll";
 
 /**
  * Research screen: three source intakes (agent search, transcript import,
@@ -31,7 +33,16 @@ export function ResearchPanel() {
     if (workspaceId !== null) void utils.research.list.invalidate({ workspaceId, projectId });
   };
 
-  const searchMutation = trpc.research.search.useMutation({ onSuccess: invalidate });
+  // The research agent runs as a queued pipeline — poll the list until the
+  // brief lands (or give up visibly after a few minutes).
+  const searchPoll = usePipelinePoll(invalidate, listQuery.data);
+
+  const searchMutation = trpc.research.search.useMutation({
+    onSuccess: () => {
+      invalidate();
+      searchPoll.begin();
+    },
+  });
   const transcriptMutation = trpc.research.importTranscript.useMutation({ onSuccess: invalidate });
   const uploadMutation = trpc.research.upload.useMutation({ onSuccess: invalidate });
   const removeMutation = trpc.research.remove.useMutation({ onSuccess: invalidate });
@@ -101,11 +112,10 @@ export function ResearchPanel() {
               <Button type="submit" variant="primary" size="sm" busy={searchMutation.isPending}>
                 <IconSearch size={13} /> Run research
               </Button>
-              {searchMutation.isSuccess ? (
-                <p className="text-xs text-emerald-700 dark:text-emerald-400">
-                  Research queued — the brief appears below when ready.
-                </p>
-              ) : null}
+              <PipelineStatusNote
+                poll={searchPoll}
+                working="Research queued — the brief appears below when ready."
+              />
               {searchMutation.isError ? (
                 <p className="text-xs text-red-600 dark:text-red-400">Could not start the run.</p>
               ) : null}
