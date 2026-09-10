@@ -14,9 +14,9 @@ import {
 /**
  * Overage-aware credit gate (spec §7: $0.60/credit metered) — the drop-in
  * replacement for `requireCredits` from server/credits.ts, which stays
- * untouched (frozen). The integrator swaps the call at the five dispatch
- * sites (listed in REQUESTS-B3.md); signature is a superset, so the swap is
- * import-only.
+ * untouched (frozen). The five generation dispatch sites (script, revision,
+ * research, titles, avatar) call this instead; the signature is a superset
+ * of requireCredits, so the swap was import-only.
  *
  * Behavior:
  *  1. Read-only lockdown: a workspace whose failed-payment grace expired
@@ -25,10 +25,9 @@ import {
  *     requireCredits).
  *  3. Balance short + paid plan + under the overage ceiling → allow-and-
  *     meter: the shortfall is granted via an idempotent ledger entry
- *     (reason `purchase`, key `overage:…` — the frozen credit_reason enum
- *     has no `overage` member, see REQUESTS-B3.md) and reported to the
- *     Stripe billing meter, so the pipeline's normal completion charge
- *     still balances to zero and the customer pays $0.60/credit.
+ *     (reason `overage`, key `overage:…`) and reported to the Stripe
+ *     billing meter, so the pipeline's normal completion charge still
+ *     balances to zero and the customer pays $0.60/credit.
  *  4. Free plan, no Stripe customer, or ceiling reached → the familiar
  *     PRECONDITION_FAILED.
  *
@@ -103,7 +102,7 @@ export async function requireCreditsWithOverage(
   const granted = await store.recordCredits({
     workspaceId,
     delta: shortfall,
-    reason: "purchase", // metered credit purchase; key prefix `overage:` marks it (frozen enum has no `overage`)
+    reason: "overage", // first-class reason (integration pass approved the enum member)
     idempotencyKey,
     actorUserId: options.actorUserId ?? null,
   });

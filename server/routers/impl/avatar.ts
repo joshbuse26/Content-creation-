@@ -4,7 +4,8 @@ import type { avatarContracts, JobAccepted } from "@/lib/types/api";
 import type { AudienceAvatar } from "@/lib/types/entities";
 import { getChannelDomainDeps, type ChannelDomainDeps } from "@/server/channel/deps";
 import { getDefaultSyncEnqueuer, type SyncEnqueuer } from "@/server/channel/jobs";
-import { CREDIT_COSTS, requireCredits } from "@/server/credits";
+import { requireCreditsWithOverage } from "@/server/billing";
+import { CREDIT_COSTS } from "@/server/credits";
 import type { AvatarFieldsPatch } from "@/server/channel/repo";
 import type { WorkspaceHandlerCtx } from "./channel";
 
@@ -80,7 +81,7 @@ export function createAvatarHandlers(handlerDeps: AvatarHandlerDeps = defaultHan
     }): Promise<JobAccepted> {
       // 1 credit per user-triggered regeneration, gated at dispatch and
       // charged (idempotently) on completion by the avatar pipeline.
-      await requireCredits(opts.ctx.workspaceId, CREDIT_COSTS.avatarRegen);
+      await requireCreditsWithOverage(opts.ctx.workspaceId, CREDIT_COSTS.avatarRegen);
       const { channelRepo } = await handlerDeps.getDeps();
       const channel = await channelRepo.get(opts.ctx.workspaceId, opts.input.channelId);
       if (channel === null) throw notFound();

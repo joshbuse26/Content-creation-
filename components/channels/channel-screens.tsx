@@ -29,6 +29,8 @@ const CONNECT_ERROR_COPY: Record<string, string> = {
   no_refresh_token:
     "Google did not grant offline access. Remove the app from your Google account permissions and connect again.",
   no_channel: "That Google account has no YouTube channel to connect.",
+  channel_limit:
+    "This workspace has reached its plan's channel limit. Upgrade the plan to connect more channels.",
   connect_failed: "Connecting the channel failed partway through — please try again.",
 };
 

@@ -25,8 +25,8 @@ import { notFound } from "./_shared";
  *
  * Without STRIPE_SECRET_KEY (fixture/dev) checkout & portal return the same
  * deterministic URLs the pre-B3 stubs did, so the zero-key boot keeps
- * working. The integrator swaps the _contracts.ts stub bodies for these
- * handlers (REQUESTS-B3.md).
+ * working. The _contracts.ts bodies are wired to these handlers (v1.1
+ * integration pass).
  */
 
 interface HandlerCtx {

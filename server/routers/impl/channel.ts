@@ -5,6 +5,7 @@ import type { channelContracts } from "@/lib/types/api";
 import type { Channel, ChannelStatsSnapshot } from "@/lib/types/entities";
 import type { UserId, WorkspaceId } from "@/lib/types/ids";
 import type { JobAccepted } from "@/lib/types/api";
+import { assertChannelLimit, getBillingStore } from "@/server/billing";
 import { getChannelDomainDeps, type ChannelDomainDeps } from "@/server/channel/deps";
 import { getDefaultSyncEnqueuer, type SyncEnqueuer } from "@/server/channel/jobs";
 import { InvalidChannelRefError, parseChannelRef } from "@/server/channel/parse";
@@ -114,6 +115,12 @@ export function createChannelHandlers(handlerDeps: ChannelHandlerDeps = defaultH
         });
         return updated ?? existing;
       }
+
+      // Tier limit (spec §7) — checked only for genuinely NEW channels, so
+      // an idempotent reconnect above is never blocked by the cap.
+      const plan = (await getBillingStore().getWorkspace(opts.ctx.workspaceId))?.plan ?? "free";
+      const currentChannels = await channelRepo.list(opts.ctx.workspaceId);
+      assertChannelLimit(plan, currentChannels.length);
 
       const created = await channelRepo.create({
         workspaceId: opts.ctx.workspaceId,

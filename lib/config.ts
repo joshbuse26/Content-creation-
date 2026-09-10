@@ -57,6 +57,12 @@ const envSchema = z
 
     STRIPE_SECRET_KEY: optionalString,
     STRIPE_WEBHOOK_SECRET: optionalString,
+    /** Stripe price ids (price_…) or price lookup keys, one per paid tier
+     *  plus the metered overage price (server/billing/checkout.ts). */
+    STRIPE_PRICE_STARTER: optionalString,
+    STRIPE_PRICE_TEAM: optionalString,
+    STRIPE_PRICE_AGENCY: optionalString,
+    STRIPE_PRICE_OVERAGE: optionalString,
 
     RESEND_API_KEY: optionalString,
     EMAIL_FROM: z.preprocess(emptyToUndefined, z.string().default("Gin Rummy <login@localhost>")),

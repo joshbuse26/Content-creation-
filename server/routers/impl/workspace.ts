@@ -13,6 +13,7 @@ import {
 } from "@/lib/types/entities";
 import type { Role } from "@/lib/types/enums";
 import { asUserId, type UserId, type WorkspaceId } from "@/lib/types/ids";
+import { assertSeatLimit, getBillingStore } from "@/server/billing";
 import { getSharedWorkspaceStore } from "@/server/workspace/memory";
 import { badRequest, forbidden, notFound } from "./_shared";
 
@@ -184,11 +185,15 @@ export const workspaceHandlers = {
     if (opts.input.role === "owner") {
       badRequest("ownership is transferred via setRole, not invite");
     }
+    // Tier seat limit (spec §7) — enforced before the membership insert in
+    // both the fixture-store and db branches below.
+    const plan = (await getBillingStore().getWorkspace(opts.ctx.workspaceId))?.plan ?? "free";
     if (!hasDb()) {
       const store = getSharedWorkspaceStore();
       const user = store.findOrCreateUserByEmail(opts.input.email);
       const existing = store.membershipFor(opts.ctx.workspaceId, user.id);
       if (existing !== null) badRequest("that user is already a member of this workspace");
+      assertSeatLimit(plan, store.members(opts.ctx.workspaceId).length);
       return store.upsertMembership(opts.ctx.workspaceId, user.id, opts.input.role);
     }
     return await getDb().transaction(async (tx) => {
@@ -219,6 +224,11 @@ export const workspaceHandlers = {
         )
         .limit(1);
       if (existing.length > 0) badRequest("that user is already a member of this workspace");
+      const currentMembers = await tx
+        .select({ id: schema.memberships.id })
+        .from(schema.memberships)
+        .where(eq(schema.memberships.workspaceId, opts.ctx.workspaceId));
+      assertSeatLimit(plan, currentMembers.length);
       const inserted = await tx
         .insert(schema.memberships)
         .values({ workspaceId: opts.ctx.workspaceId, userId, role: opts.input.role })

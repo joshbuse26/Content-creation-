@@ -11,8 +11,8 @@ import { checkChannelLimit, checkSeatLimit, TIERS } from "@/server/billing/tiers
  *   - member invite: `server/routers/impl/workspace.ts` invite — call
  *     `assertSeatLimit(plan, currentMemberCount)` before inserting.
  *
- * B3 owns the helpers only; the integrator wires them into those impls
- * (exact lines in REQUESTS-B3.md). Errors are PRECONDITION_FAILED with
+ * B3 owns the helpers only; they are wired into those impls (v1.1
+ * integration pass). Errors are PRECONDITION_FAILED with
  * user-facing upgrade copy, matching requireCredits' failure shape.
  */
 

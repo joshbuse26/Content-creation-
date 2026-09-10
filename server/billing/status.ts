@@ -13,8 +13,8 @@ import {
 /**
  * Billing status for the settings UI — served by
  * GET /api/stripe/billing-status (the frozen billing.summary contract
- * cannot carry these fields; extending it is a frozen-layer request, see
- * REQUESTS-B3.md). Dates are ISO strings: this crosses a plain JSON route,
+ * cannot carry these fields; extending it is an open frozen-layer request,
+ * see OPEN-ITEMS.md). Dates are ISO strings: this crosses a plain JSON route,
  * not superjson-encoded tRPC.
  */
 

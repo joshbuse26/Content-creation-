@@ -6,6 +6,7 @@ import { logger } from "@/lib/logger";
 import { asUserId, workspaceIdSchema } from "@/lib/types/ids";
 import { getChannelDomainDeps } from "@/server/channel/deps";
 import { getDefaultSyncEnqueuer } from "@/server/channel/jobs";
+import { checkChannelLimit, getBillingStore } from "@/server/billing";
 import { connectOauthChannel } from "@/server/channel/oauth";
 import { verifyOauthState } from "@/server/channel/oauth-state";
 import { getRoleResolver } from "@/server/membership";
@@ -118,8 +119,19 @@ export async function GET(req: Request): Promise<Response> {
       return redirectToChannels(config.APP_URL, "no_channel");
     }
 
-    // 3. Hand off to A1's domain logic (encrypts + stores, queues sync+avatar).
+    // 3. Tier channel limit (spec §7) — only a genuinely NEW channel counts;
+    // an oauth RE-connect of an already-connected channel is never blocked.
     const deps = await getChannelDomainDeps();
+    const existingChannel = await deps.channelRepo.findByYoutubeId(workspaceId, channelId);
+    if (existingChannel === null) {
+      const plan = (await getBillingStore().getWorkspace(workspaceId))?.plan ?? "free";
+      const currentChannels = await deps.channelRepo.list(workspaceId);
+      if (!checkChannelLimit(plan, currentChannels.length).allowed) {
+        return redirectToChannels(config.APP_URL, "channel_limit");
+      }
+    }
+
+    // 4. Hand off to A1's domain logic (encrypts + stores, queues sync+avatar).
     await connectOauthChannel(deps, getDefaultSyncEnqueuer(), {
       workspaceId,
       channelIdOrHandle: channelId,

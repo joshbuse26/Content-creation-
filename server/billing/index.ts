@@ -1,7 +1,7 @@
 /**
  * B3 billing domain — tiers, limits, Stripe checkout/portal, webhook
  * handling, overage metering, and the overage-aware requireCredits
- * replacement. See REQUESTS-B3.md for the integrator wiring notes.
+ * replacement. Wiring decisions are logged in DECISIONS.md (v1.1 pass).
  */
 
 export {
