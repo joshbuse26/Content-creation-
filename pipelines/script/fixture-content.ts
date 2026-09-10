@@ -1,10 +1,12 @@
 import type { StyleCard } from "@/lib/types/entities";
+import type { HookStyle } from "@/lib/types/enums";
 import type {
   Outline,
   PlannedQueries,
   ProposedFrame,
   ResearchBrief,
   ScriptContext,
+  TopicCandidate,
 } from "@/lib/types/pipeline";
 import { TITLE_PATTERN_FAMILIES } from "@/prompts";
 import { countWords } from "./readability";
@@ -107,7 +109,13 @@ export function synthOutline(context: ScriptContext): Outline {
   const outroSeconds = 16;
   const introSeconds = Math.min(45, Math.max(30, Math.round(total * 0.06)));
   const chapterBudget = total - hookSeconds - ctaSeconds - outroSeconds - introSeconds;
-  const chapterCount = Math.max(2, Math.min(8, Math.round(chapterBudget / 150)));
+  // Wave C: a style card's pacing.sectionSeconds is the chapter-length norm
+  // (PRODUCT-CONTRACTS §1) — the outline honors it; 150s is the card-less
+  // legacy default. Clamped so the outline stays inside the frozen 30-section
+  // cap (24 chapters + hook/intro/cta/outro).
+  const sectionNorm = context.styleCard?.pacing.sectionSeconds ?? 150;
+  const maxChapters = context.styleCard === null ? 8 : 24;
+  const chapterCount = Math.max(2, Math.min(maxChapters, Math.round(chapterBudget / sectionNorm)));
   const per = Math.floor(chapterBudget / chapterCount);
   const chapterHeadings = [
     "The setup, and the rules",
@@ -173,22 +181,52 @@ export interface SynthHook {
   body: string;
 }
 
-export function synthHookCandidates(context: ScriptContext): SynthHook[] {
+/** Two deterministic body variants per technique, so a card that allows
+ *  fewer than three techniques still yields three DISTINCT candidates. */
+function hookBodyVariants(angle: string): Record<HookStyle, [string, string]> {
+  return {
+    open_loop: [
+      `There is one result in this test I still cannot fully explain. ${angle} — that was the plan, anyway. By the time we hit the third round, the plan fell apart, and the reason why changes how you should think about every choice like this one.`,
+      `One number in this test refused to behave, and it is the one everything else depends on. ${angle}. I am going to show you exactly where it broke, but not until you have seen what led up to it — because the order matters.`,
+    ],
+    bold_claim: [
+      `Most of what you have heard about this is wrong, and I can show you where. ${angle}. I put that idea through a real test, wrote down every number, and the winner is not the one the internet keeps telling you to buy.`,
+      `The popular advice on this fails a basic measurement, and nobody checks. ${angle}. I checked. The gap between what gets recommended and what actually performs is wider than I expected, and it points the other way.`,
+    ],
+    stakes: [
+      `The wrong call here costs you real money, and most people make it in the first five minutes. ${angle}. Before you spend another dollar, watch what happened when I actually measured it — because one of these choices is quietly wasting your cash.`,
+      `Get this one wrong and you pay for it twice — once at checkout, and again every day you use it. ${angle}. Here is the test that would have saved me from exactly that mistake.`,
+    ],
+    in_medias_res: [
+      `Round three. The cheap one is still standing, the expensive one is smoking, and I am staring at my notes wondering what I got wrong. ${angle} — that is how this started, three days and one ruined afternoon ago.`,
+      `The timer hits zero, the result is on the screen, and it is not the one I predicted on camera an hour earlier. ${angle}. Let me back up and show you how we got here.`,
+    ],
+  };
+}
+
+/**
+ * Three tagged hook candidates. With `allowed` (a style card's hookPatterns
+ * techniques, in preference order) the candidates CYCLE the allowed
+ * techniques — repeats take the second body variant so all three bodies
+ * stay distinct. Without it, the legacy trio (open_loop/bold_claim/stakes)
+ * is unchanged.
+ */
+export function synthHookCandidates(
+  context: ScriptContext,
+  allowed?: readonly HookStyle[] | null,
+): SynthHook[] {
   const angle = context.frame.angle.replace(/[.?!]+$/, "");
-  return [
-    {
-      style: "open_loop",
-      body: `There is one result in this test I still cannot fully explain. ${angle} — that was the plan, anyway. By the time we hit the third round, the plan fell apart, and the reason why changes how you should think about every choice like this one.`,
-    },
-    {
-      style: "bold_claim",
-      body: `Most of what you have heard about this is wrong, and I can show you where. ${angle}. I put that idea through a real test, wrote down every number, and the winner is not the one the internet keeps telling you to buy.`,
-    },
-    {
-      style: "stakes",
-      body: `The wrong call here costs you real money, and most people make it in the first five minutes. ${angle}. Before you spend another dollar, watch what happened when I actually measured it — because one of these choices is quietly wasting your cash.`,
-    },
-  ];
+  const variants = hookBodyVariants(angle);
+  const techniques: readonly HookStyle[] =
+    allowed !== undefined && allowed !== null && allowed.length > 0
+      ? allowed
+      : ["open_loop", "bold_claim", "stakes"];
+  return [0, 1, 2].map((i) => {
+    const style = techniques[i % techniques.length] ?? "open_loop";
+    const variant = Math.floor(i / techniques.length) % 2;
+    const [first, second] = variants[style];
+    return { style, body: variant === 0 ? first : second };
+  });
 }
 
 export function synthSectionBody(
@@ -262,6 +300,93 @@ export function synthVoiceRewrite(
     return `${connector} — ${body.charAt(0).toLowerCase()}${body.slice(1)}`;
   }
   return body;
+}
+
+// ---------------------------------------------------------------------------
+// Topic candidates (staged `script.topics`, PRODUCT-CONTRACTS §4)
+// ---------------------------------------------------------------------------
+
+export interface SynthTopicsInput {
+  /** Deterministic seed — channel id + generation-mode key. */
+  seed: string;
+  /** The channel's niche keywords (may be empty). */
+  nicheKeywords: readonly string[];
+  /** Titles of fresh niche outliers, best ratio first (may be empty). */
+  outlierTitles: readonly string[];
+  /** 1–5 energy from the resolved style card, 3 when no card. */
+  energy: number;
+  count: number;
+}
+
+const TOPIC_TEMPLATES: readonly { title: string; angle: string }[] = [
+  {
+    title: "The {kw} upgrade everyone buys first (and why it should be last)",
+    angle: "Reorder the standard {kw} buying advice using measured results, not habit.",
+  },
+  {
+    title: "I tracked 30 days of {kw} — here is what actually moved the needle",
+    angle: "A month of honest measurement, ranked by effect size.",
+  },
+  {
+    title: "Five beginner {kw} mistakes that quietly cost the most",
+    angle: "Rank the common mistakes by real cost, with the fix for each.",
+  },
+  {
+    title: "Cheap vs expensive {kw} — blind comparison",
+    angle: "Same task, both price points, judged blind.",
+  },
+  {
+    title: "What nobody tells you before your first year of {kw}",
+    angle: "The unglamorous fundamentals, told through one concrete story.",
+  },
+  {
+    title: "One week of {kw} using only the basics",
+    angle: "A constraint experiment that questions the upgrade treadmill.",
+  },
+  {
+    title: "The {kw} setting almost everyone gets wrong",
+    angle: "One high-leverage adjustment, demonstrated before/after.",
+  },
+  {
+    title: "Auditing my own first {kw} attempt",
+    angle: "Revisit early work with today's standards and extract the lessons.",
+  },
+  {
+    title: "The 80/20 of {kw} — what to practice first",
+    angle: "The minimum set of skills that produces most of the results.",
+  },
+  {
+    title: "Every {kw} buy I would repeat (and three I regret)",
+    angle: "A no-affiliate honesty pass over a year of purchases.",
+  },
+];
+
+/** Deterministic topic candidates bound to the channel's niche + outliers. */
+export function synthTopicCandidates(input: SynthTopicsInput): TopicCandidate[] {
+  const keywords = input.nicheKeywords.length > 0 ? input.nicheKeywords : ["this niche"];
+  const offset = fnv1a(`topics|${input.seed}|${keywords.join(",")}`) % TOPIC_TEMPLATES.length;
+  const out: TopicCandidate[] = [];
+  for (let i = 0; i < input.count; i++) {
+    const template = TOPIC_TEMPLATES[(offset + i) % TOPIC_TEMPLATES.length];
+    if (template === undefined) continue;
+    const kw = keywords[i % keywords.length] ?? "this niche";
+    const outlier = input.outlierTitles[i % Math.max(1, input.outlierTitles.length)];
+    const energyNote =
+      input.energy >= 4
+        ? "High-energy fit: the format sustains fast pacing."
+        : input.energy <= 2
+          ? "Low-key fit: the format rewards an unhurried read."
+          : "Neutral-energy fit for this voice.";
+    out.push({
+      title: template.title.replace("{kw}", kw).slice(0, 120),
+      angle: template.angle.replace("{kw}", kw).slice(0, 500),
+      rationale: (outlier !== undefined
+        ? `"${outlier}" is outperforming its channel median in this niche; this adapts that demand. ${energyNote}`
+        : `Maps onto the channel's "${kw}" niche with a proven format. ${energyNote}`
+      ).slice(0, 1000),
+    });
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------

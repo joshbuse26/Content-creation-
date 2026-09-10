@@ -1,6 +1,6 @@
 import type { ScriptContext } from "@/lib/types/pipeline";
 import type { PromptTemplate } from "./version";
-import { jsonOnly, renderFrame, renderResearch } from "./shared";
+import { jsonOnly, renderFrame, renderResearch, renderStyleCard } from "./shared";
 
 /**
  * §5.7 stage 2 — the outline.
@@ -17,7 +17,12 @@ export interface OutlinePromptInput {
 
 export function outlinePrompt(input: OutlinePromptInput): PromptTemplate {
   const { frame } = input.context;
+  const card = input.context.styleCard;
   const totalSeconds = frame.targetMinutes * 60;
+  const pacingRule =
+    card === null
+      ? ""
+      : ` (6) This creator's style card sets the pacing: chapter sections should run about ${card.pacing.sectionSeconds} seconds each (adjust count, not the total), and the outline should plant a re-hook roughly every ${card.pacing.rehookSeconds} seconds of runtime.`;
   return {
     system: [
       "You outline YouTube videos for retention. Non-negotiables:",
@@ -35,11 +40,14 @@ export function outlinePrompt(input: OutlinePromptInput): PromptTemplate {
       "within 10%. Chapter sections run 60-240 seconds each — longer than",
       "240 loses people, shorter than 60 feels like channel-surfing.",
       "(5) purpose says what the viewer GETS from the section, not what the",
-      "section 'covers'.",
+      `section 'covers'.${pacingRule}`,
     ].join(" "),
     prompt: [
       "Frame:",
       renderFrame(frame),
+      "",
+      "Creator voice:",
+      renderStyleCard(card),
       "",
       "Audience:",
       input.context.avatarSummary,

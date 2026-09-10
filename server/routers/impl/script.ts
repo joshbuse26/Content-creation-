@@ -1,8 +1,10 @@
 import { z } from "zod";
 import { LLM_MODELS } from "@/lib/config";
 import type { scriptContracts } from "@/lib/types/api";
+import { generationTargetSchema, type GenerationTarget } from "@/lib/types/entities";
 import type { Script, ScriptSection } from "@/lib/types/entities";
 import type { QualityGateReport } from "@/lib/types/pipeline";
+import { resolveStyleCard } from "@/pipelines/stages/style-resolver";
 import { assembleContext } from "@/pipelines/script/context";
 import { getEngineDeps, type EngineDeps } from "@/pipelines/script/deps";
 import { dispatchPipelineJob } from "@/pipelines/script/execute";
@@ -47,6 +49,18 @@ async function refreshScriptStats(
   });
 }
 
+/** Rebuild the generation target a script was created with (mode columns). */
+function scriptGenerationTarget(script: Script): GenerationTarget | null {
+  if (script.generationMode === null) return null;
+  return generationTargetSchema.parse({
+    mode: script.generationMode,
+    archetypeId: script.archetypeId,
+    crossover: script.crossover,
+    partnerId: script.partnerId,
+    voiceProfileId: script.voiceProfileId,
+  });
+}
+
 async function qualityReportFor(
   deps: EngineDeps,
   script: Script,
@@ -63,35 +77,58 @@ async function qualityReportFor(
     script.voiceProfileId === null
       ? null
       : await deps.store.getVoiceProfile(script.workspaceId, script.voiceProfileId);
+  // Wave C: recomputed reports resolve the SAME style card the script was
+  // generated with (mode columns → archetype/crossover/partner card; legacy
+  // scripts keep the voice-profile card). A card that can no longer resolve
+  // (e.g. partner disabled since) degrades to the profile card, never to a
+  // hard error on a read path.
+  let styleCard = profile?.styleCard ?? null;
+  try {
+    styleCard = await resolveStyleCard(scriptGenerationTarget(script), profile);
+  } catch {
+    /* keep the fallback */
+  }
+  // Hook technique: recoverable from the candidate cache; null after a
+  // restart (hookPatternOk then reads "not evaluated", never a pass).
+  const chosenHookStyle =
+    deps.store.getHookCandidates(script.id)?.find((c) => c.autoPicked)?.style ?? null;
   return computeQualityReport({
     sections,
     targetMinutes: frame.targetMinutes,
     tone: frame.tone,
-    // Wave C: recomputed reports carry the style gates too.
-    styleCard: profile?.styleCard ?? null,
+    styleCard,
+    chosenHookStyle,
   });
 }
 
 /** script router — build spec §5.7 / §6. */
 export const scriptImpl = {
   /**
-   * Composite generation — 6 credits charged on completion. Wave-C contract
-   * (PRODUCT-CONTRACTS §4): C1 turns this into an orchestrator over the
-   * staged procedures (outline 1 + hooks 1 + draft 4, itemized ledger); it
-   * may not bypass stage metering. Until then it runs the 7-stage pipeline.
+   * Composite generation — wave-C C1: the ORCHESTRATOR over the staged
+   * procedures (PRODUCT-CONTRACTS §4). One dispatch, one script row, ONE
+   * SSE stream (the frozen ScriptStreamEvent union on /api/script-stream),
+   * running outline → hooks → draft in sequence with ITEMIZED ledger
+   * entries per stage (outline 1 + hooks 1 + draft 4 = 6 =
+   * CREDIT_COSTS.scriptGeneration, each keyed `<stage>:<input hash>`) —
+   * stage metering is never bypassed. `topics` is pre-selection and not
+   * part of the composite. The full 6 credits are required at dispatch.
    */
   async generate({ ctx, input }: HandlerOpts<GenerateInput>) {
     assertGenerationTargetAllowed(input.generation);
-    await requireCreditsWithOverage(ctx.workspaceId, CREDIT_COSTS.scriptGeneration);
     const deps = await getEngineDeps();
     const project = await deps.store.getProject(ctx.workspaceId, input.projectId);
     if (project === null) notFound("project");
     const frame = await deps.store.getFrame(ctx.workspaceId, input.frameId);
     if (frame === null || frame.projectId !== input.projectId) notFound("frame");
-    if (input.voiceProfileId !== null) {
-      const profile = await deps.store.getVoiceProfile(ctx.workspaceId, input.voiceProfileId);
-      if (profile === null) notFound("voice profile");
-    }
+    const profile =
+      input.voiceProfileId === null
+        ? null
+        : await deps.store.getVoiceProfile(ctx.workspaceId, input.voiceProfileId);
+    if (input.voiceProfileId !== null && profile === null) notFound("voice profile");
+    // Resolve the card now so mode errors (unknown archetype, unlicensed
+    // partner) surface at dispatch, before any charge or script row.
+    await resolveStyleCard(input.generation, profile);
+    await requireCreditsWithOverage(ctx.workspaceId, CREDIT_COSTS.scriptGeneration);
     const script = await deps.store.createScript({
       workspaceId: ctx.workspaceId,
       projectId: input.projectId,
@@ -110,6 +147,7 @@ export const scriptImpl = {
       generation: input.generation,
       scriptId: script.id,
       actorUserId: ctx.userId as string,
+      dispatch: "generate" as const,
     };
     await dispatchPipelineJob(QUEUE_NAMES.script, JOB_NAMES.generateScript, payload, () =>
       handleGenerateScriptJob(payload),

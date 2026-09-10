@@ -37,6 +37,20 @@ export function fleschReadingEase(text: string): number {
   return Math.round(score * 10) / 10;
 }
 
+/**
+ * Flesch–Kincaid grade level — drives the PER-CARD readingLevel gate
+ * (PRODUCT-CONTRACTS §6): grade = 0.39·(words/sentences) +
+ * 11.8·(syllables/word) − 15.59, floored at 0, rounded to one decimal.
+ */
+export function fleschKincaidGrade(text: string): number {
+  const words = text.match(/[\p{L}\p{N}'$-]+/gu) ?? [];
+  if (words.length === 0) return 0;
+  const sentences = countSentences(text);
+  const syllables = words.reduce((sum, w) => sum + countSyllables(w), 0);
+  const grade = 0.39 * (words.length / sentences) + 11.8 * (syllables / words.length) - 15.59;
+  return Math.max(0, Math.round(grade * 10) / 10);
+}
+
 /** Spoken-runtime estimate at 150 wpm (config per language later). */
 export const WORDS_PER_MINUTE = 150;
 
