@@ -2,6 +2,8 @@ import { z } from "zod";
 import { scriptIdSchema } from "@/lib/types/ids";
 import {
   frameJobInputSchema,
+  hookCandidateSchema,
+  outlineSchema,
   researchJobInputSchema,
   revisionJobInputSchema,
   scriptJobInputSchema,
@@ -31,8 +33,24 @@ import { runTitlesPipeline } from "./titles";
 
 const actor = z.object({ actorUserId: z.string().nullable().default(null) });
 
+/**
+ * Wave C: one job name (frozen queue contract) carries three dispatch
+ * shapes, discriminated by `dispatch`:
+ *  - "legacy"  (default, and what pre-wave payloads parse as): the
+ *    composite 7-stage run with its single -6 completion charge —
+ *    UNCHANGED for jobs already queued before a deploy.
+ *  - "draft"   staged `script.draft` (§4): adopts presetOutline/chosenHook,
+ *    charges -4 keyed `draft:<hash>`.
+ *  - "generate" the `script.generate` orchestrator: same stage sequence,
+ *    ITEMIZED per-stage charges (outline 1 + hooks 1 + draft 4 = 6).
+ */
 export const scriptJobPayloadSchema = scriptJobInputSchema
-  .extend({ scriptId: scriptIdSchema })
+  .extend({
+    scriptId: scriptIdSchema,
+    dispatch: z.enum(["legacy", "draft", "generate"]).default("legacy"),
+    presetOutline: outlineSchema.nullable().default(null),
+    chosenHook: hookCandidateSchema.nullable().default(null),
+  })
   .and(actor);
 export const researchJobPayloadSchema = researchJobInputSchema.and(actor);
 export const frameJobPayloadSchema = frameJobInputSchema.and(actor);
@@ -50,8 +68,14 @@ function assertDone(result: { status: string; stage?: string; error?: string }, 
 export async function handleGenerateScriptJob(data: unknown): Promise<void> {
   const payload = scriptJobPayloadSchema.parse(data);
   const deps = await getEngineDeps();
-  const { scriptId, actorUserId, ...input } = payload;
-  const result = await runScriptPipeline(deps, { input, scriptId, actorUserId });
+  const { scriptId, actorUserId, dispatch, presetOutline, chosenHook, ...input } = payload;
+  const result = await runScriptPipeline(deps, {
+    input,
+    scriptId,
+    actorUserId,
+    ...(dispatch === "draft" ? { presetOutline, chosenHook, metering: "draft" as const } : {}),
+    ...(dispatch === "generate" ? { metering: "itemized" as const } : {}),
+  });
   assertDone(result, "script");
 }
 

@@ -7,7 +7,8 @@ import { computeQualityReport } from "@/pipelines/script/quality-gate";
 /**
  * Wave C (C0): pure-code style gates (PRODUCT-CONTRACTS §6) — bannedClaims
  * scan (hard fail) and CTA placement, plus their wiring into the quality
- * gate. hookPatternOk / readingLevel are C1's; here they must stay null.
+ * gate. hookPatternOk / readingLevel completion lives in C1's
+ * tests/c1-quality-gates.test.ts.
  */
 
 const section = (kind: string, body: string, estSeconds = 60, heading = kind) => ({
@@ -159,7 +160,7 @@ describe("quality gate integration", () => {
     expect(report.warnings.some((w) => w.includes("Banned claim"))).toBe(true);
   });
 
-  it("passes the clean fixture script with the fixture card, C1 fields null", () => {
+  it("passes the clean fixture script with the fixture card", () => {
     const report = computeQualityReport({
       sections: fixtureSections,
       ...gateBase,
@@ -168,9 +169,12 @@ describe("quality gate integration", () => {
     expect(report.styleGates).not.toBeNull();
     expect(report.styleGates?.bannedClaimsOk).toBe(true);
     expect(report.styleGates?.ctaPlacementOk).toBe(true);
-    // C1 computes these — until then they are "not evaluated", never a pass.
+    // C1: the reading level is evaluated whenever a card is present; the
+    // hook gate stays "not evaluated" (null, never a pass) because no
+    // chosen technique was provided here.
     expect(report.styleGates?.hookPatternOk).toBeNull();
-    expect(report.styleGates?.readingLevelOk).toBeNull();
+    expect(report.styleGates?.readingGrade).not.toBeNull();
+    expect(typeof report.styleGates?.readingLevelOk).toBe("boolean");
     // Style gates never fail a clean script (word-count vs the short fixture
     // bodies is a separate, pre-existing gate — not under test here).
     expect(report.warnings.some((w) => w.includes("Banned claim"))).toBe(false);
