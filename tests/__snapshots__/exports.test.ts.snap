@@ -1,0 +1,142 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`markdown export > matches snapshot 1`] = `
+"# Budget espresso setup vs. the $2k rig
+
+> Version 1 · 189 words · est. runtime 9:42
+
+## 0:00 — Hook
+
+> _Retention: Open loop: which shot won stays hidden until 09:40._
+
+This espresso setup costs less than one month of your cafe habit — and in a blind test, it beat my two-thousand-dollar rig. I'm as annoyed about it as you are.
+
+## 0:22 — The rules of the test
+
+> _Retention: Establish stakes fast; re-hook at 01:00._
+
+Here's the thing: same beans, same water, same barista — me. The only variable is the gear. Two stacks, five drinks each, scored blind by three people who drink way too much coffee.
+
+## 1:07 — Building the $200 stack
+
+> _Retention: Re-hook at 03:00: tease the taste-off scoreboard._
+
+The machine is the boring part. The grinder is where every budget build lives or dies — grind consistency explains more of your shot quality than anything else once you're past the bottom shelf. So we're spending 60% of the budget there. Let's dial it in.
+
+## 4:07 — The blind taste-off
+
+> _Retention: Payoff moved here from outro per retention pass._
+
+Five rounds. Straight shots, milk drinks, and one curveball — an iced americano, because that's what half of you actually order. The scorecards stay face-down until the end.
+
+## 9:07 — CTA
+
+If you want the full parts list with current prices, it's in the description — and if this saved you from a four-figure mistake, the subscribe button is cheaper than a grinder.
+
+## 9:27 — Outro
+
+> _Retention: Bridge to next video; end-screen 8s._
+
+Next week I'm doing the same test with milk alternatives, and early results are genuinely weird. See you then.
+"
+`;
+
+exports[`plain text export > matches snapshot 1`] = `
+"BUDGET ESPRESSO SETUP VS. THE $2K RIG
+Version 1 · 189 words · est. runtime 9:42
+========================================================================
+
+[0:00] Hook (hook)
+------------------------------------------------
+This espresso setup costs less than one month of your cafe habit — and in a blind test, it beat my two-thousand-dollar rig. I'm as annoyed about it as you are.
+
+[0:22] The rules of the test (intro)
+------------------------------------------------
+Here's the thing: same beans, same water, same barista — me. The only variable is the gear. Two stacks, five drinks each, scored blind by three people who drink way too much coffee.
+
+[1:07] Building the $200 stack (chapter)
+------------------------------------------------
+The machine is the boring part. The grinder is where every budget build lives or dies — grind consistency explains more of your shot quality than anything else once you're past the bottom shelf. So we're spending 60% of the budget there. Let's dial it in.
+
+[4:07] The blind taste-off (chapter)
+------------------------------------------------
+Five rounds. Straight shots, milk drinks, and one curveball — an iced americano, because that's what half of you actually order. The scorecards stay face-down until the end.
+
+[9:07] CTA (cta)
+------------------------------------------------
+If you want the full parts list with current prices, it's in the description — and if this saved you from a four-figure mistake, the subscribe button is cheaper than a grinder.
+
+[9:27] Outro (outro)
+------------------------------------------------
+Next week I'm doing the same test with milk alternatives, and early results are genuinely weird. See you then.
+"
+`;
+
+exports[`teleprompter export > matches snapshot 1`] = `
+">>> HOOK <<<
+
+This espresso setup costs less than
+one month of your cafe habit — and in
+a blind test, it beat my
+two-thousand-dollar rig.
+
+I'm as annoyed about it as you are.
+
+>>> THE RULES OF THE TEST <<<
+
+Here's the thing: same beans, same
+water, same barista — me.
+
+The only variable is the gear.
+
+Two stacks, five drinks each, scored
+blind by three people who drink way
+too much coffee.
+
+>>> BUILDING THE $200 STACK <<<
+
+The machine is the boring part.
+
+The grinder is where every budget
+build lives or dies — grind
+consistency explains more of your shot
+quality than anything else once you're
+past the bottom shelf.
+
+So we're spending 60% of the budget
+there.
+
+Let's dial it in.
+
+>>> THE BLIND TASTE-OFF <<<
+
+Five rounds.
+
+Straight shots, milk drinks, and one
+curveball — an iced americano, because
+that's what half of you actually
+order.
+
+The scorecards stay face-down until
+the end.
+
+>>> CTA <<<
+
+If you want the full parts list with
+current prices, it's in the
+description — and if this saved you
+from a four-figure mistake, the
+subscribe button is cheaper than a
+grinder.
+
+>>> OUTRO <<<
+
+Next week I'm doing the same test with
+milk alternatives, and early results
+are genuinely weird.
+
+See you then.
+
+>>> END OF SCRIPT <<<
+"
+`;
