@@ -14,7 +14,7 @@ import {
 import type { Role } from "@/lib/types/enums";
 import { asUserId, type UserId, type WorkspaceId } from "@/lib/types/ids";
 import { getSharedWorkspaceStore } from "@/server/workspace/memory";
-import { badRequest, notFound } from "./_shared";
+import { badRequest, forbidden, notFound } from "./_shared";
 
 /**
  * workspace router implementation — Drizzle-backed with the in-memory
@@ -32,6 +32,12 @@ interface ProtectedCtx {
 interface WorkspaceCtx {
   userId: UserId;
   workspaceId: WorkspaceId;
+}
+
+/** Ctx for member-management procedures — workspaceProcedure provides the
+ *  actor's resolved role, which the owner-role guard below needs. */
+interface MemberAdminCtx extends WorkspaceCtx {
+  role: Role;
 }
 
 type CreateInput = z.output<typeof workspaceContracts.create.input>;
@@ -62,6 +68,18 @@ async function dbMembership(workspaceId: WorkspaceId, userId: string): Promise<M
     .limit(1);
   const row = rows[0];
   return row === undefined ? null : membershipSchema.parse(row);
+}
+
+/**
+ * Only an owner may grant or revoke the owner role, or modify/remove another
+ * owner. Without this, an admin could self-promote to owner (privilege
+ * escalation) or demote/remove co-owners.
+ */
+function assertOwnerChangeAllowed(actorRole: Role, targetRole: Role, nextRole: Role | null): void {
+  const touchesOwner = targetRole === "owner" || nextRole === "owner";
+  if (touchesOwner && actorRole !== "owner") {
+    forbidden("only an owner may grant or revoke the owner role");
+  }
 }
 
 /** Refuses role changes/removals that would leave the workspace ownerless. */
@@ -211,12 +229,13 @@ export const workspaceHandlers = {
     });
   },
 
-  async setRole(opts: { ctx: WorkspaceCtx; input: SetRoleInput }): Promise<Membership> {
+  async setRole(opts: { ctx: MemberAdminCtx; input: SetRoleInput }): Promise<Membership> {
     const targetUserId = asUserId(opts.input.userId);
     if (!hasDb()) {
       const store = getSharedWorkspaceStore();
       const target = store.membershipFor(opts.ctx.workspaceId, targetUserId);
       if (target === null) notFound("membership");
+      assertOwnerChangeAllowed(opts.ctx.role, target.role, opts.input.role);
       await assertNotLastOwner(opts.ctx.workspaceId, target, opts.input.role, () =>
         store.ownerCount(opts.ctx.workspaceId),
       );
@@ -224,6 +243,7 @@ export const workspaceHandlers = {
     }
     const target = await dbMembership(opts.ctx.workspaceId, targetUserId);
     if (target === null) notFound("membership");
+    assertOwnerChangeAllowed(opts.ctx.role, target.role, opts.input.role);
     await assertNotLastOwner(opts.ctx.workspaceId, target, opts.input.role, () =>
       dbOwnerCount(opts.ctx.workspaceId),
     );
@@ -243,7 +263,7 @@ export const workspaceHandlers = {
   },
 
   async removeMember(opts: {
-    ctx: WorkspaceCtx;
+    ctx: MemberAdminCtx;
     input: RemoveMemberInput;
   }): Promise<{ removed: boolean }> {
     const targetUserId = asUserId(opts.input.userId);
@@ -251,6 +271,7 @@ export const workspaceHandlers = {
       const store = getSharedWorkspaceStore();
       const target = store.membershipFor(opts.ctx.workspaceId, targetUserId);
       if (target === null) return { removed: false };
+      assertOwnerChangeAllowed(opts.ctx.role, target.role, null);
       await assertNotLastOwner(opts.ctx.workspaceId, target, null, () =>
         store.ownerCount(opts.ctx.workspaceId),
       );
@@ -258,6 +279,7 @@ export const workspaceHandlers = {
     }
     const target = await dbMembership(opts.ctx.workspaceId, targetUserId);
     if (target === null) return { removed: false };
+    assertOwnerChangeAllowed(opts.ctx.role, target.role, null);
     await assertNotLastOwner(opts.ctx.workspaceId, target, null, () =>
       dbOwnerCount(opts.ctx.workspaceId),
     );

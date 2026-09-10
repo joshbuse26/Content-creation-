@@ -36,6 +36,14 @@ export function badRequest(message: string): never {
   throw new TRPCError({ code: "BAD_REQUEST", message });
 }
 
+export function forbidden(message = "Access denied"): never {
+  throw new TRPCError({ code: "FORBIDDEN", message });
+}
+
+export function preconditionFailed(message: string): never {
+  throw new TRPCError({ code: "PRECONDITION_FAILED", message });
+}
+
 /**
  * jobAccepted responses carry an opaque dispatch token — pipeline_runs rows
  * are created inside the PipelineRunner as stages start, so their ids are
