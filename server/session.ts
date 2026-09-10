@@ -10,11 +10,17 @@ import { auth } from "@/server/auth";
  * synthesized for the fixture user — real HTTP calls then flow through the
  * genuine tRPC stack (authz middleware included) instead of a client-side
  * fixture shim (REQUESTS-A3 #1). PROVIDERS=live keeps real sessions only.
+ *
+ * SECURITY: fixture-session synthesis must never activate in production —
+ * it would hand every unauthenticated visitor a signed-in session. Config
+ * parsing already refuses NODE_ENV=production + PROVIDERS=fixture at
+ * startup (lib/config.ts); the NODE_ENV check here is defense in depth.
  */
 export async function getSessionWithFixtureFallback(): Promise<Session | null> {
   const session = await auth();
   if (session !== null) return session;
-  if (getConfig().PROVIDERS !== "fixture") return null;
+  const config = getConfig();
+  if (config.PROVIDERS !== "fixture" || config.NODE_ENV === "production") return null;
   return {
     user: {
       id: FIXTURE_IDS.user,

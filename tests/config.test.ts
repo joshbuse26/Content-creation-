@@ -36,11 +36,39 @@ describe("config", () => {
     expect(config.PROVIDERS).toBe("live");
   });
 
+  const liveKeys = {
+    PROVIDERS: "live",
+    ANTHROPIC_API_KEY: "sk-ant-test",
+    GOOGLE_API_KEY: "g-test",
+    TRANSCRIPT_API_KEY: "t-test",
+    SEARCH_API_KEY: "s-test",
+    IMAGE_API_KEY: "i-test",
+  };
+
   it("requires AUTH_SECRET in production", () => {
-    expect(() => parseEnv({ NODE_ENV: "production" })).toThrow(/AUTH_SECRET/);
+    expect(() => parseEnv({ NODE_ENV: "production", ...liveKeys })).toThrow(/AUTH_SECRET/);
     expect(
-      parseEnv({ NODE_ENV: "production", AUTH_SECRET: "x".repeat(32) }).AUTH_SECRET,
+      parseEnv({
+        NODE_ENV: "production",
+        AUTH_SECRET: "x".repeat(32),
+        RESEND_API_KEY: "re_test",
+        ...liveKeys,
+      }).AUTH_SECRET,
     ).toBeTruthy();
+  });
+
+  it("refuses PROVIDERS=fixture in production (fail-fast)", () => {
+    expect(() => parseEnv({ NODE_ENV: "production", AUTH_SECRET: "x".repeat(32) })).toThrow(
+      /PROVIDERS=fixture is not allowed/,
+    );
+    expect(() =>
+      parseEnv({ NODE_ENV: "production", AUTH_SECRET: "x".repeat(32), PROVIDERS: "fixture" }),
+    ).toThrow(/PROVIDERS/);
+  });
+
+  it("allows fixture during the production build phase (no runtime secrets at compile)", () => {
+    const config = parseEnv({ NODE_ENV: "production", NEXT_PHASE: "phase-production-build" });
+    expect(config.PROVIDERS).toBe("fixture");
   });
 
   it("rejects invalid enum values instead of defaulting", () => {

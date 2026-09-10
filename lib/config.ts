@@ -65,6 +65,19 @@ const envSchema = z
     LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error", "fatal"]).default("info"),
   })
   .superRefine((env, ctx) => {
+    const isBuildPhase = env.NEXT_PHASE === "phase-production-build";
+    if (env.NODE_ENV === "production" && !isBuildPhase && env.PROVIDERS === "fixture") {
+      // Fixture mode synthesizes a signed-in session without any sign-in
+      // (server/session.ts) — running it in production would hand every
+      // visitor the fixture user. Fail fast at startup instead.
+      ctx.addIssue({
+        code: "custom",
+        path: ["PROVIDERS"],
+        message:
+          "PROVIDERS=fixture is not allowed when NODE_ENV=production — fixture mode " +
+          "synthesizes sessions without sign-in. Set PROVIDERS=live (with its required keys).",
+      });
+    }
     if (env.PROVIDERS === "live") {
       const required: (keyof typeof env)[] = [
         "ANTHROPIC_API_KEY",
@@ -83,7 +96,6 @@ const envSchema = z
         }
       }
     }
-    const isBuildPhase = env.NEXT_PHASE === "phase-production-build";
     if (env.NODE_ENV === "production" && !isBuildPhase && env.AUTH_SECRET === undefined) {
       ctx.addIssue({
         code: "custom",
