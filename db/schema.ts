@@ -96,6 +96,18 @@ export const workspaces = pgTable(
     stripeCustomerId: text("stripe_customer_id"),
     creditBalance: integer("credit_balance").notNull().default(0),
     billingCycleAnchor: timestamp("billing_cycle_anchor", { withTimezone: true }),
+    // -- B3 billing columns (approved narrow frozen-layer change: nullable
+    //    columns on workspaces only — see REQUESTS-B3.md) ------------------
+    /** Active Stripe subscription backing the paid plan. */
+    stripeSubscriptionId: text("stripe_subscription_id"),
+    /** End of the current billing period (from Stripe); cycle progress + downgrade boundary. */
+    billingPeriodEnd: timestamp("billing_period_end", { withTimezone: true }),
+    /** Plan to apply at the next period boundary (downgrades — spec §7). */
+    pendingPlan: planEnum("pending_plan"),
+    /** First failed payment of the current incident; null = healthy. Read-only after 7-day grace. */
+    paymentFailedAt: timestamp("payment_failed_at", { withTimezone: true }),
+    /** Overage credits metered to Stripe this cycle (reset on invoice.paid); null = 0. */
+    overageUsed: integer("overage_used"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -727,6 +739,25 @@ export const creditLedger = pgTable(
       .on(t.idempotencyKey)
       .where(sql`${t.idempotencyKey} IS NOT NULL`),
   ],
+);
+
+/**
+ * Processed Stripe webhook events (B3 — approved narrow frozen-layer change:
+ * new table). The unique event id makes webhook handling idempotent: an
+ * event whose id is already recorded is acknowledged without re-applying
+ * side effects. Ledger writes are additionally keyed on the event id via
+ * credit_ledger.idempotency_key as a second, independent guard.
+ */
+export const stripeEvents = pgTable(
+  "stripe_events",
+  {
+    id: id(),
+    /** Stripe event id (`evt_…`) — unique ⇒ at-most-once processing. */
+    eventId: text("event_id").notNull().unique(),
+    type: text("type").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("stripe_events_type_idx").on(t.type)],
 );
 
 /** MCP access keys (v1.1 feature — table ships now). */
