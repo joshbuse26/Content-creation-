@@ -49,7 +49,7 @@ import {
   userSchema,
   workspaceSchema,
 } from "./entities";
-import { qualityGateReportSchema } from "./pipeline";
+import { hookCandidateSchema, qualityGateReportSchema } from "./pipeline";
 
 /**
  * Router input/output contracts — FROZEN LAYER.
@@ -355,6 +355,12 @@ export const scriptContracts = {
       script: scriptSchema,
       sections: z.array(scriptSectionSchema),
       qualityReport: qualityGateReportSchema.nullable(),
+      /**
+       * Stage-3 hook candidates, when known. Process-local cache (no table
+       * in the frozen schema) — null after a restart; the editor falls back
+       * to its local copy. Approved contract addition (REQUESTS-A3 #4).
+       */
+      hookCandidates: z.array(hookCandidateSchema).nullable(),
     }),
   },
   listVersions: {
@@ -382,6 +388,18 @@ export const scriptContracts = {
       locked: z.boolean(),
     }),
     output: scriptSectionSchema,
+  },
+  /**
+   * Persist a full section ordering (approved contract addition,
+   * REQUESTS-A3 #3). sectionIds must be a permutation of the script's
+   * sections; returns them in the new order.
+   */
+  reorderSections: {
+    input: workspaceScopedSchema.extend({
+      scriptId: scriptIdSchema,
+      sectionIds: z.array(scriptSectionIdSchema).min(1),
+    }),
+    output: z.array(scriptSectionSchema),
   },
   export: {
     input: workspaceScopedSchema.extend({

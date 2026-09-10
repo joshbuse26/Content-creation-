@@ -1,0 +1,1 @@
+ALTER TYPE "public"."pipeline_kind" ADD VALUE 'sync';

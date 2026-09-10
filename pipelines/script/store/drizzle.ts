@@ -32,15 +32,18 @@ import type {
   WorkspaceId,
 } from "@/lib/types/ids";
 import type { Plan, ProjectStatus, ScriptStatus } from "@/lib/types/enums";
-import type { QualityGateReport } from "@/lib/types/pipeline";
+import type { HookCandidate, QualityGateReport } from "@/lib/types/pipeline";
 import type {
   ApplyRevisionParams,
   CreditRecord,
   EngineStore,
   NewFrame,
+  NewProject,
   NewResearchDoc,
   NewRevision,
   NewSection,
+  ProjectListFilter,
+  ProjectPatch,
   SectionPatch,
 } from "./types";
 
@@ -50,6 +53,7 @@ import type {
  */
 export class DrizzleEngineStore implements EngineStore {
   private qualityReports = new Map<string, QualityGateReport>();
+  private hookCandidates = new Map<string, HookCandidate[]>();
 
   async getWorkspacePlan(workspaceId: WorkspaceId): Promise<Plan | null> {
     const rows = await getDb()
@@ -68,6 +72,60 @@ export class DrizzleEngineStore implements EngineStore {
       .limit(1);
     const row = rows[0];
     return row === undefined ? null : projectSchema.parse(row);
+  }
+
+  async listProjects(workspaceId: WorkspaceId, filter: ProjectListFilter): Promise<Project[]> {
+    const conditions = [eq(schema.projects.workspaceId, workspaceId)];
+    if (filter.channelId !== undefined) {
+      conditions.push(eq(schema.projects.channelId, filter.channelId));
+    }
+    if (filter.status !== undefined) {
+      conditions.push(eq(schema.projects.status, filter.status));
+    }
+    const rows = await getDb()
+      .select()
+      .from(schema.projects)
+      .where(and(...conditions))
+      .orderBy(desc(schema.projects.updatedAt))
+      .limit(filter.limit);
+    return rows.map((r) => projectSchema.parse(r));
+  }
+
+  async createProject(project: NewProject): Promise<Project> {
+    const rows = await getDb()
+      .insert(schema.projects)
+      .values({
+        workspaceId: project.workspaceId,
+        channelId: project.channelId,
+        title: project.title,
+        ideaId: project.ideaId,
+      })
+      .returning();
+    const row = rows[0];
+    if (row === undefined) throw new Error("createProject: insert returned no row");
+    return projectSchema.parse(row);
+  }
+
+  async updateProject(
+    workspaceId: WorkspaceId,
+    projectId: ProjectId,
+    patch: ProjectPatch,
+  ): Promise<Project | null> {
+    const rows = await getDb()
+      .update(schema.projects)
+      .set(patch)
+      .where(and(eq(schema.projects.id, projectId), eq(schema.projects.workspaceId, workspaceId)))
+      .returning();
+    const row = rows[0];
+    return row === undefined ? null : projectSchema.parse(row);
+  }
+
+  async deleteProject(workspaceId: WorkspaceId, projectId: ProjectId): Promise<boolean> {
+    const rows = await getDb()
+      .delete(schema.projects)
+      .where(and(eq(schema.projects.id, projectId), eq(schema.projects.workspaceId, workspaceId)))
+      .returning({ id: schema.projects.id });
+    return rows.length > 0;
   }
 
   async updateProjectStatus(
@@ -376,6 +434,51 @@ export class DrizzleEngineStore implements EngineStore {
     return row === undefined ? null : scriptSectionSchema.parse(row);
   }
 
+  async reorderSections(
+    workspaceId: WorkspaceId,
+    scriptId: ScriptId,
+    sectionIds: ScriptSectionId[],
+  ): Promise<ScriptSection[] | null> {
+    return await getDb().transaction(async (tx) => {
+      const rows = await tx
+        .select({ id: schema.scriptSections.id })
+        .from(schema.scriptSections)
+        .where(
+          and(
+            eq(schema.scriptSections.scriptId, scriptId),
+            eq(schema.scriptSections.workspaceId, workspaceId),
+          ),
+        );
+      const ids = new Set<string>(sectionIds);
+      if (rows.length !== sectionIds.length || ids.size !== sectionIds.length) return null;
+      if (!rows.every((r) => ids.has(r.id))) return null;
+      for (let position = 0; position < sectionIds.length; position++) {
+        const sectionId = sectionIds[position];
+        if (sectionId === undefined) continue;
+        await tx
+          .update(schema.scriptSections)
+          .set({ position })
+          .where(
+            and(
+              eq(schema.scriptSections.id, sectionId),
+              eq(schema.scriptSections.workspaceId, workspaceId),
+            ),
+          );
+      }
+      const updated = await tx
+        .select()
+        .from(schema.scriptSections)
+        .where(
+          and(
+            eq(schema.scriptSections.scriptId, scriptId),
+            eq(schema.scriptSections.workspaceId, workspaceId),
+          ),
+        )
+        .orderBy(schema.scriptSections.position);
+      return updated.map((r) => scriptSectionSchema.parse(r));
+    });
+  }
+
   // -- revisions ------------------------------------------------------------
 
   async insertRevisions(revisions: NewRevision[]): Promise<Revision[]> {
@@ -505,6 +608,16 @@ export class DrizzleEngineStore implements EngineStore {
 
   getCachedQualityReport(scriptId: ScriptId): QualityGateReport | null {
     return this.qualityReports.get(scriptId) ?? null;
+  }
+
+  // -- hook candidates (process-local cache; no table in frozen schema) -----
+
+  saveHookCandidates(scriptId: ScriptId, candidates: HookCandidate[]): void {
+    this.hookCandidates.set(scriptId, candidates);
+  }
+
+  getHookCandidates(scriptId: ScriptId): HookCandidate[] | null {
+    return this.hookCandidates.get(scriptId) ?? null;
   }
 
   // -- credits --------------------------------------------------------------

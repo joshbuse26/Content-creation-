@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { Document, HeadingLevel, Packer, Paragraph, TextRun } from "docx";
 import { LLM_MODELS } from "@/lib/config";
 import type { scriptContracts } from "@/lib/types/api";
 import type { Script, ScriptSection } from "@/lib/types/entities";
@@ -18,6 +17,7 @@ import {
   fleschReadingEase,
 } from "@/pipelines/script/readability";
 import { regenerateSectionPrompt } from "@/prompts";
+import { exportScript } from "@/server/export";
 import { JOB_NAMES, QUEUE_NAMES } from "@/queue/queues";
 import { badRequest, jobAccepted, notFound, type HandlerOpts } from "./_shared";
 
@@ -27,6 +27,7 @@ type ListVersionsInput = z.output<typeof scriptContracts.listVersions.input>;
 type UpdateSectionInput = z.output<typeof scriptContracts.updateSection.input>;
 type RegenerateSectionInput = z.output<typeof scriptContracts.regenerateSection.input>;
 type SetSectionLockInput = z.output<typeof scriptContracts.setSectionLock.input>;
+type ReorderSectionsInput = z.output<typeof scriptContracts.reorderSections.input>;
 type ExportInput = z.output<typeof scriptContracts.export.input>;
 type ExportOutput = z.output<typeof scriptContracts.export.output>;
 
@@ -60,18 +61,6 @@ async function qualityReportFor(
     targetMinutes: frame.targetMinutes,
     tone: frame.tone,
   });
-}
-
-function buildDocxBase64(title: string, sections: ScriptSection[]): Promise<string> {
-  const children: Paragraph[] = [new Paragraph({ text: title, heading: HeadingLevel.TITLE })];
-  for (const section of sections) {
-    children.push(new Paragraph({ text: section.heading, heading: HeadingLevel.HEADING_1 }));
-    for (const line of section.body.split("\n")) {
-      children.push(new Paragraph({ children: [new TextRun(line)] }));
-    }
-  }
-  const doc = new Document({ sections: [{ children }] });
-  return Packer.toBase64String(doc);
 }
 
 /** script router — build spec §5.7 / §6. */
@@ -113,7 +102,8 @@ export const scriptImpl = {
     if (script === null) notFound("script");
     const sections = await deps.store.listSections(ctx.workspaceId, input.scriptId);
     const qualityReport = await qualityReportFor(deps, script, sections);
-    return { script, sections, qualityReport };
+    const hookCandidates = deps.store.getHookCandidates(input.scriptId);
+    return { script, sections, qualityReport, hookCandidates };
   },
 
   async listVersions({ ctx, input }: HandlerOpts<ListVersionsInput>): Promise<Script[]> {
@@ -226,46 +216,45 @@ export const scriptImpl = {
     return section;
   },
 
+  /** Persist a full section ordering (approved contract addition, REQUESTS-A3 #3). */
+  async reorderSections({
+    ctx,
+    input,
+  }: HandlerOpts<ReorderSectionsInput>): Promise<ScriptSection[]> {
+    const deps = await getEngineDeps();
+    const script = await deps.store.getScript(ctx.workspaceId, input.scriptId);
+    if (script === null) notFound("script");
+    const sections = await deps.store.reorderSections(
+      ctx.workspaceId,
+      input.scriptId,
+      input.sectionIds,
+    );
+    if (sections === null) {
+      badRequest("sectionIds must be a permutation of the script's sections");
+    }
+    return sections;
+  },
+
+  /** Delegates to the canonical export implementation in server/export (A4). */
   async export({ ctx, input }: HandlerOpts<ExportInput>): Promise<ExportOutput> {
     const deps = await getEngineDeps();
     const script = await deps.store.getScript(ctx.workspaceId, input.scriptId);
     if (script === null) notFound("script");
     const sections = await deps.store.listSections(ctx.workspaceId, input.scriptId);
     const project = await deps.store.getProject(ctx.workspaceId, script.projectId);
-    const title = project?.title ?? "Script";
-    const base = `script-v${script.version}`;
-    switch (input.format) {
-      case "md":
-        return {
-          filename: `${base}.md`,
-          mimeType: "text/markdown",
-          content: [`# ${title}`, "", ...sections.map((s) => `## ${s.heading}\n\n${s.body}`)].join(
-            "\n\n",
-          ),
-          encoding: "utf8",
-        };
-      case "txt":
-        return {
-          filename: `${base}.txt`,
-          mimeType: "text/plain",
-          content: sections.map((s) => `${s.heading.toUpperCase()}\n\n${s.body}`).join("\n\n\n"),
-          encoding: "utf8",
-        };
-      case "teleprompter":
-        // Voiceover text only — no headings, wide spacing for scroll reading.
-        return {
-          filename: `${base}-teleprompter.txt`,
-          mimeType: "text/plain",
-          content: sections.map((s) => s.body).join("\n\n\n\n"),
-          encoding: "utf8",
-        };
-      case "docx":
-        return {
-          filename: `${base}.docx`,
-          mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-          content: await buildDocxBase64(title, sections),
-          encoding: "base64",
-        };
-    }
+    return exportScript(
+      {
+        title: project?.title ?? "Script",
+        version: script.version,
+        sections: sections.map((s) => ({
+          kind: s.kind,
+          heading: s.heading,
+          body: s.body,
+          estSeconds: s.estSeconds,
+          retentionNote: s.retentionNote,
+        })),
+      },
+      input.format,
+    );
   },
 } as const;

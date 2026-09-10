@@ -89,7 +89,14 @@ export const DESCRIPTION_MODES = ["informative", "narrative", "seo"] as const;
 export const descriptionModeSchema = z.enum(DESCRIPTION_MODES);
 export type DescriptionMode = z.infer<typeof descriptionModeSchema>;
 
-export const PIPELINE_KINDS = ["script", "ideas", "avatar", "revision", "thumbnail"] as const;
+export const PIPELINE_KINDS = [
+  "script",
+  "ideas",
+  "avatar",
+  "revision",
+  "thumbnail",
+  "sync",
+] as const;
 export const pipelineKindSchema = z.enum(PIPELINE_KINDS);
 export type PipelineKind = z.infer<typeof pipelineKindSchema>;
 

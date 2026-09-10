@@ -23,6 +23,7 @@ import type {
 } from "@/lib/types/entities";
 import {
   frameIdSchema,
+  projectIdSchema,
   researchDocIdSchema,
   revisionIdSchema,
   scriptIdSchema,
@@ -39,15 +40,18 @@ import {
   type WorkspaceId,
 } from "@/lib/types/ids";
 import type { Plan, ProjectStatus, ScriptStatus } from "@/lib/types/enums";
-import type { QualityGateReport } from "@/lib/types/pipeline";
+import type { HookCandidate, QualityGateReport } from "@/lib/types/pipeline";
 import type {
   ApplyRevisionParams,
   CreditRecord,
   EngineStore,
   NewFrame,
+  NewProject,
   NewResearchDoc,
   NewRevision,
   NewSection,
+  ProjectListFilter,
+  ProjectPatch,
   SectionPatch,
 } from "./types";
 
@@ -73,6 +77,7 @@ export class InMemoryEngineStore implements EngineStore {
   private revisions: Revision[] = [];
   private titleSets: TitleSet[] = [];
   private qualityReports = new Map<string, QualityGateReport>();
+  private hookCandidates = new Map<string, HookCandidate[]>();
   /** Append-only, mirrors credit_ledger semantics. */
   public readonly creditEntries: CreditRecord[] = [];
 
@@ -122,6 +127,61 @@ export class InMemoryEngineStore implements EngineStore {
     return Promise.resolve(
       cloneOrNull(this.projects.find((p) => p.id === projectId && p.workspaceId === workspaceId)),
     );
+  }
+
+  listProjects(workspaceId: WorkspaceId, filter: ProjectListFilter): Promise<Project[]> {
+    const rows = this.projects
+      .filter(
+        (p) =>
+          p.workspaceId === workspaceId &&
+          (filter.channelId === undefined || p.channelId === filter.channelId) &&
+          (filter.status === undefined || p.status === filter.status),
+      )
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+      .slice(0, filter.limit);
+    return Promise.resolve(clone(rows));
+  }
+
+  createProject(project: NewProject): Promise<Project> {
+    const now = new Date();
+    const row: Project = {
+      id: projectIdSchema.parse(randomUUID()),
+      workspaceId: project.workspaceId,
+      channelId: project.channelId,
+      title: project.title,
+      status: "idea",
+      ideaId: project.ideaId,
+      targetPublishDate: null,
+      publishedVideoId: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.projects.push(row);
+    return Promise.resolve(clone(row));
+  }
+
+  updateProject(
+    workspaceId: WorkspaceId,
+    projectId: ProjectId,
+    patch: ProjectPatch,
+  ): Promise<Project | null> {
+    const project = this.projects.find((p) => p.id === projectId && p.workspaceId === workspaceId);
+    if (project === undefined) return Promise.resolve(null);
+    if (patch.title !== undefined) project.title = patch.title;
+    if (patch.status !== undefined) project.status = patch.status;
+    if (patch.targetPublishDate !== undefined) project.targetPublishDate = patch.targetPublishDate;
+    if (patch.publishedVideoId !== undefined) project.publishedVideoId = patch.publishedVideoId;
+    project.updatedAt = new Date();
+    return Promise.resolve(clone(project));
+  }
+
+  deleteProject(workspaceId: WorkspaceId, projectId: ProjectId): Promise<boolean> {
+    const index = this.projects.findIndex(
+      (p) => p.id === projectId && p.workspaceId === workspaceId,
+    );
+    if (index === -1) return Promise.resolve(false);
+    this.projects.splice(index, 1);
+    return Promise.resolve(true);
   }
 
   updateProjectStatus(
@@ -368,6 +428,30 @@ export class InMemoryEngineStore implements EngineStore {
     return Promise.resolve(clone(section));
   }
 
+  reorderSections(
+    workspaceId: WorkspaceId,
+    scriptId: ScriptId,
+    sectionIds: ScriptSectionId[],
+  ): Promise<ScriptSection[] | null> {
+    const rows = this.sections.filter(
+      (s) => s.scriptId === scriptId && s.workspaceId === workspaceId,
+    );
+    const ids = new Set<string>(sectionIds);
+    if (rows.length !== sectionIds.length || ids.size !== sectionIds.length) {
+      return Promise.resolve(null);
+    }
+    if (!rows.every((s) => ids.has(s.id))) return Promise.resolve(null);
+    const now = new Date();
+    for (const section of rows) {
+      const position = sectionIds.indexOf(section.id);
+      if (section.position !== position) {
+        section.position = position;
+        section.updatedAt = now;
+      }
+    }
+    return Promise.resolve(clone([...rows].sort((a, b) => a.position - b.position)));
+  }
+
   // -- revisions ------------------------------------------------------------
 
   insertRevisions(revisions: NewRevision[]): Promise<Revision[]> {
@@ -468,6 +552,17 @@ export class InMemoryEngineStore implements EngineStore {
 
   getCachedQualityReport(scriptId: ScriptId): QualityGateReport | null {
     return this.qualityReports.get(scriptId) ?? null;
+  }
+
+  // -- hook candidates (process-local cache, like quality reports) ----------
+
+  saveHookCandidates(scriptId: ScriptId, candidates: HookCandidate[]): void {
+    this.hookCandidates.set(scriptId, clone(candidates));
+  }
+
+  getHookCandidates(scriptId: ScriptId): HookCandidate[] | null {
+    const candidates = this.hookCandidates.get(scriptId);
+    return candidates === undefined ? null : clone(candidates);
   }
 
   // -- credits --------------------------------------------------------------

@@ -30,7 +30,7 @@ import type {
   ScriptStatus,
   SectionKind,
 } from "@/lib/types/enums";
-import type { QualityGateReport } from "@/lib/types/pipeline";
+import type { HookCandidate, QualityGateReport } from "@/lib/types/pipeline";
 import type { FactRef, DiffOp, TitleOption } from "@/lib/types/entities";
 
 /**
@@ -114,10 +114,38 @@ export interface CreditRecord {
   projectId: ProjectId | null;
 }
 
+export interface NewProject {
+  workspaceId: WorkspaceId;
+  channelId: ChannelId;
+  title: string;
+  ideaId: Project["ideaId"];
+}
+
+export interface ProjectPatch {
+  title?: string;
+  status?: ProjectStatus;
+  targetPublishDate?: string | null;
+  publishedVideoId?: string | null;
+}
+
+export interface ProjectListFilter {
+  channelId?: ChannelId;
+  status?: ProjectStatus;
+  limit: number;
+}
+
 export interface EngineStore {
   // Workspace / project / channel context
   getWorkspacePlan(workspaceId: WorkspaceId): Promise<Plan | null>;
   getProject(workspaceId: WorkspaceId, projectId: ProjectId): Promise<Project | null>;
+  listProjects(workspaceId: WorkspaceId, filter: ProjectListFilter): Promise<Project[]>;
+  createProject(project: NewProject): Promise<Project>;
+  updateProject(
+    workspaceId: WorkspaceId,
+    projectId: ProjectId,
+    patch: ProjectPatch,
+  ): Promise<Project | null>;
+  deleteProject(workspaceId: WorkspaceId, projectId: ProjectId): Promise<boolean>;
   updateProjectStatus(
     workspaceId: WorkspaceId,
     projectId: ProjectId,
@@ -181,6 +209,16 @@ export interface EngineStore {
     sectionId: ScriptSectionId,
     patch: SectionPatch,
   ): Promise<ScriptSection | null>;
+  /**
+   * Persist a new section order (positions become the index of each id in
+   * sectionIds). Returns null when sectionIds is not a permutation of the
+   * script's sections.
+   */
+  reorderSections(
+    workspaceId: WorkspaceId,
+    scriptId: ScriptId,
+    sectionIds: ScriptSectionId[],
+  ): Promise<ScriptSection[] | null>;
 
   // Revisions
   insertRevisions(revisions: NewRevision[]): Promise<Revision[]>;
@@ -209,6 +247,12 @@ export interface EngineStore {
   // is pure code), so getQualityReport never returns stale-wrong data.
   saveQualityReport(scriptId: ScriptId, report: QualityGateReport): void;
   getCachedQualityReport(scriptId: ScriptId): QualityGateReport | null;
+
+  // Hook candidates — same story as quality reports: no table in the frozen
+  // schema, so the stage-3 candidates live in a process-local cache and
+  // script.get returns null after a restart (editor falls back locally).
+  saveHookCandidates(scriptId: ScriptId, candidates: HookCandidate[]): void;
+  getHookCandidates(scriptId: ScriptId): HookCandidate[] | null;
 
   // Credits (ledger + balance; append-only ledger)
   recordCredits(record: CreditRecord): Promise<void>;

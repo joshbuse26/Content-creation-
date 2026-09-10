@@ -255,6 +255,7 @@ export async function runScriptPipeline(
         autoPicked: i === pickedIndex,
       }));
       state.hookCandidates = candidates;
+      deps.store.saveHookCandidates(scriptId, candidates);
       await publish({ type: "hooks", candidates });
 
       // Then every section in order, each prompt carrying all prior text.
