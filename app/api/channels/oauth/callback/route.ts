@@ -9,6 +9,7 @@ import { getDefaultSyncEnqueuer } from "@/server/channel/jobs";
 import { connectOauthChannel } from "@/server/channel/oauth";
 import { verifyOauthState } from "@/server/channel/oauth-state";
 import { getRoleResolver } from "@/server/membership";
+import { clientIpFromRequest, enforceRateLimitHttp } from "@/server/ratelimit";
 import { getSessionWithFixtureFallback } from "@/server/session";
 
 /**
@@ -41,6 +42,8 @@ function redirectToChannels(appUrl: string, error?: string): Response {
 }
 
 export async function GET(req: Request): Promise<Response> {
+  const denied = await enforceRateLimitHttp("auth", `ip:${clientIpFromRequest(req)}`);
+  if (denied !== null) return denied;
   const config = getConfig();
   const session = await getSessionWithFixtureFallback();
   const sessionUserId = session?.user.id ?? "";

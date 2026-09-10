@@ -50,7 +50,9 @@ function resolvePolicy(policy: RateLimitPolicyName | RateLimitPolicy): RateLimit
 
 /**
  * Check and record a hit for `subject` under `policy`. Never throws on store
- * failure (fail-open, logged).
+ * failure: general traffic fails OPEN (an unavailable Redis must not take
+ * down the API), but the "generation" policy fails CLOSED — generation
+ * endpoints spend real money, so an unlimitable request is a denied one.
  */
 export async function checkRateLimit(
   policy: RateLimitPolicyName | RateLimitPolicy,
@@ -60,10 +62,20 @@ export async function checkRateLimit(
   try {
     return await getRateLimiter().check(resolved, subject);
   } catch (err) {
-    logger.error(
-      { policy: resolved.id, err: err instanceof Error ? err.message : String(err) },
-      "rate limit store unavailable — failing open",
-    );
+    const message = err instanceof Error ? err.message : String(err);
+    if (resolved.id === RATE_LIMIT_POLICIES.generation.id) {
+      logger.error(
+        { policy: resolved.id, err: message },
+        "rate limit store unavailable — failing CLOSED for the generation policy (cost control)",
+      );
+      return {
+        allowed: false,
+        limit: resolved.limit,
+        remaining: 0,
+        retryAfterMs: resolved.windowMs,
+      };
+    }
+    logger.error({ policy: resolved.id, err: message }, "rate limit store unavailable — failing open");
     return { allowed: true, limit: resolved.limit, remaining: resolved.limit, retryAfterMs: 0 };
   }
 }
@@ -90,6 +102,34 @@ export function rateLimitHeaders(decision: RateLimitDecision): Record<string, st
     "RateLimit-Remaining": String(decision.remaining),
     "Retry-After": String(Math.ceil(decision.retryAfterMs / 1000)),
   };
+}
+
+/** Best-effort client IP for route-handler rate limiting (proxy-aware). */
+export function clientIpFromRequest(req: Request): string {
+  const forwarded = req.headers.get("x-forwarded-for");
+  if (forwarded !== null && forwarded.trim() !== "") {
+    const first = forwarded.split(",")[0]?.trim();
+    if (first !== undefined && first !== "") return first;
+  }
+  const real = req.headers.get("x-real-ip");
+  if (real !== null && real.trim() !== "") return real.trim();
+  return "unknown";
+}
+
+/**
+ * Route-handler enforcement: returns a ready 429 Response when over the
+ * limit, null when the request may proceed.
+ */
+export async function enforceRateLimitHttp(
+  policy: RateLimitPolicyName | RateLimitPolicy,
+  subject: string,
+): Promise<Response | null> {
+  const decision = await checkRateLimit(policy, subject);
+  if (decision.allowed) return null;
+  return new Response(JSON.stringify({ error: "Rate limit exceeded. Try again shortly." }), {
+    status: 429,
+    headers: { "Content-Type": "application/json", ...rateLimitHeaders(decision) },
+  });
 }
 
 /**

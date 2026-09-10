@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import RedisMock from "ioredis-mock";
 import {
   MemorySlidingWindowStore,
@@ -6,6 +6,12 @@ import {
   RedisSlidingWindowStore,
   type SlidingWindowStore,
 } from "@/server/ratelimit/limiter";
+import {
+  checkRateLimit,
+  clientIpFromRequest,
+  enforceRateLimitHttp,
+  setRateLimiterForTests,
+} from "@/server/ratelimit/middleware";
 import { RATE_LIMIT_POLICIES } from "@/server/ratelimit/policies";
 
 function makeLimiter(store: SlidingWindowStore): {
@@ -108,6 +114,61 @@ describe("general policy boundary (100/min)", () => {
     const denied = await limiter.check(RATE_LIMIT_POLICIES.general, "u");
     expect(denied.allowed).toBe(false);
     expect(denied.limit).toBe(100);
+  });
+});
+
+describe("store-failure behavior", () => {
+  const throwingStore: SlidingWindowStore = {
+    hit: () => Promise.reject(new Error("redis down")),
+  };
+
+  afterEach(() => {
+    setRateLimiterForTests(undefined);
+  });
+
+  it("fails OPEN for the general policy", async () => {
+    setRateLimiterForTests(new RateLimiter(throwingStore));
+    const decision = await checkRateLimit("general", "u");
+    expect(decision.allowed).toBe(true);
+  });
+
+  it("fails CLOSED for the generation policy (cost control)", async () => {
+    setRateLimiterForTests(new RateLimiter(throwingStore));
+    const decision = await checkRateLimit("generation", "u");
+    expect(decision.allowed).toBe(false);
+    expect(decision.remaining).toBe(0);
+    expect(decision.retryAfterMs).toBeGreaterThan(0);
+  });
+});
+
+describe("route-handler enforcement", () => {
+  afterEach(() => {
+    setRateLimiterForTests(undefined);
+  });
+
+  it("returns null while allowed, then a 429 with standard headers", async () => {
+    setRateLimiterForTests(new RateLimiter(new MemorySlidingWindowStore()));
+    for (let i = 0; i < 5; i++) {
+      expect(await enforceRateLimitHttp("auth", "ip:1.2.3.4")).toBeNull();
+    }
+    const denied = await enforceRateLimitHttp("auth", "ip:1.2.3.4");
+    expect(denied?.status).toBe(429);
+    expect(denied?.headers.get("RateLimit-Limit")).toBe("5");
+    expect(denied?.headers.get("Retry-After")).toBeTruthy();
+    // A different IP still passes.
+    expect(await enforceRateLimitHttp("auth", "ip:5.6.7.8")).toBeNull();
+  });
+
+  it("extracts the client IP from proxy headers", () => {
+    const withForwarded = new Request("https://x.test/", {
+      headers: { "x-forwarded-for": "203.0.113.9, 10.0.0.2" },
+    });
+    expect(clientIpFromRequest(withForwarded)).toBe("203.0.113.9");
+    const withRealIp = new Request("https://x.test/", {
+      headers: { "x-real-ip": "198.51.100.7" },
+    });
+    expect(clientIpFromRequest(withRealIp)).toBe("198.51.100.7");
+    expect(clientIpFromRequest(new Request("https://x.test/"))).toBe("unknown");
   });
 });
 

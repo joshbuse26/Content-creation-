@@ -6,6 +6,7 @@ import { asUserId, scriptIdSchema, workspaceIdSchema } from "@/lib/types/ids";
 import { getScriptEventBus } from "@/pipelines/script/events";
 import { getEngineStore } from "@/pipelines/script/store";
 import { getRoleResolver } from "@/server/membership";
+import { clientIpFromRequest, enforceRateLimitHttp } from "@/server/ratelimit";
 import { getSessionWithFixtureFallback } from "@/server/session";
 import { createScriptSseStream } from "./stream";
 
@@ -35,6 +36,15 @@ export async function GET(req: Request): Promise<Response> {
   if (sessionUserId === "") {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+
+  // Rate limit stream opens per user ("general", 100/min) — SSE reconnects
+  // with history replay are part of normal operation, so the strict auth
+  // policy would lock legitimate viewers out.
+  const denied = await enforceRateLimitHttp(
+    "general",
+    `sse:${sessionUserId}:${clientIpFromRequest(req)}`,
+  );
+  if (denied !== null) return denied;
 
   const url = new URL(req.url);
   const parsed = querySchema.safeParse({

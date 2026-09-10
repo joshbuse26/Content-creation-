@@ -7,7 +7,9 @@ export {
 } from "./limiter";
 export {
   checkRateLimit,
+  clientIpFromRequest,
   enforceRateLimit,
+  enforceRateLimitHttp,
   getRateLimiter,
   rateLimitHeaders,
   rateLimitMiddleware,

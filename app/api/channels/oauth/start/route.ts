@@ -5,6 +5,7 @@ import { getConfig } from "@/lib/config";
 import { asUserId, workspaceIdSchema } from "@/lib/types/ids";
 import { signOauthState } from "@/server/channel/oauth-state";
 import { getRoleResolver } from "@/server/membership";
+import { clientIpFromRequest, enforceRateLimitHttp } from "@/server/ratelimit";
 import { getSessionWithFixtureFallback } from "@/server/session";
 
 /**
@@ -21,6 +22,8 @@ export const dynamic = "force-dynamic";
 const OAUTH_SCOPE = "https://www.googleapis.com/auth/youtube.readonly";
 
 export async function GET(req: Request): Promise<Response> {
+  const denied = await enforceRateLimitHttp("auth", `ip:${clientIpFromRequest(req)}`);
+  if (denied !== null) return denied;
   const session = await getSessionWithFixtureFallback();
   const sessionUserId = session?.user.id ?? "";
   if (sessionUserId === "") {
