@@ -176,6 +176,10 @@ export class InMemoryEngineStore implements EngineStore {
     if (patch.status !== undefined) project.status = patch.status;
     if (patch.targetPublishDate !== undefined) project.targetPublishDate = patch.targetPublishDate;
     if (patch.publishedVideoId !== undefined) project.publishedVideoId = patch.publishedVideoId;
+    if (patch.generationMode !== undefined) project.generationMode = patch.generationMode;
+    if (patch.archetypeId !== undefined) project.archetypeId = patch.archetypeId;
+    if (patch.crossover !== undefined) project.crossover = patch.crossover;
+    if (patch.partnerId !== undefined) project.partnerId = patch.partnerId;
     project.updatedAt = new Date();
     return Promise.resolve(clone(project));
   }

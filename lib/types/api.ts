@@ -260,6 +260,21 @@ export const projectContracts = {
     input: workspaceScopedSchema.extend({ projectId: projectIdSchema }),
     output: z.object({ archived: z.boolean() }),
   },
+  /**
+   * Wave-C additive (REQUESTS-C2 #1): persist the project's generation
+   * target (mode/archetype/crossover) BEFORE any draft exists, so the
+   * picker's choice follows the user across devices and teammates see it.
+   * `null` clears the target (legacy voice-profile flow). Mode availability
+   * is enforced server-side (server/modes.ts) exactly as on the staged
+   * script procedures.
+   */
+  setGenerationTarget: {
+    input: workspaceScopedSchema.extend({
+      projectId: projectIdSchema,
+      generation: generationTargetSchema.nullable(),
+    }),
+    output: projectSchema,
+  },
 } as const;
 
 // --------------------------------------------------------------------------
@@ -533,6 +548,12 @@ export const thumbnailsContracts = {
       projectId: projectIdSchema,
       compositionPattern: z.string().min(1).max(60),
       subjectDescription: z.string().min(1).max(1000),
+      /**
+       * Wave-C additive (REQUESTS-C3 #1): user-supplied overlay text. The
+       * pipeline enforces the archetype preset's maxOverlayWords cap
+       * (reject-with-clear-error, never silent truncation).
+       */
+      overlayText: z.string().max(200).nullable().default(null),
     }),
     output: jobAcceptedSchema,
   },

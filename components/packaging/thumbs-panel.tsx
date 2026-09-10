@@ -25,8 +25,22 @@ export function ThumbsPanel() {
   const projectId = useProjectId();
   const utils = trpc.useUtils();
   const { toast } = useToast();
-  const [pattern, setPattern] = useState(COMPOSITION_PATTERNS[0]?.id ?? "big-text");
+  // null = no explicit choice yet — defaults to the archetype preset
+  // ("auto") when the project carries one, else the first library pattern.
+  const [chosenPattern, setChosenPattern] = useState<string | null>(null);
   const [subject, setSubject] = useState("");
+  const [overlay, setOverlay] = useState("");
+
+  const projectQuery = trpc.project.get.useQuery(
+    workspaceId !== null ? { workspaceId, projectId } : skipToken,
+  );
+  // The server resolves "auto" from the project row's mode fields — offer it
+  // exactly when the row carries an archetype or crossover (REQUESTS-C3).
+  const hasPreset =
+    projectQuery.data?.generationMode === "archetype" ||
+    projectQuery.data?.generationMode === "crossover";
+  const pattern =
+    chosenPattern ?? (hasPreset ? "auto" : (COMPOSITION_PATTERNS[0]?.id ?? "big-text"));
 
   const listQuery = trpc.thumbnails.list.useQuery(
     workspaceId !== null ? { workspaceId, projectId } : skipToken,
@@ -45,7 +59,10 @@ export function ThumbsPanel() {
       toast(
         err.data?.code === "PRECONDITION_FAILED"
           ? "Not enough credits for a thumbnail run (3 needed)."
-          : "Could not start thumbnail generation — try again.",
+          : err.data?.code === "BAD_REQUEST"
+            ? // Overlay word-cap / auto-pattern violations carry a clear message.
+              err.message
+            : "Could not start thumbnail generation — try again.",
       );
     },
   });
@@ -87,6 +104,24 @@ export function ThumbsPanel() {
               aria-label="Composition pattern"
               className="grid grid-cols-2 gap-2 sm:grid-cols-4"
             >
+              {hasPreset ? (
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={pattern === "auto"}
+                  title="Use the composition pattern from this project's style preset."
+                  onClick={() => {
+                    setChosenPattern("auto");
+                  }}
+                  className={`rounded-md border px-2.5 py-2 text-left text-xs font-medium transition-colors ${
+                    pattern === "auto"
+                      ? "border-emerald-600 bg-emerald-50 text-emerald-900 ring-1 ring-emerald-600 dark:border-emerald-500 dark:bg-emerald-950/40 dark:text-emerald-200 dark:ring-emerald-500"
+                      : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:border-zinc-700 dark:hover:bg-zinc-900"
+                  }`}
+                >
+                  Auto (style preset)
+                </button>
+              ) : null}
               {COMPOSITION_PATTERNS.map((p) => (
                 <button
                   key={p.id}
@@ -95,7 +130,7 @@ export function ThumbsPanel() {
                   aria-checked={p.id === pattern}
                   title={p.note}
                   onClick={() => {
-                    setPattern(p.id);
+                    setChosenPattern(p.id);
                   }}
                   className={`rounded-md border px-2.5 py-2 text-left text-xs font-medium transition-colors ${
                     p.id === pattern
@@ -107,7 +142,11 @@ export function ThumbsPanel() {
                 </button>
               ))}
             </div>
-            {selected !== undefined ? (
+            {pattern === "auto" ? (
+              <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                The composition rule from this project&rsquo;s style preset is used automatically.
+              </p>
+            ) : selected !== undefined ? (
               <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{selected.note}</p>
             ) : null}
           </div>
@@ -122,6 +161,7 @@ export function ThumbsPanel() {
                 projectId,
                 compositionPattern: pattern,
                 subjectDescription: subject.trim(),
+                overlayText: overlay.trim() === "" ? null : overlay.trim(),
               });
             }}
           >
@@ -133,6 +173,17 @@ export function ThumbsPanel() {
                 value={subject}
                 onChange={(e) => {
                   setSubject(e.target.value);
+                }}
+              />
+            </Field>
+            <Field label="Overlay text (optional)" htmlFor="th-overlay">
+              <TextArea
+                id="th-overlay"
+                className="min-h-10 resize-y"
+                placeholder="e.g. $200 vs $2000 — style presets cap the word count"
+                value={overlay}
+                onChange={(e) => {
+                  setOverlay(e.target.value);
                 }}
               />
             </Field>

@@ -108,25 +108,26 @@ export function StagedGeneratePanel() {
     [versionsQuery.data],
   );
 
-  // ---- generation target (local stash; server mode fields win) ------------
+  // ---- generation target (local stash → project row → latest script) ------
+  const project = projectQuery.data ?? null;
   const [generation, setGeneration] = useState<GenerationTarget | null>(null);
   useEffect(() => {
-    setGeneration(resolveGenerationTarget(projectId, latestScript));
-  }, [projectId, latestScript]);
+    setGeneration(resolveGenerationTarget(projectId, project, latestScript));
+  }, [projectId, project, latestScript]);
   // The style editor on the project frame broadcasts changes; pick them up
   // (and drop stale outline/hooks state) without a refresh.
   useEffect(() => {
     const onChanged = (e: Event) => {
       const detail = (e as CustomEvent<{ projectId?: string } | undefined>).detail;
       if (detail?.projectId !== projectId) return;
-      setGeneration(resolveGenerationTarget(projectId, latestScript));
+      setGeneration(resolveGenerationTarget(projectId, project, latestScript));
       reloadFlow();
     };
     window.addEventListener(GENERATION_CHANGED_EVENT, onChanged);
     return () => {
       window.removeEventListener(GENERATION_CHANGED_EVENT, onChanged);
     };
-  }, [projectId, latestScript, reloadFlow]);
+  }, [projectId, project, latestScript, reloadFlow]);
 
   // ---- resume an in-flight generation (SSE replay restores history) -------
   useEffect(() => {

@@ -215,6 +215,11 @@ export const projectRouter = router({
     .input(projectContracts.archive.input)
     .output(projectContracts.archive.output)
     .mutation(({ ctx, input }) => projectHandlers.archive({ ctx, input })),
+  setGenerationTarget: workspaceProcedure("project", "update")
+    .use(general)
+    .input(projectContracts.setGenerationTarget.input)
+    .output(projectContracts.setGenerationTarget.output)
+    .mutation(({ ctx, input }) => projectHandlers.setGenerationTarget({ ctx, input })),
 });
 
 export const researchRouter = router({

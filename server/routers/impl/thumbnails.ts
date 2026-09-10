@@ -53,10 +53,9 @@ export const thumbnailsImpl = {
       faceImageKey: null,
       actorUserId: ctx.userId,
       presetArchetypeId: preset?.id ?? null,
-      // The frozen generate contract has no overlayText field yet — the
-      // pipeline accepts and cap-enforces it; exposing it is a frozen-layer
-      // request (REQUESTS-C3.md).
-      overlayText: null,
+      // Additive contract field (REQUESTS-C3 #1) — the pipeline enforces
+      // the preset's maxOverlayWords cap (reject, never silent truncation).
+      overlayText: input.overlayText,
     };
     await dispatchPipelineJob(QUEUE_NAMES.packaging, JOB_NAMES.thumbnails, payload, () =>
       handleThumbnailsJob(payload),

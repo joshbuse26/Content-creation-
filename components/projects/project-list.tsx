@@ -42,12 +42,16 @@ export function ProjectListScreen() {
       : skipToken,
   );
 
+  const setTargetMutation = trpc.project.setGenerationTarget.useMutation();
   const createMutation = trpc.project.create.useMutation({
     onSuccess: (project) => {
-      // No frozen contract carries the style choice at creation
-      // (REQUESTS-C2.md #1) — stash it per project; every staged script
-      // call sends it as the `generation` param.
+      // Persist the style choice on the project row (wave-C additive
+      // project.setGenerationTarget); the localStorage stash stays as the
+      // fallback so the choice applies immediately even if the save fails.
       storeGenerationTarget(project.id, newTarget);
+      if (workspaceId !== null && newTarget !== null) {
+        setTargetMutation.mutate({ workspaceId, projectId: project.id, generation: newTarget });
+      }
       setCreating(false);
       setTitle("");
       setNewTarget(null);
