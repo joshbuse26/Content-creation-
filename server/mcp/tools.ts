@@ -4,8 +4,8 @@ import type { Session } from "next-auth";
 import { z } from "zod";
 import { getConfig } from "@/lib/config";
 import { logger } from "@/lib/logger";
-import { IDEA_STATUSES } from "@/lib/types/enums";
-import type { ApiKey, Project } from "@/lib/types/entities";
+import { ARCHETYPE_IDS, IDEA_STATUSES } from "@/lib/types/enums";
+import { generationTargetSchema, type ApiKey, type Project } from "@/lib/types/entities";
 import {
   asChannelId,
   asProjectId,
@@ -64,6 +64,10 @@ const ARG_SCHEMAS = {
     project_id: uuidArg,
     frame_id: uuidArg,
     voice_profile_id: uuidArg.nullable().optional(),
+    // Wave-C generation target, mirroring generationTargetSchema (F9);
+    // availability (partnered flag, train mode) is enforced by the same
+    // server guard the tRPC procedures run.
+    generation: generationTargetSchema.nullable().optional(),
   }),
   get_script: z.object({ script_id: uuidArg }),
   generate_titles: z.object({ project_id: uuidArg }),
@@ -124,7 +128,7 @@ const TOOL_DEFINITIONS: Record<McpToolName, McpToolDefinition> = {
   generate_script: {
     name: "generate_script",
     description:
-      "Run the 7-stage script pipeline for a project's chosen frame. Charges 6 credits on completion. Returns a job acceptance with the new script_id; poll get_script for the result.",
+      "Run the staged script pipeline (outline → hooks → draft) for a project's chosen frame, orchestrated as one job. Charges ITEMIZED per-stage ledger entries on completion: outline 1 + hooks 1 + draft 4 = 6 credits, each idempotency-keyed (retries never double-charge). Returns a job acceptance with the new script_id; poll get_script for the result.",
     inputSchema: {
       type: "object",
       properties: {
@@ -133,6 +137,39 @@ const TOOL_DEFINITIONS: Record<McpToolName, McpToolDefinition> = {
         voice_profile_id: {
           ...UUID_SCHEMA,
           description: "Optional voice profile id (UUID); omit for the default voice",
+        },
+        generation: {
+          type: "object",
+          description:
+            "Optional generation target (omit or null for the legacy voice-profile flow). archetype and crossover are generally available; partnered_named additionally requires the deployment's partner flag and a licensed, enabled partner; train_on_my_channel is not yet available.",
+          properties: {
+            mode: {
+              type: "string",
+              enum: ["archetype", "crossover", "partnered_named", "train_on_my_channel"],
+            },
+            archetypeId: {
+              type: "string",
+              enum: [...ARCHETYPE_IDS],
+              description: "Required when mode=archetype",
+            },
+            crossover: {
+              type: "object",
+              description:
+                "Required when mode=crossover: a deterministic blend of two distinct archetypes",
+              properties: {
+                a: { type: "string", enum: [...ARCHETYPE_IDS] },
+                b: { type: "string", enum: [...ARCHETYPE_IDS] },
+                weightA: { type: "number", minimum: 0, maximum: 1 },
+              },
+              required: ["a", "b", "weightA"],
+            },
+            partnerId: { type: "string", description: "Required when mode=partnered_named" },
+            voiceProfileId: {
+              type: "string",
+              description: "Required when mode=train_on_my_channel",
+            },
+          },
+          required: ["mode"],
         },
       },
       required: ["project_id", "frame_id"],
@@ -339,6 +376,9 @@ export async function callMcpTool(
             input.voice_profile_id === undefined || input.voice_profile_id === null
               ? null
               : voiceProfileIdSchema.parse(input.voice_profile_id),
+          // Same orchestrator path as the web app — the mode guard and
+          // partner/archetype resolution run server-side at dispatch.
+          generation: input.generation ?? null,
         });
         return toolText(accepted);
       }

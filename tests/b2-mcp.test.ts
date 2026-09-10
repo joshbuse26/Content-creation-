@@ -341,6 +341,50 @@ describe("tools/call", () => {
     expect(deps.store.creditEntries).toHaveLength(0);
   });
 
+  it("generate_script accepts a wave-C generation target and stamps the script's mode columns", async () => {
+    const { secret } = await mintKey();
+    const result = await callTool(secret, "generate_script", {
+      project_id: fixtureProject.id,
+      frame_id: fixtureFrame.id,
+      generation: { mode: "archetype", archetypeId: "calm-explainer" },
+    });
+    expect(result.isError).toBeUndefined();
+    const accepted = JSON.parse(result.content[0]?.text ?? "{}") as { scriptId: string };
+    const script = await deps.store.getScript(
+      fixtureCtx.workspaceId,
+      accepted.scriptId as Parameters<typeof deps.store.getScript>[1],
+    );
+    expect(script?.generationMode).toBe("archetype");
+    expect(script?.archetypeId).toBe("calm-explainer");
+  });
+
+  it("generate_script partnered_named rides the same server flag guard (FORBIDDEN when off)", async () => {
+    const { secret } = await mintKey();
+    const result = await callTool(secret, "generate_script", {
+      project_id: fixtureProject.id,
+      frame_id: fixtureFrame.id,
+      generation: { mode: "partnered_named", partnerId: FIXTURE_IDS.partner },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("FORBIDDEN");
+    expect(deps.store.creditEntries).toHaveLength(0);
+  });
+
+  it("tools/list documents generate_script's generation param and itemized charging (no schema drift)", async () => {
+    const { secret } = await mintKey();
+    const reply = await replyOf(await post(rpc("tools/list"), secret));
+    const tools = (reply.result?.tools ?? []) as {
+      name: string;
+      description: string;
+      inputSchema: { properties: Record<string, unknown> };
+    }[];
+    const def = tools.find((t) => t.name === "generate_script");
+    expect(def).toBeDefined();
+    expect(def?.description).toMatch(/outline 1 \+ hooks 1 \+ draft 4 = 6/);
+    expect(def?.description).not.toMatch(/Charges 6 credits on completion/);
+    expect(def?.inputSchema.properties).toHaveProperty("generation");
+  });
+
   it("get_script joins script → project → channel scope", async () => {
     const { secret } = await mintKey();
     const result = await callTool(secret, "get_script", { script_id: FIXTURE_IDS.script });
