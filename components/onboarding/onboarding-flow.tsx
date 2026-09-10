@@ -30,8 +30,19 @@ export function OnboardingFlow() {
   const [wsName, setWsName] = useState("");
   const [connectedChannelId, setConnectedChannelId] = useState<ChannelId | null>(null);
 
+  const utils = trpc.useUtils();
   const createWs = trpc.workspace.create.useMutation({
-    onSuccess: (ws) => {
+    onSuccess: async (ws) => {
+      // Make the new workspace visible to workspace.list consumers BEFORE
+      // selecting it — otherwise the selection resolves against a stale list
+      // (null workspaceId for first-time users; the wrong workspace for
+      // users who already had one).
+      utils.workspace.list.setData(undefined, (prev) => {
+        const mine = { ...ws, role: "owner" as const };
+        if (prev === undefined) return [mine];
+        return prev.some((w) => w.id === ws.id) ? prev : [...prev, mine];
+      });
+      await utils.workspace.list.invalidate();
       selectWorkspace(ws.id);
       setStep("channel");
     },
