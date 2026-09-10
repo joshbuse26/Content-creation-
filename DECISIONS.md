@@ -342,3 +342,36 @@ card through the same seam; archetype/crossover/partner cards flow through the i
 `styleCard` injection (prompts, voice pass, gates) as channel-learned cards. `PROMPT_VERSION`
 bumped to `2026-09-10.2` (outline prompt now renders the style card + pacing rule; hook prompt
 gained the allowed-techniques constraint; new topics prompt).
+
+## 2026-09-10 — Wave C integration (C1 + C2 + C3 → main)
+
+**Merge order C1 → C2 → C3, all textually clean; two semantic seams fixed at integration.**
+(1) golden-run injected engine deps via `setEngineDepsForTests` but C1's stage handlers resolve
+through the new `getStageDeps()` cache — the first brief's isolated store was captured for every
+later brief ("project not found"). golden-run now clears the stage-deps cache per brief and the
+golden loop exercises the REAL staged pipeline end-to-end. (2) The meal-prep-myths CTA canary
+(rapid-listicle wants the CTA at ~30% of runtime) still failed after C1 because the fixture
+outline synthesizer always appended the CTA at the end. `synthOutline` now honors the card's
+`ctaHabits`: `timestamp_pct` cards get the CTA inserted at the chapter boundary closest to
+`placementPct` of runtime (always directly after a chapter, so `after_payoff` semantics hold);
+`end_only`/`after_payoff`/card-less keep the legacy end position. Canary passes.
+
+**Approved additive frozen-layer changes (REQUESTS-C2 #1, REQUESTS-C3 #1):**
+`project.setGenerationTarget` — a dedicated mutation (cleaner than widening `project.update`:
+mode guards + archetype-catalog validation don't belong on a general field patch) that persists
+`generationMode/archetypeId/crossover/partnerId` on the project row pre-draft; `null` clears.
+`ProjectPatch` and both stores gained the mode fields. The picker saves server-side on create
+and on style change; the localStorage stash is kept as a fallback and the client resolution
+order is local stash → project row → latest script row. `thumbnails.generate` gained additive
+`overlayText` (`max(200).nullable().default(null)`); the router passes it through and C3's
+pipeline enforces the preset's `maxOverlayWords` cap (reject, never truncate).
+
+**Thumbs panel defaults to the `"auto"` composition pattern** for projects whose row carries an
+archetype or crossover (exactly the condition under which the server can resolve a preset — and
+project rows now do carry it pre-draft, thanks to setGenerationTarget); any explicit pattern
+pick overrides. Crossover tie-break verified identical in `mergeStyleCards` and
+`resolveThumbnailPreset`: `weightA >= 0.5 → a`, tie to `a` — card and preset can never disagree
+about which archetype won.
+
+**`docs/golden-baseline.md` regenerated on the final tree** (real staged path, style-gate
+columns filled, CTA canary green); `--compare` runs against it in CI-adjacent smoke.
