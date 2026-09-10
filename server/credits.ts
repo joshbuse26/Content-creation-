@@ -1,0 +1,56 @@
+import { TRPCError } from "@trpc/server";
+import { eq } from "drizzle-orm";
+import { getDb, hasDb, schema } from "@/db";
+import type { WorkspaceId } from "@/lib/types/ids";
+import { getSharedWorkspaceStore } from "@/server/workspace/memory";
+
+/**
+ * Credit gating (spec §7) — checked at DISPATCH time, before any generation
+ * job is enqueued or run inline, so a workspace can never start work it
+ * cannot pay for. The completion-time charge in each pipeline stays the
+ * moment the ledger entry is written (never on failure); the database CHECK
+ * on workspaces.credit_balance (>= OVERDRAFT_FLOOR) is the backstop against
+ * concurrent races pushing the balance negative.
+ */
+
+/** Balance may never drop below this (0 for now — no overdraft). */
+export const OVERDRAFT_FLOOR = 0;
+
+/** Costs per generation action (spec §7). */
+export const CREDIT_COSTS = {
+  scriptGeneration: 6,
+  revisionPass: 2,
+  researchRun: 1,
+  titles: 1,
+  avatarRegen: 1,
+} as const;
+
+/** Current balance, or null when the workspace does not exist. */
+export async function getCreditBalance(workspaceId: WorkspaceId): Promise<number | null> {
+  if (!hasDb()) {
+    return getSharedWorkspaceStore().get(workspaceId)?.creditBalance ?? null;
+  }
+  const rows = await getDb()
+    .select({ creditBalance: schema.workspaces.creditBalance })
+    .from(schema.workspaces)
+    .where(eq(schema.workspaces.id, workspaceId))
+    .limit(1);
+  return rows[0]?.creditBalance ?? null;
+}
+
+/**
+ * Throws PRECONDITION_FAILED unless the workspace can afford `cost` without
+ * dropping below the overdraft floor.
+ */
+export async function requireCredits(workspaceId: WorkspaceId, cost: number): Promise<void> {
+  const balance = await getCreditBalance(workspaceId);
+  if (balance === null) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "workspace not found" });
+  }
+  if (balance - cost < OVERDRAFT_FLOOR) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: `Not enough credits: this action costs ${cost} credit${cost === 1 ? "" : "s"} and the workspace has ${balance}. Buy more credits or upgrade the plan.`,
+    });
+  }
+}

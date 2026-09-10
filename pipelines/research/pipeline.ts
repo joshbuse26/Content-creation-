@@ -144,6 +144,7 @@ export async function runResearchPipeline(
   };
 
   const runner = new PipelineRunner(deps.runs);
+  const inputHash = stageInputHash(input);
   const result = await runner.execute(
     {
       kind: "script",
@@ -156,18 +157,21 @@ export async function runResearchPipeline(
       workspaceId: input.workspaceId,
       projectId: input.projectId,
       input: params,
-      inputHash: stageInputHash(input),
+      inputHash,
     },
   );
 
-  if (result.status === "done") {
-    // 1 credit per research run (spec §7), charged on completion.
+  if (result.status === "done" && result.skippedStages.length !== RESEARCH_STAGES.length) {
+    // 1 credit per research run (spec §7), charged on completion — never on
+    // failure, never twice (idempotent per input hash), and not for a run
+    // whose stages were all resumed/skipped.
     await deps.store.recordCredits({
       workspaceId: input.workspaceId,
       delta: -1,
       reason: "research_run",
       actorUserId: params.actorUserId,
       projectId: input.projectId,
+      idempotencyKey: `research_run:${inputHash}`,
     });
   }
   return result;

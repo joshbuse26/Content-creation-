@@ -87,16 +87,25 @@ const updatedAt = () =>
 // Tenancy core
 // ---------------------------------------------------------------------------
 
-export const workspaces = pgTable("workspaces", {
-  id: id(),
-  name: text("name").notNull(),
-  plan: planEnum("plan").notNull().default("free"),
-  stripeCustomerId: text("stripe_customer_id"),
-  creditBalance: integer("credit_balance").notNull().default(0),
-  billingCycleAnchor: timestamp("billing_cycle_anchor", { withTimezone: true }),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
+export const workspaces = pgTable(
+  "workspaces",
+  {
+    id: id(),
+    name: text("name").notNull(),
+    plan: planEnum("plan").notNull().default("free"),
+    stripeCustomerId: text("stripe_customer_id"),
+    creditBalance: integer("credit_balance").notNull().default(0),
+    billingCycleAnchor: timestamp("billing_cycle_anchor", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    // Overdraft floor (0 for now): a charge may never push the balance
+    // negative — the dispatch-time requireCredits gate is the primary
+    // control, this CHECK is the database-level backstop.
+    check("workspaces_credit_balance_floor", sql`${t.creditBalance} >= 0`),
+  ],
+);
 
 export const users = pgTable("users", {
   id: id(),
@@ -704,6 +713,9 @@ export const creditLedger = pgTable(
     pipelineRunId: uuid("pipeline_run_id").references(() => pipelineRuns.id, {
       onDelete: "set null",
     }),
+    /** Charge dedupe key (e.g. `<reason>:<run input hash>`) — a retried or
+     *  re-run pipeline completion writes at most one entry per key. */
+    idempotencyKey: text("idempotency_key"),
     createdAt: createdAt(),
   },
   (t) => [
@@ -711,6 +723,9 @@ export const creditLedger = pgTable(
     index("credit_ledger_project_idx").on(t.projectId),
     index("credit_ledger_pipeline_run_idx").on(t.pipelineRunId),
     index("credit_ledger_actor_idx").on(t.actorUserId),
+    uniqueIndex("credit_ledger_idempotency_uq")
+      .on(t.idempotencyKey)
+      .where(sql`${t.idempotencyKey} IS NOT NULL`),
   ],
 );
 

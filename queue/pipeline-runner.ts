@@ -28,6 +28,13 @@ export interface PipelineRunRecord {
   creditsCharged: number;
 }
 
+export interface ActiveRunKey {
+  workspaceId: string;
+  projectId: string | null;
+  kind: PipelineKind;
+  inputHash: string;
+}
+
 export interface PipelineRunStore {
   create(run: Omit<PipelineRunRecord, "id">): Promise<PipelineRunRecord>;
   update(
@@ -42,6 +49,12 @@ export interface PipelineRunStore {
     stage: string;
     inputHash: string;
   }): Promise<PipelineRunRecord | null>;
+  /**
+   * Most recently touched `running` stage row for this pipeline+input (any
+   * stage), or null. Backs the runner claim: an identical run refuses to
+   * start while another is running and fresh.
+   */
+  findRunning?(key: ActiveRunKey): Promise<{ id: string; updatedAt: Date } | null>;
 }
 
 export interface StageDefinition<TInput> {
@@ -73,7 +86,18 @@ export interface PipelineRunnerOptions {
   backoffMs?: (attempt: number) => number;
   /** Injectable for tests. */
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * How recently a concurrent `running` row must have been touched to block
+   * an identical run from starting. Default 5 minutes — a crashed run's
+   * stale row stops blocking once it ages out.
+   */
+  claimFreshnessMs?: number;
+  /** Injectable clock for tests. */
+  now?: () => number;
 }
+
+/** Error message returned when an identical run is already in progress. */
+export const RUN_ALREADY_IN_PROGRESS = "an identical run is already in progress";
 
 export function hashInput(input: unknown): string {
   return createHash("sha256")
@@ -87,6 +111,8 @@ export class PipelineRunner {
   private readonly maxRetries: number;
   private readonly backoffMs: (attempt: number) => number;
   private readonly sleep: (ms: number) => Promise<void>;
+  private readonly claimFreshnessMs: number;
+  private readonly now: () => number;
 
   constructor(
     private readonly store: PipelineRunStore,
@@ -95,6 +121,8 @@ export class PipelineRunner {
     this.maxRetries = options.maxRetries ?? 2;
     this.backoffMs = options.backoffMs ?? ((attempt) => 1_000 * 2 ** (attempt - 1));
     this.sleep = options.sleep ?? defaultSleep;
+    this.claimFreshnessMs = options.claimFreshnessMs ?? 5 * 60_000;
+    this.now = options.now ?? Date.now;
   }
 
   async execute<TInput>(
@@ -103,6 +131,28 @@ export class PipelineRunner {
   ): Promise<PipelineResult> {
     const inputHash = params.inputHash ?? hashInput(params.input);
     const skippedStages: string[] = [];
+
+    // Runner claim: refuse to start when an identical run (same workspace,
+    // project, kind and input hash) has a fresh `running` stage row — a
+    // duplicate enqueue or an overlapping BullMQ retry must not execute the
+    // same work (and charge for it) twice. Stale rows from crashed runs age
+    // out after claimFreshnessMs.
+    if (this.store.findRunning !== undefined) {
+      const active = await this.store.findRunning({
+        workspaceId: params.workspaceId,
+        projectId: params.projectId,
+        kind: pipeline.kind,
+        inputHash,
+      });
+      if (active !== null && this.now() - active.updatedAt.getTime() < this.claimFreshnessMs) {
+        return {
+          status: "failed",
+          stage: pipeline.stages[0]?.name ?? "start",
+          error: RUN_ALREADY_IN_PROGRESS,
+          skippedStages,
+        };
+      }
+    }
 
     for (const stage of pipeline.stages) {
       const key = {
@@ -169,12 +219,14 @@ export class PipelineRunner {
 /** In-memory store — tests and fixture mode. */
 export class InMemoryPipelineRunStore implements PipelineRunStore {
   public readonly rows: PipelineRunRecord[] = [];
+  private readonly touchedAt = new Map<string, Date>();
   private seq = 0;
 
   create(run: Omit<PipelineRunRecord, "id">): Promise<PipelineRunRecord> {
     this.seq += 1;
     const record: PipelineRunRecord = { ...run, id: `run-${this.seq}` };
     this.rows.push(record);
+    this.touchedAt.set(record.id, new Date());
     return Promise.resolve(record);
   }
 
@@ -185,7 +237,28 @@ export class InMemoryPipelineRunStore implements PipelineRunStore {
     const row = this.rows.find((r) => r.id === id);
     if (row === undefined) return Promise.reject(new Error(`run ${id} not found`));
     Object.assign(row, patch);
+    this.touchedAt.set(id, new Date());
     return Promise.resolve();
+  }
+
+  findRunning(key: ActiveRunKey): Promise<{ id: string; updatedAt: Date } | null> {
+    const match = [...this.rows]
+      .reverse()
+      .find(
+        (r) =>
+          r.workspaceId === key.workspaceId &&
+          r.projectId === key.projectId &&
+          r.kind === key.kind &&
+          r.inputHash === key.inputHash &&
+          r.status === "running",
+      );
+    if (match === undefined) return Promise.resolve(null);
+    return Promise.resolve({ id: match.id, updatedAt: this.touchedAt.get(match.id) ?? new Date() });
+  }
+
+  /** Test hook: back-date a row's last-touched time (stale-claim tests). */
+  setTouchedAtForTests(id: string, when: Date): void {
+    this.touchedAt.set(id, when);
   }
 
   find(key: {

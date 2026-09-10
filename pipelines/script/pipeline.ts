@@ -451,22 +451,29 @@ export async function runScriptPipeline(
     })),
   };
 
+  const inputHash = stageInputHash({ input, scriptId });
   const result = await runner.execute(pipeline, {
     workspaceId: input.workspaceId,
     projectId: input.projectId,
     input: params,
-    inputHash: stageInputHash({ input, scriptId }),
+    inputHash,
   });
 
   if (result.status === "done") {
-    // Charge 6 credits on completion (spec §7) — never on failure.
-    await deps.store.recordCredits({
-      workspaceId: input.workspaceId,
-      delta: -6,
-      reason: "script_generation",
-      actorUserId: params.actorUserId,
-      projectId: input.projectId,
-    });
+    // Charge 6 credits on completion (spec §7) — never on failure, never
+    // twice: the charge is idempotent per (reason, input hash), and a run
+    // where every stage was resumed/skipped did no new work to charge for.
+    const allStagesSkipped = result.skippedStages.length === SCRIPT_STAGES.length;
+    if (!allStagesSkipped) {
+      await deps.store.recordCredits({
+        workspaceId: input.workspaceId,
+        delta: -6,
+        reason: "script_generation",
+        actorUserId: params.actorUserId,
+        projectId: input.projectId,
+        idempotencyKey: `script_generation:${inputHash}`,
+      });
+    }
     await publish({ type: "complete", scriptId: scriptIdSchema.parse(scriptId) });
   } else {
     await publish({

@@ -138,7 +138,9 @@ export async function runRevisionPipeline(
     },
   );
 
-  if (result.status === "done") {
+  if (result.status === "done" && result.skippedStages.length !== REVISION_STAGES.length) {
+    // 2 credits on completion — never on failure, never twice (idempotent
+    // per input hash), and not for an all-skipped resume.
     const script = await deps.store.getScript(input.workspaceId, input.scriptId);
     await deps.store.recordCredits({
       workspaceId: input.workspaceId,
@@ -146,6 +148,7 @@ export async function runRevisionPipeline(
       reason: "revision_pass",
       actorUserId: params.actorUserId,
       projectId: script?.projectId ?? null,
+      idempotencyKey: `revision_pass:${stageInputHash(input)}`,
     });
   }
   return { result, revisions: inserted };

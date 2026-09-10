@@ -1,7 +1,7 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { PipelineKind } from "@/lib/types/enums";
-import type { PipelineRunRecord, PipelineRunStore } from "./pipeline-runner";
+import type { ActiveRunKey, PipelineRunRecord, PipelineRunStore } from "./pipeline-runner";
 
 /** Drizzle-backed pipeline_runs store — the production PipelineRunStore. */
 export class DrizzlePipelineRunStore implements PipelineRunStore {
@@ -79,5 +79,26 @@ export class DrizzlePipelineRunStore implements PipelineRunStore {
       error: row.error,
       creditsCharged: row.creditsCharged,
     };
+  }
+
+  async findRunning(key: ActiveRunKey): Promise<{ id: string; updatedAt: Date } | null> {
+    const db = getDb();
+    const rows = await db
+      .select({ id: schema.pipelineRuns.id, updatedAt: schema.pipelineRuns.updatedAt })
+      .from(schema.pipelineRuns)
+      .where(
+        and(
+          eq(schema.pipelineRuns.workspaceId, key.workspaceId),
+          key.projectId === null
+            ? isNull(schema.pipelineRuns.projectId)
+            : eq(schema.pipelineRuns.projectId, key.projectId),
+          eq(schema.pipelineRuns.kind, key.kind),
+          eq(schema.pipelineRuns.inputHash, key.inputHash),
+          eq(schema.pipelineRuns.status, "running"),
+        ),
+      )
+      .orderBy(desc(schema.pipelineRuns.updatedAt))
+      .limit(1);
+    return rows[0] ?? null;
   }
 }

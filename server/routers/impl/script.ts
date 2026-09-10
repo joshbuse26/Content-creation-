@@ -17,6 +17,7 @@ import {
   fleschReadingEase,
 } from "@/pipelines/script/readability";
 import { regenerateSectionPrompt } from "@/prompts";
+import { CREDIT_COSTS, requireCredits } from "@/server/credits";
 import { exportScript } from "@/server/export";
 import { JOB_NAMES, QUEUE_NAMES } from "@/queue/queues";
 import { badRequest, jobAccepted, notFound, type HandlerOpts } from "./_shared";
@@ -67,6 +68,7 @@ async function qualityReportFor(
 export const scriptImpl = {
   /** Starts the 7-stage pipeline; 6 credits charged on completion. */
   async generate({ ctx, input }: HandlerOpts<GenerateInput>) {
+    await requireCredits(ctx.workspaceId, CREDIT_COSTS.scriptGeneration);
     const deps = await getEngineDeps();
     const project = await deps.store.getProject(ctx.workspaceId, input.projectId);
     if (project === null) notFound("project");

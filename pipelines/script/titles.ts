@@ -133,13 +133,16 @@ export async function runTitlesPipeline(
     },
   );
 
-  if (result.status === "done") {
+  if (result.status === "done" && result.skippedStages.length !== TITLES_STAGES.length) {
+    // 1 credit on completion — never on failure, never twice (idempotent
+    // per input hash), and not for an all-skipped resume.
     await deps.store.recordCredits({
       workspaceId: input.workspaceId,
       delta: -1,
       reason: "titles",
       actorUserId: params.actorUserId,
       projectId: input.projectId,
+      idempotencyKey: `titles:${stageInputHash(input)}`,
     });
   }
   return { result, titleSet: saved };

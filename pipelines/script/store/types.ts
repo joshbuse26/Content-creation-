@@ -112,6 +112,14 @@ export interface CreditRecord {
   reason: CreditReason;
   actorUserId: string | null;
   projectId: ProjectId | null;
+  /**
+   * Charge dedupe key (typically `<reason>:<run input hash>`). When set, a
+   * second recordCredits call with the same key is a no-op — this is what
+   * makes completion charges safe under BullMQ retries and identical
+   * re-runs. Omit/null for entries that must always append (grants,
+   * purchases, refunds).
+   */
+  idempotencyKey?: string | null;
 }
 
 export interface NewProject {

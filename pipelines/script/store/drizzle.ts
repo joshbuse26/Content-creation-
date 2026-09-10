@@ -623,14 +623,34 @@ export class DrizzleEngineStore implements EngineStore {
   // -- credits --------------------------------------------------------------
 
   async recordCredits(record: CreditRecord): Promise<void> {
+    const idempotencyKey = record.idempotencyKey ?? null;
     await getDb().transaction(async (tx) => {
-      await tx.insert(schema.creditLedger).values({
+      const values = {
         workspaceId: record.workspaceId,
         delta: record.delta,
         reason: record.reason,
         actorUserId: record.actorUserId,
         projectId: record.projectId,
-      });
+        idempotencyKey,
+      };
+      const inserted =
+        idempotencyKey === null
+          ? await tx
+              .insert(schema.creditLedger)
+              .values(values)
+              .returning({ id: schema.creditLedger.id })
+          : await tx
+              .insert(schema.creditLedger)
+              .values(values)
+              .onConflictDoNothing({
+                target: schema.creditLedger.idempotencyKey,
+                where: sql`${schema.creditLedger.idempotencyKey} IS NOT NULL`,
+              })
+              .returning({ id: schema.creditLedger.id });
+      // Conflict on the idempotency key ⇒ this charge already happened
+      // (e.g. a BullMQ retry after the ledger write) — never touch the
+      // balance a second time.
+      if (inserted.length === 0) return;
       await tx
         .update(schema.workspaces)
         .set({ creditBalance: sql`${schema.workspaces.creditBalance} + ${record.delta}` })

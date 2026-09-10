@@ -15,6 +15,13 @@
       "when": 1789009113640,
       "tag": "0001_milky_photon",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789020664301,
+      "tag": "0002_futuristic_korvac",
+      "breakpoints": true
     }
   ]
 }

@@ -568,6 +568,12 @@ export class InMemoryEngineStore implements EngineStore {
   // -- credits --------------------------------------------------------------
 
   recordCredits(record: CreditRecord): Promise<void> {
+    const key = record.idempotencyKey ?? null;
+    if (key !== null && this.creditEntries.some((e) => (e.idempotencyKey ?? null) === key)) {
+      // Same semantics as the unique partial index in Postgres: at most one
+      // ledger entry per idempotency key.
+      return Promise.resolve();
+    }
     this.creditEntries.push(record);
     return Promise.resolve();
   }
