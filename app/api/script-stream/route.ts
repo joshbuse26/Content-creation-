@@ -5,8 +5,8 @@ import { logger } from "@/lib/logger";
 import { asUserId, scriptIdSchema, workspaceIdSchema } from "@/lib/types/ids";
 import { getScriptEventBus } from "@/pipelines/script/events";
 import { getEngineStore } from "@/pipelines/script/store";
-import { auth } from "@/server/auth";
 import { getRoleResolver } from "@/server/membership";
+import { getSessionWithFixtureFallback } from "@/server/session";
 import { createScriptSseStream } from "./stream";
 
 /**
@@ -30,7 +30,7 @@ const querySchema = z.object({
 });
 
 export async function GET(req: Request): Promise<Response> {
-  const session = await auth();
+  const session = await getSessionWithFixtureFallback();
   const sessionUserId = session?.user.id ?? "";
   if (sessionUserId === "") {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });

@@ -2,11 +2,12 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { randomUUID } from "node:crypto";
 import { appRouter } from "@/server/routers";
 import { createContext } from "@/server/trpc";
-import { auth } from "@/server/auth";
+import { getSessionWithFixtureFallback } from "@/server/session";
 import { logger } from "@/lib/logger";
 
 const handler = async (req: Request) => {
-  const session = await auth();
+  // Fixture mode synthesizes the fixture-user session (REQUESTS-A3 #1).
+  const session = await getSessionWithFixtureFallback();
   const requestId = randomUUID();
   return fetchRequestHandler({
     endpoint: "/api/trpc",

@@ -7,11 +7,23 @@ import { applyStreamEvent, initialStreamState, type StreamState } from "./stream
 import { buildFixtureStream } from "./stream-fixtures";
 
 /**
- * Consumes the script pipeline SSE stream (GET /api/script/stream?scriptId=…,
- * per the frozen script contract). If the endpoint is unreachable before the
- * first event — it doesn't exist yet in fixture mode — the stream is replayed
- * from fixtures with realistic pacing so the screen fully works today.
+ * Consumes the script pipeline SSE stream
+ * (GET /api/script-stream?workspaceId=…&scriptId=…, A2's route). Events
+ * arrive with the SSE `event:` field set to the ScriptStreamEvent type and
+ * the full JSON event in `data:`. If the endpoint errors before the first
+ * event, the stream is replayed from fixtures with realistic pacing.
  */
+
+const STREAM_EVENT_TYPES = [
+  "stage_started",
+  "stage_done",
+  "outline",
+  "section",
+  "hooks",
+  "quality_report",
+  "failed",
+  "complete",
+] as const;
 export function useScriptStream() {
   const [state, setState] = useState<StreamState>(initialStreamState());
   const [elapsedS, setElapsedS] = useState(0);
@@ -68,7 +80,7 @@ export function useScriptStream() {
   }, [dispatch]);
 
   const start = useCallback(
-    (scriptId: string) => {
+    (scriptId: string, workspaceId: string) => {
       cleanup();
       gotEventRef.current = false;
       scriptIdRef.current = scriptId;
@@ -79,13 +91,15 @@ export function useScriptStream() {
 
       let source: EventSource;
       try {
-        source = new EventSource(`/api/script/stream?scriptId=${encodeURIComponent(scriptId)}`);
+        source = new EventSource(
+          `/api/script-stream?workspaceId=${encodeURIComponent(workspaceId)}&scriptId=${encodeURIComponent(scriptId)}`,
+        );
       } catch {
         runSimulation();
         return;
       }
       sourceRef.current = source;
-      source.onmessage = (msg: MessageEvent<string>) => {
+      const onEvent = (msg: MessageEvent<string>) => {
         gotEventRef.current = true;
         try {
           dispatch(JSON.parse(msg.data));
@@ -93,6 +107,11 @@ export function useScriptStream() {
           // Ignore malformed frames; the schema parse guards shape.
         }
       };
+      // The route names each SSE event after its type, so plain onmessage
+      // never fires — subscribe to every member of the frozen union.
+      for (const type of STREAM_EVENT_TYPES) {
+        source.addEventListener(type, onEvent);
+      }
       source.onerror = () => {
         source.close();
         sourceRef.current = null;

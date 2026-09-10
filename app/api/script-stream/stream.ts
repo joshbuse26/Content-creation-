@@ -34,8 +34,11 @@ export function createScriptSseStream(
           // Stream already closed by the client — nothing to do.
         }
       };
+      // Flush a comment immediately so response headers reach the client
+      // (EventSource onopen) before the first real event or heartbeat.
+      safeEnqueue(`: connected ${Date.now().toString()}\n\n`);
       heartbeat = setInterval(() => {
-        safeEnqueue(`: heartbeat ${Date.now()}\n\n`);
+        safeEnqueue(`: heartbeat ${Date.now().toString()}\n\n`);
       }, heartbeatMs);
       try {
         for await (const event of bus.subscribe(scriptId, options.signal)) {

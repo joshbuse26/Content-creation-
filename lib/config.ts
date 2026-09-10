@@ -37,6 +37,9 @@ const envSchema = z
     AUTH_SECRET: optionalString,
     GOOGLE_CLIENT_ID: optionalString,
     GOOGLE_CLIENT_SECRET: optionalString,
+    /** OAuth refresh-token encryption key (falls back to AUTH_SECRET) so
+     *  token re-encryption is decoupled from session-secret rotation. */
+    CHANNEL_TOKEN_SECRET: optionalString,
 
     GOOGLE_API_KEY: optionalString,
     ANTHROPIC_API_KEY: optionalString,

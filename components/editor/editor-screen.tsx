@@ -95,6 +95,13 @@ export function EditorScreen() {
     },
   });
   const lockMutation = trpc.script.setSectionLock.useMutation();
+  const reorderMutation = trpc.script.reorderSections.useMutation({
+    onError: () => {
+      if (workspaceId !== null && scriptId !== null) {
+        void utils.script.get.invalidate({ workspaceId, scriptId });
+      }
+    },
+  });
   const regenMutation = trpc.script.regenerateSection.useMutation();
   const runRevisionMutation = trpc.revision.run.useMutation({
     onSuccess: () => {
@@ -139,7 +146,10 @@ export function EditorScreen() {
 
   const { script, qualityReport } = scriptQuery.data;
   const totals = totalsFor(sections.map((s) => s.body));
-  const hookCandidates = loadHookCandidates(scriptId) ?? fixtureHookCandidates;
+  // Server-persisted candidates first (script.get), then the localStorage
+  // bridge (survives web-process restarts), then fixture defaults.
+  const hookCandidates =
+    scriptQuery.data.hookCandidates ?? loadHookCandidates(scriptId) ?? fixtureHookCandidates;
   const pending = review !== null ? pendingCount(review) : 0;
 
   const saveSection = (section: ScriptSection, fields: { heading?: string; body?: string }) => {
@@ -357,7 +367,16 @@ export function EditorScreen() {
                 regenMutation.isPending && regenMutation.variables.sectionId === section.id
               }
               onMove={(direction) => {
-                setSections((prev) => [...moveSection(prev, section.id as string, direction)]);
+                setSections((prev) => {
+                  const moved = moveSection(prev, section.id as string, direction);
+                  if (moved === prev) return prev; // no-op (already at an edge)
+                  reorderMutation.mutate({
+                    workspaceId,
+                    scriptId,
+                    sectionIds: [...moved].sort((a, b) => a.position - b.position).map((s) => s.id),
+                  });
+                  return [...moved];
+                });
               }}
               onToggleLock={() => {
                 const locked = !section.locked;

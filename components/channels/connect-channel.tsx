@@ -37,7 +37,11 @@ export function ConnectChannel({ onConnected }: { onConnected?: (channel: Channe
         />
         <CardBody>
           <a
-            href="/api/auth/signin?callbackUrl=%2Fchannels"
+            href={
+              workspaceId !== null
+                ? `/api/channels/oauth/start?workspaceId=${encodeURIComponent(workspaceId)}`
+                : "/api/auth/signin?callbackUrl=%2Fchannels"
+            }
             className="flex h-10 w-full items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
           >
             <IconGoogle size={16} />

@@ -35,8 +35,8 @@ export function GeneratePanel() {
     workspaceId !== null ? { workspaceId, projectId } : skipToken,
   );
   const generateMutation = trpc.script.generate.useMutation({
-    onSuccess: (res) => {
-      start(res.scriptId);
+    onSuccess: (res, variables) => {
+      start(res.scriptId, variables.workspaceId);
     },
   });
 
