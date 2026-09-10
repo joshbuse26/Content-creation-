@@ -14,12 +14,12 @@ const fakeConfig = vi.hoisted(() => ({
   LOG_LEVEL: "info",
   AUTH_SECRET: "test-secret-for-oauth-sync",
   CHANNEL_TOKEN_SECRET: undefined as string | undefined,
-  GOOGLE_CLIENT_ID: "client-id" as string | undefined,
-  GOOGLE_CLIENT_SECRET: "client-secret" as string | undefined,
+  GOOGLE_CLIENT_ID: "client-id",
+  GOOGLE_CLIENT_SECRET: "client-secret",
 }));
 
 vi.mock("@/lib/config", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/config")>();
+  const actual: Record<string, unknown> = await importOriginal();
   return { ...actual, getConfig: () => fakeConfig };
 });
 
@@ -33,7 +33,11 @@ const workspaceId = asWorkspaceId("00000000-0000-4000-8000-000000000001");
 const publicProvider = { marker: "public" } as unknown as YoutubeProvider;
 const authedProvider = { marker: "authed" } as unknown as YoutubeProvider;
 
-async function seed(store: InMemoryChannelStore, mode: "public" | "oauth", tokenEnc: string | null) {
+async function seed(
+  store: InMemoryChannelStore,
+  mode: "public" | "oauth",
+  tokenEnc: string | null,
+) {
   return store.create({
     workspaceId,
     mode,
@@ -133,7 +137,7 @@ describe("mintAccessToken", () => {
   it("exchanges the refresh token at Google's token endpoint", async () => {
     const calls: { url: string; body: string }[] = [];
     const fetchImpl = (url: string, init: RequestInit) => {
-      calls.push({ url, body: String(init.body) });
+      calls.push({ url, body: (init.body as URLSearchParams).toString() });
       return Promise.resolve(
         new Response(JSON.stringify({ access_token: "at-999" }), { status: 200 }),
       );

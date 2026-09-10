@@ -15,7 +15,7 @@ vi.mock("@/server/auth", () => ({
 
 const getConfigMock = vi.fn<() => { PROVIDERS: string; NODE_ENV: string }>();
 vi.mock("@/lib/config", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/config")>();
+  const actual: Record<string, unknown> = await importOriginal();
   return { ...actual, getConfig: () => getConfigMock() };
 });
 

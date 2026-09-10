@@ -31,7 +31,7 @@ const fakeConfig: FakeConfig = {
 };
 
 vi.mock("@/lib/config", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/config")>();
+  const actual: Record<string, unknown> = await importOriginal();
   return { ...actual, getConfig: () => fakeConfig };
 });
 

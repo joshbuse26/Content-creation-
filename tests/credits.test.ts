@@ -65,9 +65,7 @@ describe("credit gating at dispatch", () => {
     setFixtureBalance(0);
     const deps = makeDeps();
     setEngineDepsForTests(deps);
-    await expect(
-      scriptImpl.generate({ ctx: fixtureCtx, input: scriptInput }),
-    ).rejects.toSatisfy(
+    await expect(scriptImpl.generate({ ctx: fixtureCtx, input: scriptInput })).rejects.toSatisfy(
       (err: unknown) =>
         err instanceof TRPCError &&
         err.code === "PRECONDITION_FAILED" &&

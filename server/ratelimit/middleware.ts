@@ -75,7 +75,10 @@ export async function checkRateLimit(
         retryAfterMs: resolved.windowMs,
       };
     }
-    logger.error({ policy: resolved.id, err: message }, "rate limit store unavailable — failing open");
+    logger.error(
+      { policy: resolved.id, err: message },
+      "rate limit store unavailable — failing open",
+    );
     return { allowed: true, limit: resolved.limit, remaining: resolved.limit, retryAfterMs: 0 };
   }
 }
