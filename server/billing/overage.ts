@@ -60,6 +60,34 @@ function insufficient(cost: number, balance: number): never {
   });
 }
 
+function readOnlyLockdown(): never {
+  throw new TRPCError({
+    code: "PRECONDITION_FAILED",
+    message:
+      `This workspace is read-only: a payment failed more than ${String(GRACE_PERIOD_DAYS)} days ago. ` +
+      "Update the payment method in the billing portal to resume generating.",
+  });
+}
+
+/**
+ * The read-only lockdown check on its own — for generation-class dispatches
+ * that are not (yet) credit-metered (e.g. script.regenerateSection,
+ * adversarial F4). Same error shape the metered gate throws.
+ */
+export async function assertWorkspaceNotReadOnly(
+  workspaceId: WorkspaceId,
+  options: Pick<OverageOptions, "store" | "now"> = {},
+): Promise<void> {
+  const store = options.store ?? getBillingStore();
+  const workspace = await store.getWorkspace(workspaceId);
+  if (workspace === null) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "workspace not found" });
+  }
+  if (isWorkspaceReadOnly(workspace.paymentFailedAt, options.now ?? new Date())) {
+    readOnlyLockdown();
+  }
+}
+
 export async function requireCreditsWithOverage(
   workspaceId: WorkspaceId,
   cost: number,
@@ -72,12 +100,7 @@ export async function requireCreditsWithOverage(
   }
 
   if (isWorkspaceReadOnly(workspace.paymentFailedAt, options.now ?? new Date())) {
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message:
-        `This workspace is read-only: a payment failed more than ${String(GRACE_PERIOD_DAYS)} days ago. ` +
-        "Update the payment method in the billing portal to resume generating.",
-    });
+    readOnlyLockdown();
   }
 
   if (workspace.creditBalance - cost >= OVERDRAFT_FLOOR) return;

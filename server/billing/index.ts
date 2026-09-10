@@ -21,7 +21,11 @@ export {
   type LimitCheck,
 } from "@/server/billing/tiers";
 export { assertChannelLimit, assertSeatLimit } from "@/server/billing/limits";
-export { requireCreditsWithOverage, type OverageMeter } from "@/server/billing/overage";
+export {
+  assertWorkspaceNotReadOnly,
+  requireCreditsWithOverage,
+  type OverageMeter,
+} from "@/server/billing/overage";
 export { handleStripeEvent, type StripeWebhookEvent } from "@/server/billing/events";
 export {
   getBillingStore,

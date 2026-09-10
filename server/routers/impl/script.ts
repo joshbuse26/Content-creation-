@@ -20,7 +20,7 @@ import {
   fleschReadingEase,
 } from "@/pipelines/script/readability";
 import { regenerateSectionPrompt } from "@/prompts";
-import { requireCreditsWithOverage } from "@/server/billing";
+import { assertWorkspaceNotReadOnly, requireCreditsWithOverage } from "@/server/billing";
 import { CREDIT_COSTS } from "@/server/credits";
 import { assertGenerationTargetAllowed } from "@/server/modes";
 import { exportScript } from "@/server/export";
@@ -194,6 +194,11 @@ export const scriptImpl = {
 
   /** One-off LLM rewrite of a single section, continuity-aware. */
   async regenerateSection({ ctx, input }: HandlerOpts<RegenerateSectionInput>) {
+    // Read-only lockdown (adversarial F4): this is a generation-class
+    // dispatch (live LLM), so a workspace whose payment-failure grace
+    // expired cannot dispatch it. Metering it is a pending product
+    // decision (see OPEN-ITEMS) — the lockdown is enforced either way.
+    await assertWorkspaceNotReadOnly(ctx.workspaceId);
     const deps = await getEngineDeps();
     const section = await deps.store.getSection(ctx.workspaceId, input.sectionId);
     if (section === null) notFound("section");

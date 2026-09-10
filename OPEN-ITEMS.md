@@ -140,15 +140,22 @@ two approved additive contract changes (`project.setGenerationTarget`,
   the billing screen shows identical "script_generation" labels for a full
   staged flow. Labeled rows need an `ALTER TYPE credit_reason ADD VALUE`
   class change (frozen enum); the itemization already exists.
-- **Staged-output persistence** — `script.topics/outline/hooks` return
-  their payloads synchronously and persist nothing (no output table in the
-  frozen schema). An identical re-submit finds the done run row, recomputes
-  the response, and the keyed charge dedupes (free) — but in LIVE mode the
-  recompute re-calls Grok (uncharged), and pre-draft refresh-resume in the
-  UI rides a schema-validated localStorage bridge (`gr.stagedflow.<id>`).
-  A `jsonb` output column on `pipeline_runs` (or the scripts hook/quality
-  cache column below) fixes both; the client seam to prefer a server copy
-  is `restoreFlow`/`storeStagedFlow`.
+- **Staged-output persistence — server side DONE (adversarial wave-C pass)**
+  — `pipeline_runs.output` (migration 0006) now persists
+  `script.topics/outline/hooks` payloads and identical re-submits re-serve
+  them (zero live Grok calls; legacy rows recompute once and persist).
+  REMAINING: pre-draft refresh-resume in the UI still rides the
+  schema-validated localStorage bridge (`gr.stagedflow.<id>`); the client
+  seam to prefer the server copy is `restoreFlow`/`storeStagedFlow`.
+- **regenerateSection + avatar-regen metering** — product decision pending
+  (currently free; the read-only payment lockdown IS enforced on
+  `script.regenerateSection` as of the adversarial wave-C pass). When
+  pricing lands, charge via the shared `settleCharge` path like every
+  other generation dispatch.
+- **Staged per-stage MCP tools** — the MCP surface exposes the
+  `generate_script` orchestrator (now with the wave-C `generation` param)
+  but not `script.topics/outline/hooks/draft` individually; add per-stage
+  tools when an agent workflow needs stage-level control.
 - **`NEXT_PUBLIC_FEATURE_PARTNERED_NAMED` (build-time)** — the picker's
   partnered tab is compiled behind this flag and renders nothing today.
   When the partnered launch is scheduled, set it on the web BUILD env
