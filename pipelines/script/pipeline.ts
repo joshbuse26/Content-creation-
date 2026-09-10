@@ -1,9 +1,10 @@
 import { z } from "zod";
 import { LLM_MODELS } from "@/lib/config";
-import type { FactRef } from "@/lib/types/entities";
+import type { FactRef, StyleCard } from "@/lib/types/entities";
+import type { HookStyle } from "@/lib/types/enums";
 import {
   SCRIPT_STAGES,
-  outlineSchema,
+  type ScriptStage,
   scriptStreamEventSchema,
   sectionRewriteOutputSchema,
   type DraftOutput,
@@ -15,21 +16,22 @@ import {
   type ScriptStreamEvent,
 } from "@/lib/types/pipeline";
 import { researchDocIdSchema, scriptIdSchema, type ScriptId } from "@/lib/types/ids";
+import { generateHookCandidates } from "@/pipelines/stages/hooks";
+import { generateOutline } from "@/pipelines/stages/outline";
+import { resolveStyleCard } from "@/pipelines/stages/style-resolver";
 import {
   factCheckPrompt,
-  hookPrompt,
-  outlinePrompt,
   qualityFixPrompt,
   retentionPrompt,
   sectionPrompt,
   voicePrompt,
 } from "@/prompts";
 import { PipelineRunner, type PipelineResult } from "@/queue/pipeline-runner";
+import { CREDIT_COSTS } from "@/server/credits";
 import { applyCodeAutoFix } from "./auto-fix";
 import { assembleContext } from "./context";
 import type { EngineDeps } from "./deps";
 import {
-  synthHookCandidates,
   synthOutline,
   synthRetentionNote,
   synthRetentionRewrite,
@@ -52,6 +54,20 @@ import type { NewSection } from "./store";
  * §5.7 — the script agent. Seven stages, exactly as named in the frozen
  * SCRIPT_STAGES, executed by the shared PipelineRunner (which owns per-stage
  * retries and resume), streaming ScriptStreamEvents to the editor.
+ *
+ * Wave C (C1): the same pipeline body now serves three dispatch shapes —
+ * the frozen SSE event union is identical for all of them:
+ *  - LEGACY composite (default): one -6 completion charge, unchanged.
+ *  - `script.draft` (staged §4): an approved outline and/or chosen hook are
+ *    adopted instead of generated; one -4 completion charge keyed
+ *    `draft:<hash>`.
+ *  - `script.generate` ORCHESTRATOR: outline → hooks → draft in sequence
+ *    with ITEMIZED per-stage ledger entries (1 + 1 + 4 = 6) — outline's
+ *    credit lands when the outline stage completes, hooks' when the
+ *    candidates are produced (draft_sections), draft's on completion. Every
+ *    entry is idempotency-keyed `<stage>:<input hash>`, so retries and
+ *    resumed runs never double-charge and the orchestrator cannot bypass
+ *    stage metering.
  */
 
 interface WorkingSection {
@@ -66,38 +82,31 @@ interface ScriptRunState {
   context?: ScriptContext;
   outline?: Outline;
   hookCandidates?: HookCandidate[];
+  pickedHookStyle?: HookStyle;
   sections?: WorkingSection[];
   report?: QualityGateReport;
 }
+
+/** How this run is metered (see module docs). */
+export type ScriptRunMetering = "composite" | "draft" | "itemized";
 
 export interface ScriptPipelineParams {
   input: ScriptJobInput;
   scriptId: ScriptId;
   actorUserId: string | null;
+  /** Staged `draft`: the approved outline to adopt instead of generating. */
+  presetOutline?: Outline | null;
+  /** Staged `draft`: the chosen hook (used verbatim for the hook section). */
+  chosenHook?: HookCandidate | null;
+  /** Defaults to "composite" (legacy single -6 charge). */
+  metering?: ScriptRunMetering;
 }
-
-const hookCandidatesSchema = z.object({
-  candidates: z
-    .array(
-      z.object({
-        style: z.enum(["open_loop", "bold_claim", "stakes", "in_medias_res"]),
-        body: z.string().min(1),
-      }),
-    )
-    .length(3),
-});
 
 const sectionBodySchema = z.object({ body: z.string().min(1) });
 
 const factClaimsSchema = z.object({
   claims: z.array(z.object({ claim: z.string().min(1), researchDocId: z.string().nullable() })),
 });
-
-function pickHookStyle(outcome: ScriptContext["frame"]["outcome"]): string {
-  if (outcome === "watch_time") return "open_loop";
-  if (outcome === "subs") return "bold_claim";
-  return "stakes";
-}
 
 function scriptStats(sections: WorkingSection[]): {
   words: number;
@@ -132,7 +141,16 @@ export async function runScriptPipeline(
         ? Promise.resolve(null)
         : deps.store.getVoiceProfile(input.workspaceId, input.voiceProfileId),
     ]);
-    state.context = assembleContext({ frame, researchDocs, avatar, voiceProfile });
+    const base = assembleContext({ frame, researchDocs, avatar, voiceProfile });
+    // Wave C: the generation target (archetype / crossover / partner)
+    // resolves the style card; generation === null keeps the legacy
+    // voice-profile card assembleContext already set. Archetype and partner
+    // cards flow through the SAME styleCard seam as channel-learned cards.
+    const styleCard: StyleCard | null =
+      input.generation === null
+        ? base.styleCard
+        : await resolveStyleCard(input.generation, voiceProfile);
+    state.context = { ...base, styleCard };
     return state.context;
   };
 
@@ -203,26 +221,14 @@ export async function runScriptPipeline(
     // -- 2 ------------------------------------------------------------------
     outline: async () => {
       const context = await ensureContext();
-      const outline = await generateJson({
-        mode: deps.mode,
-        llm: deps.llm,
-        model: LLM_MODELS.sonnet,
-        template: outlinePrompt({ context }),
-        maxTokens: 4000,
-        schema: outlineSchema,
-        fixture: () => synthOutline(context),
-      });
-      // Code-normalize: scale targetSeconds to the frame target if the model
-      // overshot the ±10% budget instead of burning a retry on arithmetic.
-      const total = outline.sections.reduce((sum, s) => sum + s.targetSeconds, 0);
-      const target = context.frame.targetMinutes * 60;
-      if (Math.abs(total - target) / target > 0.1) {
-        const scale = target / total;
-        outline.sections = outline.sections.map((s) => ({
-          ...s,
-          targetSeconds: Math.max(10, Math.round(s.targetSeconds * scale)),
-        }));
+      if (params.presetOutline !== undefined && params.presetOutline !== null) {
+        // Staged `draft`: the outline was approved upstream — adopt it
+        // verbatim (it already went through the outline stage's metering).
+        state.outline = params.presetOutline;
+        await publish({ type: "outline", outline: params.presetOutline });
+        return;
       }
+      const outline = await generateOutline({ mode: deps.mode, llm: deps.llm, context });
       state.outline = outline;
       await publish({ type: "outline", outline });
     },
@@ -230,30 +236,26 @@ export async function runScriptPipeline(
     // -- 3 ------------------------------------------------------------------
     draft_sections: async () => {
       const context = await ensureContext();
-      const outline = state.outline ?? synthOutline(context);
+      const outline = state.outline ?? params.presetOutline ?? synthOutline(context);
       state.outline = outline;
 
-      // Hook first: three tagged candidates, auto-pick by frame outcome.
-      const hookResult = await generateJson({
-        mode: deps.mode,
-        llm: deps.llm,
-        model: LLM_MODELS.sonnet,
-        template: hookPrompt({ context, outline }),
-        maxTokens: 1500,
-        temperature: 0.9,
-        schema: hookCandidatesSchema,
-        fixture: () => ({ candidates: synthHookCandidates(context) }),
-      });
-      const preferred = pickHookStyle(context.frame.outcome);
-      const pickedIndex = Math.max(
-        0,
-        hookResult.candidates.findIndex((c) => c.style === preferred),
-      );
-      const candidates: HookCandidate[] = hookResult.candidates.map((c, i) => ({
-        style: c.style,
-        body: c.body,
-        autoPicked: i === pickedIndex,
-      }));
+      // Hook first. Staged `draft` with a chosen hook uses it verbatim;
+      // otherwise three tagged candidates, CONSTRAINED to the style card's
+      // hookPatterns when a card is in play, auto-picked by the card's
+      // preference order (frame outcome when card-less — legacy behavior).
+      let candidates: HookCandidate[];
+      if (params.chosenHook !== undefined && params.chosenHook !== null) {
+        candidates = [{ ...params.chosenHook, autoPicked: true }];
+      } else {
+        candidates = await generateHookCandidates({
+          mode: deps.mode,
+          llm: deps.llm,
+          context,
+          outline,
+        });
+      }
+      const picked = candidates.find((c) => c.autoPicked) ?? candidates[0];
+      state.pickedHookStyle = picked?.style;
       state.hookCandidates = candidates;
       deps.store.saveHookCandidates(scriptId, candidates);
       await publish({ type: "hooks", candidates });
@@ -265,7 +267,6 @@ export async function runScriptPipeline(
         if (planned === undefined) continue;
         let body: string;
         if (planned.kind === "hook") {
-          const picked = candidates[pickedIndex];
           body = picked?.body ?? candidates.map((c) => c.body)[0] ?? "";
         } else {
           const result = await generateJson({
@@ -402,17 +403,27 @@ export async function runScriptPipeline(
     quality_gate: async () => {
       const context = await ensureContext();
       let sections = await ensureSections();
+      // The technique of the hook actually used: known in-run, recovered
+      // from the chosen hook / candidate cache on a resumed run.
+      const chosenHookStyle =
+        state.pickedHookStyle ??
+        params.chosenHook?.style ??
+        deps.store.getHookCandidates(scriptId)?.find((c) => c.autoPicked)?.style ??
+        null;
       const gateInput = () => ({
         sections,
         targetMinutes: context.frame.targetMinutes,
         tone: context.frame.tone,
-        // Wave C: style-card gates (bannedClaims hard-fail + CTA placement).
+        // Wave C: style-card gates — bannedClaims hard-fail, CTA placement,
+        // hookPatternOk, and the per-card readingLevel band (which replaces
+        // the global Flesch gate whenever a card is present).
         styleCard: context.styleCard,
+        chosenHookStyle,
       });
       let report = computeQualityReport(gateInput());
-      if (!report.passed) {
+      const violations = gateViolations(report);
+      if (!report.passed && violations.length > 0) {
         // One auto-fix loop: LLM repair in live mode, code repair in fixture.
-        const violations = gateViolations(report);
         const fixed = await generateJson({
           mode: deps.mode,
           llm: deps.llm,
@@ -440,6 +451,45 @@ export async function runScriptPipeline(
     },
   };
 
+  // The run hash folds in any preset outline/hook (a draft of a different
+  // approved outline is a different run); legacy calls leave the fields
+  // undefined, so their hashes — and stage-resume behavior — are unchanged.
+  const inputHash = stageInputHash({
+    input,
+    scriptId,
+    ...(params.presetOutline != null ? { presetOutline: params.presetOutline } : {}),
+    ...(params.chosenHook != null ? { chosenHook: params.chosenHook } : {}),
+  });
+
+  // Metering (PRODUCT-CONTRACTS §4): the composite keeps its single -6;
+  // draft charges its -4; the orchestrator writes ITEMIZED entries per
+  // stage — outline (1) after the outline stage, hooks (1) when candidates
+  // are produced (draft_sections), draft (4) on completion — summing to 6.
+  // Every entry is keyed `<stage>:<input hash>`, so retries/resumes charge
+  // exactly once per stage.
+  const metering: ScriptRunMetering = params.metering ?? "composite";
+  const stageCharges: Partial<Record<ScriptStage, { cost: number; key: string }>> =
+    metering === "itemized"
+      ? {
+          outline: { cost: CREDIT_COSTS.scriptOutline, key: `outline:${inputHash}` },
+          draft_sections: { cost: CREDIT_COSTS.scriptHooks, key: `hooks:${inputHash}` },
+        }
+      : {};
+  const completionCharge =
+    metering === "composite"
+      ? { cost: CREDIT_COSTS.scriptGeneration, key: `script_generation:${inputHash}` }
+      : { cost: CREDIT_COSTS.scriptDraft, key: `draft:${inputHash}` };
+  const chargeStage = async (charge: { cost: number; key: string }) => {
+    await deps.store.recordCredits({
+      workspaceId: input.workspaceId,
+      delta: -charge.cost,
+      reason: "script_generation",
+      actorUserId: params.actorUserId,
+      projectId: input.projectId,
+      idempotencyKey: charge.key,
+    });
+  };
+
   const runner = new PipelineRunner(deps.runs);
   const pipeline = {
     kind: "script" as const,
@@ -448,12 +498,13 @@ export async function runScriptPipeline(
       run: async () => {
         await publish({ type: "stage_started", stage: name });
         await stageBodies[name]();
+        const charge = stageCharges[name];
+        if (charge !== undefined) await chargeStage(charge);
         await publish({ type: "stage_done", stage: name });
       },
     })),
   };
 
-  const inputHash = stageInputHash({ input, scriptId });
   const result = await runner.execute(pipeline, {
     workspaceId: input.workspaceId,
     projectId: input.projectId,
@@ -462,19 +513,12 @@ export async function runScriptPipeline(
   });
 
   if (result.status === "done") {
-    // Charge 6 credits on completion (spec §7) — never on failure, never
-    // twice: the charge is idempotent per (reason, input hash), and a run
-    // where every stage was resumed/skipped did no new work to charge for.
+    // Completion charge (spec §7) — never on failure, never twice: the
+    // charge is idempotent per (reason, key), and a run where every stage
+    // was resumed/skipped did no new work to charge for.
     const allStagesSkipped = result.skippedStages.length === SCRIPT_STAGES.length;
     if (!allStagesSkipped) {
-      await deps.store.recordCredits({
-        workspaceId: input.workspaceId,
-        delta: -6,
-        reason: "script_generation",
-        actorUserId: params.actorUserId,
-        projectId: input.projectId,
-        idempotencyKey: `script_generation:${inputHash}`,
-      });
+      await chargeStage(completionCharge);
     }
     await publish({ type: "complete", scriptId: scriptIdSchema.parse(scriptId) });
   } else {

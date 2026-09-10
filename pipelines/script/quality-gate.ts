@@ -1,24 +1,39 @@
 import type { StyleCard } from "@/lib/types/entities";
+import type { HookStyle } from "@/lib/types/enums";
 import type { QualityGateReport } from "@/lib/types/pipeline";
 import { computeStyleGates } from "@/lib/style-gates";
 import { findBannedPhrases } from "@/prompts";
-import { countWords, estimateSeconds, fleschReadingEase, WORDS_PER_MINUTE } from "./readability";
+import {
+  countWords,
+  estimateSeconds,
+  fleschKincaidGrade,
+  fleschReadingEase,
+  WORDS_PER_MINUTE,
+} from "./readability";
 
 /**
  * §5.7 stage 7 — the quality gate. Pure code, no LLM:
  * - word count within ±15% of frame target (targetMinutes × 150)
- * - Flesch reading ease ≥ 60 unless the tone declares itself academic
+ * - readability: Flesch reading ease ≥ 60 (unless the tone declares itself
+ *   academic) — REPLACED by the card's readingLevel band when a card is
+ *   present (see below)
  * - runtime estimated at 150 wpm
  * - hook ≤ 30 spoken seconds
  * Failures trigger ONE auto-fix loop (LLM repair, then re-check); remaining
  * problems surface as warnings on the report, never silently.
  *
- * Wave C (PRODUCT-CONTRACTS §6): when a style card is in play the report
- * also carries styleGates — bannedClaims scan (HARD FAIL) and CTA placement
- * are computed here via lib/style-gates.ts; hookPatternOk and the per-card
- * readingLevel (which will REPLACE the global Flesch gate when present) are
- * typed but computed by C1's staged pipeline. Until C1 lands, the global
- * Flesch gate still applies even with a card.
+ * Wave C (PRODUCT-CONTRACTS §6), completed by C1: when a style card is in
+ * play the report carries a fully-evaluated styleGates block —
+ * - bannedClaims scan (HARD FAIL) + CTA placement via lib/style-gates.ts;
+ * - readingGrade/readingLevelOk: Flesch–Kincaid grade vs the CARD's band,
+ *   which REPLACES the global Flesch ≥ 60 gate (`readabilityOk` reflects
+ *   it). The check is one-sided: a grade ABOVE maxGrade fails (too complex
+ *   for the audience); a grade below minGrade only warns — simpler-than-
+ *   target spoken prose never hurts retention;
+ * - hookPatternOk: chosen hook's technique ∈ card.hookPatterns, evaluated
+ *   whenever the caller knows the chosen technique (`chosenHookStyle`);
+ *   null only on recomputes where the technique is unrecoverable (e.g.
+ *   script.get after a process restart with an empty hook cache).
  */
 
 export const WORD_TOLERANCE = 0.15;
@@ -31,6 +46,9 @@ export interface GateInput {
   tone: string;
   /** Style card driving the per-card gates; omit/null for legacy scripts. */
   styleCard?: StyleCard | null;
+  /** Technique tag of the hook actually used; omit/null when unknown
+   *  (hookPatternOk then stays null = "not evaluated", never a pass). */
+  chosenHookStyle?: HookStyle | null;
 }
 
 export function isAcademicTone(tone: string): boolean {
@@ -48,8 +66,17 @@ export function computeQualityReport(
   const upper = Math.round(targetWordCount * (1 + WORD_TOLERANCE));
   const wordCountWithinTolerance = wordCount >= lower && wordCount <= upper;
 
+  const card = input.styleCard ?? null;
   const fleschScore = fleschReadingEase(fullText);
-  const readabilityOk = isAcademicTone(input.tone) || fleschScore >= MIN_FLESCH;
+  // Per-card readingLevel REPLACES the global Flesch ≥ 60 gate when a card
+  // is present (PRODUCT-CONTRACTS §6); the global rule is the legacy path.
+  const readingGrade = card === null ? null : fleschKincaidGrade(fullText);
+  const readingLevelOk =
+    card === null || readingGrade === null ? null : readingGrade <= card.readingLevel.maxGrade;
+  const readabilityOk =
+    readingLevelOk !== null
+      ? readingLevelOk
+      : isAcademicTone(input.tone) || fleschScore >= MIN_FLESCH;
 
   const estRuntimeSeconds = estimateSeconds(wordCount);
 
@@ -65,7 +92,23 @@ export function computeQualityReport(
     );
   }
   if (!readabilityOk) {
-    warnings.push(`Flesch reading ease ${fleschScore} is below ${MIN_FLESCH}.`);
+    if (card !== null && readingGrade !== null) {
+      warnings.push(
+        `Reading grade ${readingGrade} is above the card's grade-${card.readingLevel.maxGrade} ceiling.`,
+      );
+    } else {
+      warnings.push(`Flesch reading ease ${fleschScore} is below ${MIN_FLESCH}.`);
+    }
+  }
+  if (
+    card !== null &&
+    readingGrade !== null &&
+    readingLevelOk === true &&
+    readingGrade < card.readingLevel.minGrade
+  ) {
+    warnings.push(
+      `Reading grade ${readingGrade} sits below the card's grade ${card.readingLevel.minGrade}-${card.readingLevel.maxGrade} band — simpler than target (not a failure).`,
+    );
   }
   if (hook === undefined) {
     warnings.push("Script has no hook section.");
@@ -82,9 +125,17 @@ export function computeQualityReport(
     }
   }
 
-  // -- style-card gates (wave C) --------------------------------------------
-  const card = input.styleCard ?? null;
-  const styleGates = card === null ? null : computeStyleGates(input.sections, card);
+  // -- style-card gates (wave C, completed by C1) ---------------------------
+  const baseStyleGates = card === null ? null : computeStyleGates(input.sections, card);
+  const chosenHookStyle = input.chosenHookStyle ?? null;
+  const hookPatternOk =
+    card === null || chosenHookStyle === null
+      ? null
+      : card.hookPatterns.some((p) => p.technique === chosenHookStyle);
+  const styleGates =
+    baseStyleGates === null
+      ? null
+      : { ...baseStyleGates, hookPatternOk, readingGrade, readingLevelOk };
   if (styleGates !== null) {
     for (const hit of styleGates.bannedClaimHits) {
       warnings.push(
@@ -92,9 +143,24 @@ export function computeQualityReport(
       );
     }
     warnings.push(...styleGates.notes);
+    if (hookPatternOk === false && chosenHookStyle !== null) {
+      warnings.push(
+        `Hook technique "${chosenHookStyle}" is not in the card's allowed hookPatterns (${(
+          card?.hookPatterns ?? []
+        )
+          .map((p) => p.technique)
+          .join(", ")}).`,
+      );
+    }
   }
+  // null sub-fields mean "not evaluated" and never count as a pass — but
+  // they cannot fail a gate either; only an explicit false fails.
   const styleGatesPass =
-    styleGates === null || (styleGates.bannedClaimsOk && styleGates.ctaPlacementOk);
+    styleGates === null ||
+    (styleGates.bannedClaimsOk &&
+      styleGates.ctaPlacementOk &&
+      styleGates.hookPatternOk !== false &&
+      styleGates.readingLevelOk !== false);
 
   return {
     passed: wordCountWithinTolerance && readabilityOk && hookOk && styleGatesPass,
@@ -123,9 +189,15 @@ export function gateViolations(report: QualityGateReport): string[] {
     );
   }
   if (!report.readabilityOk) {
-    violations.push(
-      `Flesch reading ease is ${report.fleschReadingEase}; raise above ${MIN_FLESCH} with shorter sentences and plainer words.`,
-    );
+    if (report.styleGates !== null && report.styleGates.readingGrade !== null) {
+      violations.push(
+        `Reading grade is ${report.styleGates.readingGrade}; simplify with shorter sentences and plainer words to land inside the card's grade band.`,
+      );
+    } else {
+      violations.push(
+        `Flesch reading ease is ${report.fleschReadingEase}; raise above ${MIN_FLESCH} with shorter sentences and plainer words.`,
+      );
+    }
   }
   if (!report.hookOk) {
     violations.push(
@@ -143,6 +215,10 @@ export function gateViolations(report: QualityGateReport): string[] {
         `Fix CTA placement: ${report.styleGates.notes.join(" ") || "match the style card's CTA habits."}`,
       );
     }
+    // hookPatternOk === false is deliberately NOT a violation: the hook body
+    // was explicitly chosen (by the user or an earlier stage) and a section
+    // rewrite cannot change its technique tag — it fails the gate and is
+    // surfaced as a warning instead of burning an auto-fix loop.
   }
   return violations;
 }
