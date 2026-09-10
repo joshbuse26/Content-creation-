@@ -782,6 +782,10 @@ export const pipelineRuns = pgTable(
     inputHash: text("input_hash").notNull(),
     error: text("error"),
     creditsCharged: integer("credits_charged").notNull().default(0),
+    /** Stage output payload (wave-C adversarial F2): persisted on completion
+     *  so an identical re-submit re-serves instead of recomputing on live
+     *  LLM. Null for legacy rows and streamed (non-sync) stages. */
+    output: jsonb("output").$type<unknown>(),
     startedAt: timestamp("started_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
     createdAt: createdAt(),
@@ -791,6 +795,12 @@ export const pipelineRuns = pgTable(
     index("pipeline_runs_project_idx").on(t.projectId),
     index("pipeline_runs_workspace_idx").on(t.workspaceId),
     index("pipeline_runs_kind_stage_idx").on(t.kind, t.stage),
+    // Atomic runner claim (wave-C adversarial F6): at most one ACTIVE stage
+    // row per pipeline input — a concurrent identical dispatch loses the
+    // insert race and surfaces as CONFLICT instead of executing twice.
+    uniqueIndex("pipeline_runs_active_claim_idx")
+      .on(t.kind, t.inputHash)
+      .where(sql`${t.status} in ('queued', 'running')`),
   ],
 );
 

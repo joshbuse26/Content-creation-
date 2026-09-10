@@ -26,6 +26,22 @@ export interface PipelineRunRecord {
   inputHash: string;
   error: string | null;
   creditsCharged: number;
+  /** Persisted stage output (sync stages) — null/absent for streamed stages
+   *  and rows created before the output column existed. */
+  output?: unknown;
+}
+
+/**
+ * Thrown by PipelineRunStore.create when an ACTIVE (queued/running) row for
+ * the same (kind, input hash) already exists — the atomic claim behind the
+ * runner's concurrent-duplicate protection (backed by the partial unique
+ * index pipeline_runs_active_claim_idx in Postgres).
+ */
+export class RunClaimConflictError extends Error {
+  constructor() {
+    super(RUN_ALREADY_IN_PROGRESS);
+    this.name = "RunClaimConflictError";
+  }
 }
 
 export interface ActiveRunKey {
@@ -36,10 +52,14 @@ export interface ActiveRunKey {
 }
 
 export interface PipelineRunStore {
+  /** Throws RunClaimConflictError when an active (queued/running) row with
+   *  the same (kind, input hash) already holds the claim. */
   create(run: Omit<PipelineRunRecord, "id">): Promise<PipelineRunRecord>;
   update(
     id: string,
-    patch: Partial<Pick<PipelineRunRecord, "status" | "attempt" | "error" | "creditsCharged">>,
+    patch: Partial<
+      Pick<PipelineRunRecord, "status" | "attempt" | "error" | "creditsCharged" | "output">
+    >,
   ): Promise<void>;
   /** Latest run row for this stage+input, or null. */
   find(key: {
@@ -169,15 +189,35 @@ export class PipelineRunner {
         continue;
       }
 
-      const record =
-        existing ??
-        (await this.store.create({
-          ...key,
-          status: "queued",
-          attempt: 0,
-          error: null,
-          creditsCharged: 0,
-        }));
+      let record: PipelineRunRecord;
+      if (existing !== null) {
+        record = existing;
+      } else {
+        // Atomic claim: the insert itself enforces "one active run per
+        // (kind, input hash)" — a concurrent identical dispatch that raced
+        // past the freshness check above loses here instead of executing
+        // (and charging) the same work twice.
+        try {
+          record = await this.store.create({
+            ...key,
+            status: "queued",
+            attempt: 0,
+            error: null,
+            creditsCharged: 0,
+            output: null,
+          });
+        } catch (err) {
+          if (err instanceof RunClaimConflictError) {
+            return {
+              status: "failed",
+              stage: stage.name,
+              error: RUN_ALREADY_IN_PROGRESS,
+              skippedStages,
+            };
+          }
+          throw err;
+        }
+      }
 
       const outcome = await this.runStageWithRetries(stage, params.input, record);
       if (outcome !== null) {
@@ -223,6 +263,14 @@ export class InMemoryPipelineRunStore implements PipelineRunStore {
   private seq = 0;
 
   create(run: Omit<PipelineRunRecord, "id">): Promise<PipelineRunRecord> {
+    // Mirror of the pipeline_runs_active_claim_idx partial unique index.
+    const activeDuplicate = this.rows.some(
+      (r) =>
+        r.kind === run.kind &&
+        r.inputHash === run.inputHash &&
+        (r.status === "queued" || r.status === "running"),
+    );
+    if (activeDuplicate) return Promise.reject(new RunClaimConflictError());
     this.seq += 1;
     const record: PipelineRunRecord = { ...run, id: `run-${this.seq}` };
     this.rows.push(record);
@@ -232,7 +280,9 @@ export class InMemoryPipelineRunStore implements PipelineRunStore {
 
   update(
     id: string,
-    patch: Partial<Pick<PipelineRunRecord, "status" | "attempt" | "error" | "creditsCharged">>,
+    patch: Partial<
+      Pick<PipelineRunRecord, "status" | "attempt" | "error" | "creditsCharged" | "output">
+    >,
   ): Promise<void> {
     const row = this.rows.find((r) => r.id === id);
     if (row === undefined) return Promise.reject(new Error(`run ${id} not found`));

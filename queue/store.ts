@@ -1,26 +1,48 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { PipelineKind } from "@/lib/types/enums";
-import type { ActiveRunKey, PipelineRunRecord, PipelineRunStore } from "./pipeline-runner";
+import {
+  RunClaimConflictError,
+  type ActiveRunKey,
+  type PipelineRunRecord,
+  type PipelineRunStore,
+} from "./pipeline-runner";
+
+/** Postgres unique_violation (the active-claim partial unique index). */
+function isUniqueViolation(err: unknown): boolean {
+  for (let cursor: unknown = err; cursor instanceof Error; cursor = cursor.cause) {
+    if ((cursor as { code?: unknown }).code === "23505") return true;
+  }
+  return false;
+}
 
 /** Drizzle-backed pipeline_runs store — the production PipelineRunStore. */
 export class DrizzlePipelineRunStore implements PipelineRunStore {
   async create(run: Omit<PipelineRunRecord, "id">): Promise<PipelineRunRecord> {
     const db = getDb();
-    const rows = await db
-      .insert(schema.pipelineRuns)
-      .values({
-        workspaceId: run.workspaceId,
-        projectId: run.projectId,
-        kind: run.kind,
-        stage: run.stage,
-        status: run.status,
-        attempt: run.attempt,
-        inputHash: run.inputHash,
-        error: run.error,
-        creditsCharged: run.creditsCharged,
-      })
-      .returning({ id: schema.pipelineRuns.id });
+    let rows: { id: string }[];
+    try {
+      rows = await db
+        .insert(schema.pipelineRuns)
+        .values({
+          workspaceId: run.workspaceId,
+          projectId: run.projectId,
+          kind: run.kind,
+          stage: run.stage,
+          status: run.status,
+          attempt: run.attempt,
+          inputHash: run.inputHash,
+          error: run.error,
+          creditsCharged: run.creditsCharged,
+          output: run.output ?? null,
+        })
+        .returning({ id: schema.pipelineRuns.id });
+    } catch (err) {
+      // pipeline_runs_active_claim_idx: an identical run already holds the
+      // active claim — surface the typed conflict, never a raw DB error.
+      if (isUniqueViolation(err)) throw new RunClaimConflictError();
+      throw err;
+    }
     const row = rows[0];
     if (row === undefined) throw new Error("insert into pipeline_runs returned no row");
     return { ...run, id: row.id };
@@ -28,7 +50,9 @@ export class DrizzlePipelineRunStore implements PipelineRunStore {
 
   async update(
     id: string,
-    patch: Partial<Pick<PipelineRunRecord, "status" | "attempt" | "error" | "creditsCharged">>,
+    patch: Partial<
+      Pick<PipelineRunRecord, "status" | "attempt" | "error" | "creditsCharged" | "output">
+    >,
   ): Promise<void> {
     const db = getDb();
     await db
@@ -78,6 +102,7 @@ export class DrizzlePipelineRunStore implements PipelineRunStore {
       inputHash: row.inputHash,
       error: row.error,
       creditsCharged: row.creditsCharged,
+      output: row.output ?? null,
     };
   }
 

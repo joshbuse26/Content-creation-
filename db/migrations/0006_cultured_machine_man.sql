@@ -1,0 +1,2 @@
+ALTER TABLE "pipeline_runs" ADD COLUMN "output" jsonb;--> statement-breakpoint
+CREATE UNIQUE INDEX "pipeline_runs_active_claim_idx" ON "pipeline_runs" USING btree ("kind","input_hash") WHERE "pipeline_runs"."status" in ('queued', 'running');

@@ -3,6 +3,8 @@ import {
   hashInput,
   InMemoryPipelineRunStore,
   PipelineRunner,
+  RUN_ALREADY_IN_PROGRESS,
+  RunClaimConflictError,
   type PipelineDefinition,
 } from "@/queue/pipeline-runner";
 
@@ -130,5 +132,61 @@ describe("PipelineRunner", () => {
   it("hashInput is deterministic and input-sensitive", () => {
     expect(hashInput({ a: 1 })).toBe(hashInput({ a: 1 }));
     expect(hashInput({ a: 1 })).not.toBe(hashInput({ a: 2 }));
+  });
+
+  it("two truly concurrent identical executes: one runs, one CONFLICTs (atomic claim)", async () => {
+    const store = new InMemoryPipelineRunStore();
+    const runner = new PipelineRunner(store, { sleep: noSleep });
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let runs = 0;
+    const pipeline = pipelineWith([
+      {
+        name: "slow",
+        impl: async () => {
+          runs += 1;
+          await gate;
+        },
+      },
+    ]);
+    // Both dispatches start before either has persisted a row — the old
+    // check-then-create claim let both execute; the atomic create must not.
+    const both = Promise.all([runner.execute(pipeline, params), runner.execute(pipeline, params)]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    release();
+    const results = await both;
+    expect(runs).toBe(1);
+    expect(results.map((r) => r.status).sort()).toEqual(["done", "failed"]);
+    const loser = results.find((r) => r.status === "failed");
+    expect(loser).toMatchObject({ error: RUN_ALREADY_IN_PROGRESS });
+    // Exactly one row was ever created for the input.
+    expect(store.rows).toHaveLength(1);
+  });
+
+  it("the in-memory store's create mirrors the partial unique claim index", async () => {
+    const store = new InMemoryPipelineRunStore();
+    const base = {
+      workspaceId: "ws-1",
+      projectId: "proj-1",
+      kind: "script" as const,
+      stage: "outline",
+      status: "running" as const,
+      attempt: 1,
+      inputHash: "same-hash",
+      error: null,
+      creditsCharged: 0,
+    };
+    await store.create(base);
+    await expect(store.create({ ...base, stage: "draft" })).rejects.toBeInstanceOf(
+      RunClaimConflictError,
+    );
+    // A finished claim frees the slot: done/failed rows never block.
+    const finished = await store.create({ ...base, inputHash: "other-hash" });
+    await store.update(finished.id, { status: "done" });
+    await expect(
+      store.create({ ...base, inputHash: "other-hash", status: "queued" }),
+    ).resolves.toMatchObject({ inputHash: "other-hash" });
   });
 });
