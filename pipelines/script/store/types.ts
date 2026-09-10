@@ -147,6 +147,11 @@ export interface ProjectPatch {
   status?: ProjectStatus;
   targetPublishDate?: string | null;
   publishedVideoId?: string | null;
+  /** Wave-C mode fields (project.setGenerationTarget) — undefined ⇒ unchanged, null ⇒ cleared. */
+  generationMode?: Project["generationMode"];
+  archetypeId?: Project["archetypeId"];
+  crossover?: Project["crossover"];
+  partnerId?: Project["partnerId"];
 }
 
 export interface ProjectListFilter {

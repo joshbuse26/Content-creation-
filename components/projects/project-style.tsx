@@ -32,8 +32,12 @@ export function ProjectStyleRow({ projectId }: { projectId: ProjectId }) {
   const [open, setOpen] = useState(false);
   const [target, setTarget] = useState<GenerationTarget | null>(null);
 
+  const utils = trpc.useUtils();
   const archetypesQuery = trpc.archetypes.list.useQuery(
     workspaceId !== null ? { workspaceId } : skipToken,
+  );
+  const projectQuery = trpc.project.get.useQuery(
+    workspaceId !== null ? { workspaceId, projectId } : skipToken,
   );
   const versionsQuery = trpc.script.listVersions.useQuery(
     workspaceId !== null ? { workspaceId, projectId } : skipToken,
@@ -43,17 +47,38 @@ export function ProjectStyleRow({ projectId }: { projectId: ProjectId }) {
     [versionsQuery.data],
   );
   const hasDraft = latestScript !== null;
+  const project = projectQuery.data ?? null;
 
   useEffect(() => {
     setOpen(false);
-    setTarget(resolveGenerationTarget(projectId, latestScript));
-  }, [projectId, latestScript]);
+    setTarget(resolveGenerationTarget(projectId, project, latestScript));
+  }, [projectId, project, latestScript]);
 
   const archetypes = archetypesQuery.data ?? [];
+
+  // Server persistence (project.setGenerationTarget); the localStorage stash
+  // below stays as the fallback if the save fails.
+  const saveMutation = trpc.project.setGenerationTarget.useMutation({
+    onSuccess: () => {
+      if (workspaceId !== null) {
+        void utils.project.get.invalidate({ workspaceId, projectId });
+        void utils.project.list.invalidate();
+      }
+    },
+    onError: () => {
+      toast(
+        "Couldn't save the style to the project — it's kept locally and still applies to your next generation.",
+        "info",
+      );
+    },
+  });
 
   const applyChange = (next: GenerationTarget | null) => {
     setTarget(next);
     storeGenerationTarget(projectId, next);
+    if (workspaceId !== null) {
+      saveMutation.mutate({ workspaceId, projectId, generation: next });
+    }
     applyStyleChangeToFlow(projectId);
     window.dispatchEvent(new CustomEvent(GENERATION_CHANGED_EVENT, { detail: { projectId } }));
     if (hasDraft) {

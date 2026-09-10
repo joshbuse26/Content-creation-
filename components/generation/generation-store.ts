@@ -3,15 +3,16 @@ import { generationTargetSchema, type GenerationTarget } from "@/lib/types/entit
 import { flowReducer, restoreFlow, serializeFlow } from "./staged-flow";
 
 /**
- * Per-project generation-target persistence (wave C2).
+ * Per-project generation-target persistence (wave C2, upgraded at C-wave
+ * integration).
  *
- * No frozen contract persists a project's chosen generation target before a
- * draft exists (project.create/update carry no mode fields — see
- * REQUESTS-C2.md #1), so the picker stashes the choice per project in
- * localStorage, exactly like the editor's hook-store bridge. After a draft
- * exists the SERVER is authoritative: script rows carry
- * generationMode/archetypeId/crossover, and callers should prefer the latest
- * script's fields over this stash (see resolveGenerationTarget).
+ * `project.setGenerationTarget` now persists the choice server-side on the
+ * project row (REQUESTS-C2 #1 delivered), so the server is authoritative
+ * across devices and teammates. The localStorage stash is kept as a
+ * fallback: it is written alongside every mutation, so on this browser it
+ * matches the server after a successful save and preserves the user's
+ * intent if the save failed. Resolution order (resolveGenerationTarget):
+ * local stash → project row mode fields → latest script row mode fields.
  *
  * Everything loaded from storage is schema-validated; anything that does not
  * parse is dropped (and the key cleared) rather than trusted.
@@ -62,31 +63,41 @@ export function loadGenerationTarget(projectId: string): GenerationTarget | null
   return loadValidated(targetKey(projectId), generationTargetSchema);
 }
 
+/** Row shapes carrying wave-C mode fields (project and script rows both do). */
+export interface GenerationModeFieldsRow {
+  generationMode: GenerationTarget["mode"] | null;
+  archetypeId: GenerationTarget["archetypeId"];
+  crossover: GenerationTarget["crossover"];
+  partnerId: GenerationTarget["partnerId"];
+  voiceProfileId?: GenerationTarget["voiceProfileId"];
+}
+
+function targetFromRow(row: GenerationModeFieldsRow | null): GenerationTarget | null {
+  if (row === null || row.generationMode === null) return null;
+  const parsed = generationTargetSchema.safeParse({
+    mode: row.generationMode,
+    archetypeId: row.archetypeId,
+    crossover: row.crossover,
+    partnerId: row.partnerId,
+    voiceProfileId: row.voiceProfileId ?? null,
+  });
+  return parsed.success ? parsed.data : null;
+}
+
 /**
- * Server-known mode fields (from the latest script row) win over the local
- * stash; the stash covers the time before any draft exists.
+ * Resolution order: local stash (this browser's latest intent — matches the
+ * server after a successful setGenerationTarget, survives a failed one) →
+ * project row (server truth pre-draft, follows the user across devices) →
+ * latest script row (the style the newest draft was actually written with).
  */
 export function resolveGenerationTarget(
   projectId: string,
-  latestScript: {
-    generationMode: GenerationTarget["mode"] | null;
-    archetypeId: GenerationTarget["archetypeId"];
-    crossover: GenerationTarget["crossover"];
-    partnerId: GenerationTarget["partnerId"];
-    voiceProfileId: GenerationTarget["voiceProfileId"];
-  } | null,
+  project: GenerationModeFieldsRow | null,
+  latestScript: GenerationModeFieldsRow | null,
 ): GenerationTarget | null {
   const local = loadGenerationTarget(projectId);
   if (local !== null) return local;
-  if (latestScript === null || latestScript.generationMode === null) return null;
-  const parsed = generationTargetSchema.safeParse({
-    mode: latestScript.generationMode,
-    archetypeId: latestScript.archetypeId,
-    crossover: latestScript.crossover,
-    partnerId: latestScript.partnerId,
-    voiceProfileId: latestScript.voiceProfileId,
-  });
-  return parsed.success ? parsed.data : null;
+  return targetFromRow(project) ?? targetFromRow(latestScript);
 }
 
 // ---------------------------------------------------------------------------
