@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button, IconButton } from "@/components/ui/button";
 import { IconCheck, IconCopy, IconSparkle } from "@/components/ui/icons";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
+import { PipelineStatusNote } from "@/components/ui/pipeline-note";
+import { usePipelinePoll } from "@/components/lib/use-pipeline-poll";
 
 /** 25 scored title options grouped by pattern family, with copy buttons. */
 export function TitlesPanel() {
@@ -20,9 +22,15 @@ export function TitlesPanel() {
   const latestQuery = trpc.titles.latest.useQuery(
     workspaceId !== null ? { workspaceId, projectId } : skipToken,
   );
+  const invalidate = () => {
+    if (workspaceId !== null) void utils.titles.latest.invalidate({ workspaceId, projectId });
+  };
+  // Title generation is a queued pipeline — poll until the set lands.
+  const generatePoll = usePipelinePoll(invalidate, latestQuery.data);
   const generateMutation = trpc.titles.generate.useMutation({
     onSuccess: () => {
-      if (workspaceId !== null) void utils.titles.latest.invalidate({ workspaceId, projectId });
+      invalidate();
+      generatePoll.begin();
     },
   });
 
@@ -78,11 +86,10 @@ export function TitlesPanel() {
           <IconSparkle size={13} /> {titleSet !== null ? "Regenerate" : "Generate titles"}
         </Button>
       </div>
-      {generateMutation.isSuccess ? (
-        <p className="rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-          Title generation queued.
-        </p>
-      ) : null}
+      <PipelineStatusNote
+        poll={generatePoll}
+        working="Title generation queued — options appear below when ready."
+      />
 
       {titleSet === null ? (
         <EmptyState

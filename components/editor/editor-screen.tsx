@@ -13,7 +13,9 @@ import { Button } from "@/components/ui/button";
 import { Dropdown, DropdownItem } from "@/components/ui/dropdown";
 import { IconHistory, IconSparkle, IconWarning } from "@/components/ui/icons";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
+import { PipelineStatusNote } from "@/components/ui/pipeline-note";
 import { fmtDate, fmtDuration, fmtNumber } from "@/components/lib/format";
+import { usePipelinePoll } from "@/components/lib/use-pipeline-poll";
 import { loadHookCandidates } from "./hook-store";
 import { ExportMenu } from "./export-menu";
 import { HookSwitcher } from "./hook-switcher";
@@ -96,27 +98,43 @@ export function EditorScreen() {
   }, [revisions, scriptQuery.data]);
 
   // ---- mutations ----------------------------------------------------------
+  const invalidateScript = () => {
+    if (workspaceId !== null && scriptId !== null) {
+      void utils.script.get.invalidate({ workspaceId, scriptId });
+    }
+  };
+  const invalidateRevisions = () => {
+    if (workspaceId !== null && scriptId !== null) {
+      void utils.revision.list.invalidate({ workspaceId, scriptId });
+    }
+  };
+  // Section regeneration and revision passes run as queued pipelines — poll
+  // until their results land (fixture mode updates synchronously; the
+  // invalidate covers that, the poll covers queued mode).
+  const regenPoll = usePipelinePoll(invalidateScript, scriptQuery.data);
+  const revisionPoll = usePipelinePoll(invalidateRevisions, revisionsQuery.data);
+
   const updateSectionMutation = trpc.script.updateSection.useMutation({
     onError: () => {
-      if (workspaceId !== null && scriptId !== null) {
-        void utils.script.get.invalidate({ workspaceId, scriptId });
-      }
+      invalidateScript();
     },
   });
   const lockMutation = trpc.script.setSectionLock.useMutation();
   const reorderMutation = trpc.script.reorderSections.useMutation({
     onError: () => {
-      if (workspaceId !== null && scriptId !== null) {
-        void utils.script.get.invalidate({ workspaceId, scriptId });
-      }
+      invalidateScript();
     },
   });
-  const regenMutation = trpc.script.regenerateSection.useMutation();
+  const regenMutation = trpc.script.regenerateSection.useMutation({
+    onSuccess: () => {
+      invalidateScript();
+      regenPoll.begin();
+    },
+  });
   const runRevisionMutation = trpc.revision.run.useMutation({
     onSuccess: () => {
-      if (workspaceId !== null && scriptId !== null) {
-        void utils.revision.list.invalidate({ workspaceId, scriptId });
-      }
+      invalidateRevisions();
+      revisionPoll.begin();
     },
   });
   const acceptMutation = trpc.revision.accept.useMutation();
@@ -291,11 +309,10 @@ export function EditorScreen() {
         <ExportMenu workspaceId={workspaceId} scriptId={scriptId} />
       </div>
 
-      {runRevisionMutation.isSuccess ? (
-        <p className="rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-          Revision pass queued — suggestions appear in revision mode when ready.
-        </p>
-      ) : null}
+      <PipelineStatusNote
+        poll={revisionPoll}
+        working="Revision pass queued — suggestions appear in revision mode when ready."
+      />
 
       {/* Quality gate warnings */}
       {qualityReport !== null && (!qualityReport.passed || qualityReport.warnings.length > 0) ? (
@@ -375,11 +392,10 @@ export function EditorScreen() {
       ) : (
         /* ---- Write mode ---- */
         <div className="space-y-3">
-          {regenMutation.isSuccess ? (
-            <p className="rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-              Section regeneration queued — it refreshes in place when the pipeline finishes.
-            </p>
-          ) : null}
+          <PipelineStatusNote
+            poll={regenPoll}
+            working="Section regeneration queued — it refreshes in place when the pipeline finishes."
+          />
           {sections.map((section, i) => (
             <SectionCard
               key={section.id}

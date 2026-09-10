@@ -8,7 +8,9 @@ import { SyncStatusBadge } from "@/components/projects/status-badge";
 import { Button } from "@/components/ui/button";
 import { IconRefresh, IconTrash } from "@/components/ui/icons";
 import { LoadingState } from "@/components/ui/state";
+import { PipelineStatusNote } from "@/components/ui/pipeline-note";
 import { fmtDateTime } from "@/components/lib/format";
+import { usePipelinePoll } from "@/components/lib/use-pipeline-poll";
 
 export function ChannelsSettingsPanel() {
   const { workspaceId, channels, selectChannel } = useWorkspace();
@@ -16,7 +18,14 @@ export function ChannelsSettingsPanel() {
   const invalidate = () => {
     if (workspaceId !== null) void utils.channel.list.invalidate({ workspaceId });
   };
-  const syncMutation = trpc.channel.sync.useMutation({ onSuccess: invalidate });
+  // Channel sync runs as a queued pipeline — poll until statuses change.
+  const syncPoll = usePipelinePoll(invalidate, channels);
+  const syncMutation = trpc.channel.sync.useMutation({
+    onSuccess: () => {
+      invalidate();
+      syncPoll.begin();
+    },
+  });
   const disconnectMutation = trpc.channel.disconnect.useMutation({
     onSuccess: () => {
       selectChannel(null);
@@ -28,6 +37,10 @@ export function ChannelsSettingsPanel() {
 
   return (
     <div className="space-y-6">
+      <PipelineStatusNote
+        poll={syncPoll}
+        working="Sync queued — statuses refresh when the pipeline finishes."
+      />
       <ul className="divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200 bg-white dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">
         {channels.length === 0 ? (
           <li className="px-4 py-6 text-center text-sm text-zinc-400">No channels connected.</li>

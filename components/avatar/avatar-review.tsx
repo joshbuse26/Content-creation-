@@ -18,7 +18,9 @@ import {
   IconX,
 } from "@/components/ui/icons";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
+import { PipelineStatusNote } from "@/components/ui/pipeline-note";
 import { fmtDateTime } from "@/components/lib/format";
+import { usePipelinePoll } from "@/components/lib/use-pipeline-poll";
 
 /**
  * The avatar review screen: every field editable inline, per-field regenerate
@@ -50,9 +52,15 @@ export function AvatarReview({ channelId }: { channelId: ChannelId }) {
       }
     },
   });
+  const invalidateAvatar = () => {
+    if (workspaceId !== null) void utils.avatar.get.invalidate({ workspaceId, channelId });
+  };
+  // Avatar generation is a queued pipeline — poll until fields land.
+  const regenPoll = usePipelinePoll(invalidateAvatar, avatarQuery.data);
   const regenMutation = trpc.avatar.regenerate.useMutation({
     onSuccess: () => {
-      if (workspaceId !== null) void utils.avatar.get.invalidate({ workspaceId, channelId });
+      invalidateAvatar();
+      regenPoll.begin();
     },
   });
 
@@ -72,6 +80,41 @@ export function AvatarReview({ channelId }: { channelId: ChannelId }) {
   }
   const avatar = avatarQuery.data ?? null;
   if (avatar === null) {
+    if (regenPoll.pending) {
+      return (
+        <EmptyState
+          title="Generating your audience avatar…"
+          hint="Analyzing your channel's videos, titles, and stats — fields appear here automatically."
+        />
+      );
+    }
+    if (regenMutation.isError || regenPoll.timedOut) {
+      return (
+        <EmptyState
+          title={
+            regenPoll.timedOut
+              ? "Avatar generation is taking longer than usual"
+              : "Avatar generation failed"
+          }
+          hint={
+            regenPoll.timedOut
+              ? "It may still finish in the background — retry if nothing appears."
+              : "Something went wrong starting the run — try again."
+          }
+          action={
+            <Button
+              variant="primary"
+              busy={regenMutation.isPending}
+              onClick={() => {
+                regenMutation.mutate({ workspaceId, channelId, regenerateAll: true });
+              }}
+            >
+              <IconRefresh size={14} /> Retry
+            </Button>
+          }
+        />
+      );
+    }
     return (
       <EmptyState
         title="No audience avatar yet"
@@ -166,11 +209,10 @@ export function AvatarReview({ channelId }: { channelId: ChannelId }) {
         }
       />
       <CardBody className="space-y-5">
-        {regenMutation.isSuccess ? (
-          <p className="rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-            Regeneration queued — fields refresh when the pipeline finishes.
-          </p>
-        ) : null}
+        <PipelineStatusNote
+          poll={regenPoll}
+          working="Regeneration queued — fields refresh when the pipeline finishes."
+        />
 
         <div className="grid gap-5 sm:grid-cols-2">
           <InlineTextField

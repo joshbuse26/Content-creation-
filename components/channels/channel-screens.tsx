@@ -14,15 +14,24 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { TextInput } from "@/components/ui/field";
 import { IconRefresh } from "@/components/ui/icons";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
+import { PipelineStatusNote } from "@/components/ui/pipeline-note";
 import { fmtCompact, fmtDateTime } from "@/components/lib/format";
+import { usePipelinePoll } from "@/components/lib/use-pipeline-poll";
 import { ConnectChannel } from "./connect-channel";
 
 export function ChannelListScreen() {
   const { workspaceId, channels } = useWorkspace();
   const utils = trpc.useUtils();
+  const invalidate = () => {
+    if (workspaceId !== null) void utils.channel.list.invalidate({ workspaceId });
+  };
+  // Channel sync runs as a queued pipeline — poll the list until sync
+  // status/timestamps change.
+  const syncPoll = usePipelinePoll(invalidate, channels);
   const syncMutation = trpc.channel.sync.useMutation({
     onSuccess: () => {
-      if (workspaceId !== null) void utils.channel.list.invalidate({ workspaceId });
+      invalidate();
+      syncPoll.begin();
     },
   });
 
@@ -34,6 +43,12 @@ export function ChannelListScreen() {
         title="Channels"
         subtitle="Connected channels feed research, audience avatars, and voice."
       />
+      <div className="mb-3">
+        <PipelineStatusNote
+          poll={syncPoll}
+          working="Sync queued — stats refresh when the pipeline finishes."
+        />
+      </div>
       {channels.length === 0 ? (
         <EmptyState
           title="No channels connected"
@@ -78,7 +93,19 @@ export function ChannelDetailScreen({ channelId }: { channelId: ChannelId }) {
   const channelQuery = trpc.channel.get.useQuery(
     workspaceId !== null ? { workspaceId, channelId } : skipToken,
   );
-  const syncMutation = trpc.channel.sync.useMutation();
+  const invalidateChannel = () => {
+    if (workspaceId !== null) {
+      void utils.channel.get.invalidate({ workspaceId, channelId });
+      void utils.channel.list.invalidate({ workspaceId });
+    }
+  };
+  const syncPoll = usePipelinePoll(invalidateChannel, channelQuery.data);
+  const syncMutation = trpc.channel.sync.useMutation({
+    onSuccess: () => {
+      invalidateChannel();
+      syncPoll.begin();
+    },
+  });
   const nicheMutation = trpc.channel.updateNiche.useMutation({
     onSuccess: () => {
       if (workspaceId !== null) {
@@ -126,6 +153,11 @@ export function ChannelDetailScreen({ channelId }: { channelId: ChannelId }) {
             <IconRefresh size={13} /> Sync now
           </Button>
         }
+      />
+
+      <PipelineStatusNote
+        poll={syncPoll}
+        working="Sync queued — stats refresh when the pipeline finishes."
       />
 
       <div className="grid gap-4 sm:grid-cols-3">

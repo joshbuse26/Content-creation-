@@ -11,6 +11,8 @@ import { Card, CardBody } from "@/components/ui/card";
 import { Field, Select, TextArea } from "@/components/ui/field";
 import { IconCheck, IconSparkle } from "@/components/ui/icons";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
+import { PipelineStatusNote } from "@/components/ui/pipeline-note";
+import { usePipelinePoll } from "@/components/lib/use-pipeline-poll";
 
 /** v1: text thumbnail briefs only — image generation ships in v1.1. */
 const COMPOSITION_PATTERNS = [
@@ -39,7 +41,14 @@ export function ThumbsPanel() {
   const invalidate = () => {
     if (workspaceId !== null) void utils.thumbnails.list.invalidate({ workspaceId, projectId });
   };
-  const generateMutation = trpc.thumbnails.generate.useMutation({ onSuccess: invalidate });
+  // Brief generation is a queued pipeline — poll until the concept lands.
+  const generatePoll = usePipelinePoll(invalidate, listQuery.data);
+  const generateMutation = trpc.thumbnails.generate.useMutation({
+    onSuccess: () => {
+      invalidate();
+      generatePoll.begin();
+    },
+  });
   const chooseMutation = trpc.thumbnails.choose.useMutation({ onSuccess: invalidate });
 
   if (workspaceId === null || listQuery.isLoading) return <LoadingState />;
@@ -110,6 +119,11 @@ export function ThumbsPanel() {
           </form>
         </CardBody>
       </Card>
+
+      <PipelineStatusNote
+        poll={generatePoll}
+        working="Brief queued — it appears below when the pipeline finishes."
+      />
 
       {concepts.length === 0 ? (
         <EmptyState title="No thumbnail briefs yet" />
