@@ -6,6 +6,7 @@ import { getQueue, JOB_NAMES, QUEUE_NAMES } from "@/queue/queues";
 import { runAvatarGeneration } from "@/pipelines/avatar/pipeline";
 import { runChannelSync } from "@/pipelines/sync/pipeline";
 import { getChannelDomainDeps, type ChannelDomainDeps } from "./deps";
+import { makeChannelYoutubeResolver } from "./oauth-token";
 
 /**
  * Job enqueueing for the A1 channel domain. With Redis, jobs land on the
@@ -42,7 +43,12 @@ export function createInlineSyncEnqueuer(
       try {
         const deps = await getDeps();
         await runChannelSync(
-          { channelRepo: deps.channelRepo, youtube: deps.providers.youtube, quota: deps.quota },
+          {
+            channelRepo: deps.channelRepo,
+            youtube: deps.providers.youtube,
+            quota: deps.quota,
+            resolveYoutube: makeChannelYoutubeResolver(deps),
+          },
           input,
         );
       } catch (err) {

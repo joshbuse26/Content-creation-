@@ -82,15 +82,33 @@ const searchListSchema = z.object({
     .default([]),
 });
 
-/** Live YouTube Data API v3 provider (public reads; 10k units/day — spec §8). */
+/**
+ * Live YouTube Data API v3 provider (10k units/day — spec §8).
+ *
+ * Default construction uses API-key (public-data) requests. Pass an OAuth
+ * access token to make authenticated requests on behalf of the channel
+ * owner — the oauth-mode sync path mints one from the stored (encrypted)
+ * refresh token (server/channel/oauth-token.ts).
+ */
 export class LiveYoutube implements YoutubeProvider {
+  constructor(private readonly options: { accessToken?: string } = {}) {}
+
   private async request(path: string, params: Record<string, string>): Promise<unknown> {
-    const { GOOGLE_API_KEY } = getConfig();
-    if (GOOGLE_API_KEY === undefined) {
-      throw new Error("GOOGLE_API_KEY is required for the live YouTube provider");
+    const { accessToken } = this.options;
+    let url: string;
+    let headers: Record<string, string> = {};
+    if (accessToken !== undefined) {
+      url = `${API}/${path}?${new URLSearchParams(params).toString()}`;
+      headers = { Authorization: `Bearer ${accessToken}` };
+    } else {
+      const { GOOGLE_API_KEY } = getConfig();
+      if (GOOGLE_API_KEY === undefined) {
+        throw new Error("GOOGLE_API_KEY is required for the live YouTube provider");
+      }
+      url = `${API}/${path}?${new URLSearchParams({ ...params, key: GOOGLE_API_KEY }).toString()}`;
     }
-    const qs = new URLSearchParams({ ...params, key: GOOGLE_API_KEY });
-    const res = await fetch(`${API}/${path}?${qs.toString()}`, {
+    const res = await fetch(url, {
+      headers,
       signal: AbortSignal.timeout(15_000),
     });
     if (!res.ok) {

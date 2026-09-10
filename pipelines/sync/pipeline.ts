@@ -45,6 +45,12 @@ export interface SyncDeps {
   channelRepo: ChannelRepo;
   youtube: YoutubeProvider;
   quota: QuotaTracker;
+  /**
+   * Per-channel provider selection: oauth-mode channels sync with an
+   * authed provider built from their stored refresh token
+   * (server/channel/oauth-token.ts); defaults to `youtube` when absent.
+   */
+  resolveYoutube?: (channel: Channel) => Promise<YoutubeProvider>;
   /** Injectable for tests that want to observe stage rows. */
   runStore?: PipelineRunStore;
   now?: () => Date;
@@ -164,9 +170,14 @@ export async function runChannelSync(deps: SyncDeps, rawInput: unknown): Promise
 
   await deps.channelRepo.update(input.workspaceId, input.channelId, { syncStatus: "syncing" });
 
+  // oauth-mode channels sync as the channel owner via their stored refresh
+  // token; the resolver falls back to the public provider on any failure.
+  const youtube =
+    deps.resolveYoutube !== undefined ? await deps.resolveYoutube(channel) : deps.youtube;
+
   const ctx: SyncRunContext = { channel };
   const runner = new PipelineRunner(deps.runStore ?? new InMemoryPipelineRunStore());
-  const result = await runner.execute(buildSyncPipeline(deps, ctx), {
+  const result = await runner.execute(buildSyncPipeline({ ...deps, youtube }, ctx), {
     workspaceId: input.workspaceId,
     projectId: null,
     input,

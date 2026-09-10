@@ -85,6 +85,12 @@ export interface ChannelRepo {
   insertSnapshot(data: NewSnapshotData): Promise<ChannelStatsSnapshot>;
   /** All channels across workspaces — worker-only (nightly sweep fan-out). */
   listAllForSweep(): Promise<Channel[]>;
+  /**
+   * Stored (encrypted) OAuth refresh token for a channel, or null. Only the
+   * oauth-mode sync path reads this — the ciphertext never leaves the
+   * server and is decrypted just-in-time (server/channel/crypto.ts).
+   */
+  getRefreshTokenEnc(workspaceId: WorkspaceId, channelId: ChannelId): Promise<string | null>;
 }
 
 export interface AvatarFieldsPatch {
@@ -328,6 +334,15 @@ export class DrizzleChannelRepo implements ChannelRepo {
   async listAllForSweep(): Promise<Channel[]> {
     const rows = await getDb().select().from(schema.channels).orderBy(schema.channels.createdAt);
     return rows.map(rowToChannel);
+  }
+
+  async getRefreshTokenEnc(workspaceId: WorkspaceId, channelId: ChannelId): Promise<string | null> {
+    const rows = await getDb()
+      .select({ oauthRefreshToken: schema.channels.oauthRefreshToken })
+      .from(schema.channels)
+      .where(and(eq(schema.channels.workspaceId, workspaceId), eq(schema.channels.id, channelId)))
+      .limit(1);
+    return rows[0]?.oauthRefreshToken ?? null;
   }
 }
 
@@ -585,6 +600,14 @@ export class InMemoryChannelStore implements ChannelRepo, TrackingRepo {
 
   listAllForSweep(): Promise<Channel[]> {
     return Promise.resolve([...this.channels.values()].map((c) => c.entity));
+  }
+
+  getRefreshTokenEnc(workspaceId: WorkspaceId, channelId: ChannelId): Promise<string | null> {
+    const mem = this.channels.get(channelId);
+    if (mem === undefined || mem.entity.workspaceId !== workspaceId) {
+      return Promise.resolve(null);
+    }
+    return Promise.resolve(mem.oauthRefreshTokenEnc);
   }
 
   /** Test/debug helper — read the stored (encrypted) token for a channel. */

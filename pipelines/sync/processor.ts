@@ -4,6 +4,7 @@ import { avatarJobInputSchema, syncJobInputSchema } from "@/lib/types/pipeline";
 import { JOB_NAMES } from "@/queue/queues";
 import { getChannelDomainDeps, type ChannelDomainDeps } from "@/server/channel/deps";
 import { createQueueSyncEnqueuer, type SyncEnqueuer } from "@/server/channel/jobs";
+import { makeChannelYoutubeResolver } from "@/server/channel/oauth-token";
 import { runAvatarGeneration } from "@/pipelines/avatar/pipeline";
 import { runChannelSync } from "./pipeline";
 import { runPostPublishTracking, trackingSweepInputSchema } from "./tracking";
@@ -61,7 +62,12 @@ export async function processSyncQueueJob(
         return;
       }
       await runChannelSync(
-        { channelRepo: deps.channelRepo, youtube: deps.providers.youtube, quota: deps.quota },
+        {
+          channelRepo: deps.channelRepo,
+          youtube: deps.providers.youtube,
+          quota: deps.quota,
+          resolveYoutube: makeChannelYoutubeResolver(deps),
+        },
         data,
       );
       return;
