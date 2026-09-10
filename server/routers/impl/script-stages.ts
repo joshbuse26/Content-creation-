@@ -156,12 +156,18 @@ export const scriptStagesImpl = {
             limit: 5,
           });
 
+    // The outlier snapshot feeds the prompt, so it is part of the run
+    // identity (adversarial F2): fold it into the hashed input — refreshed
+    // outliers produce a NEW metered run instead of re-serving a stale one,
+    // and an unchanged snapshot re-serves the persisted output for free.
+    const outlierSnapshot = outliers.map((o) => ({ title: o.title, outlierRatio: o.outlierRatio }));
+
     const topics = await runMeteredSyncStage<TopicCandidate[]>({
       deps: deps.engine,
       stage: "topics",
       workspaceId: ctx.workspaceId,
       projectId: null,
-      input,
+      input: { input, outliers: outlierSnapshot },
       cost: CREDIT_COSTS.scriptTopics,
       actorUserId: ctx.userId,
       compute: async () => {
@@ -172,7 +178,7 @@ export const scriptStagesImpl = {
           template: topicsPrompt({
             channelTitle: channel.title,
             nicheKeywords: channel.nicheKeywords,
-            outliers: outliers.map((o) => ({ title: o.title, outlierRatio: o.outlierRatio })),
+            outliers: outlierSnapshot,
             styleCard,
             count: input.count,
           }),

@@ -48,6 +48,7 @@ import {
   countWords,
   fleschReadingEase,
 } from "./readability";
+import { settleCharge } from "./settle-charge";
 import type { NewSection } from "./store";
 
 /**
@@ -443,8 +444,9 @@ export async function runScriptPipeline(
       }
       state.report = report;
       deps.store.saveQualityReport(scriptId, report);
+      // Stats land here; `final` is set AFTER the completion charge below —
+      // a script must never surface as final while unpaid (adversarial F1).
       await deps.store.updateScript(input.workspaceId, scriptId, {
-        status: "final",
         stats: scriptStats(sections),
       });
       await publish({ type: "quality_report", report });
@@ -480,7 +482,7 @@ export async function runScriptPipeline(
       ? { cost: CREDIT_COSTS.scriptGeneration, key: `script_generation:${inputHash}` }
       : { cost: CREDIT_COSTS.scriptDraft, key: `draft:${inputHash}` };
   const chargeStage = async (charge: { cost: number; key: string }) => {
-    await deps.store.recordCredits({
+    await settleCharge(deps.store, {
       workspaceId: input.workspaceId,
       delta: -charge.cost,
       reason: "script_generation",
@@ -514,12 +516,26 @@ export async function runScriptPipeline(
 
   if (result.status === "done") {
     // Completion charge (spec §7) — never on failure, never twice: the
-    // charge is idempotent per (reason, key), and a run where every stage
-    // was resumed/skipped did no new work to charge for.
-    const allStagesSkipped = result.skippedStages.length === SCRIPT_STAGES.length;
-    if (!allStagesSkipped) {
+    // ledger key makes the charge idempotent, so it is attempted on EVERY
+    // completed run (adversarial F1). A fully-resumed identical re-run
+    // dedupes on the key; a retry whose first attempt crashed (or bounced
+    // off the balance floor) between the last stage and the charge pays
+    // here instead of finishing free. The script surfaces as `final` — and
+    // `complete` is published — only after the charge lands; a charge
+    // failure fails the run so the BullMQ retry re-attempts the charge.
+    try {
       await chargeStage(completionCharge);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await publish({ type: "failed", stage: "quality_gate", message });
+      return {
+        status: "failed",
+        stage: "quality_gate",
+        error: message,
+        skippedStages: result.skippedStages,
+      };
     }
+    await deps.store.updateScript(input.workspaceId, scriptId, { status: "final" });
     await publish({ type: "complete", scriptId: scriptIdSchema.parse(scriptId) });
   } else {
     await publish({
