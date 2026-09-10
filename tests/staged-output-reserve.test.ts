@@ -223,9 +223,7 @@ describe("balance-floor bounce at stage completion (F5)", () => {
     expect(result).toEqual({ hooks: ["h"] });
     expect(computeCalls).toBe(1);
     // The overage grant covered the shortfall, then the charge landed.
-    expect(billing.ledger).toEqual([
-      expect.objectContaining({ delta: 1, reason: "overage" }),
-    ]);
+    expect(billing.ledger).toEqual([expect.objectContaining({ delta: 1, reason: "overage" })]);
     expect(deps.store.creditEntries).toHaveLength(1);
     expect((await billing.getWorkspace(fixtureCtx.workspaceId))?.overageUsed).toBe(1);
   });

@@ -102,7 +102,11 @@ export const projectHandlers = {
     // Partner ids get the SAME record-level checks the dispatch sites run
     // (adversarial F8): the flag guard above cannot verify the row — an
     // unknown or unlicensed partner must never land in a project row.
-    if (generation !== null && generation.mode === "partnered_named" && generation.partnerId !== null) {
+    if (
+      generation !== null &&
+      generation.mode === "partnered_named" &&
+      generation.partnerId !== null
+    ) {
       await requireEnabledPartner(generation.partnerId);
     }
     // Normalized: fields outside the target's mode are stored NULL.

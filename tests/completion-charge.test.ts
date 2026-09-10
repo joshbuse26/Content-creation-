@@ -20,7 +20,10 @@ import { makeDeps, fixtureCtx } from "./a2-helpers";
 
 type Deps = ReturnType<typeof makeDeps>;
 
-const pipelineParams = (deps: Deps, scriptId: Parameters<typeof runScriptPipeline>[1]["scriptId"]) =>
+const pipelineParams = (
+  deps: Deps,
+  scriptId: Parameters<typeof runScriptPipeline>[1]["scriptId"],
+) =>
   ({
     input: {
       workspaceId: fixtureCtx.workspaceId,

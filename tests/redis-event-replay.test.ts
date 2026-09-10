@@ -88,8 +88,12 @@ function makeBus(server: FakeRedisServer): RedisScriptEventBus {
   return new RedisScriptEventBus("redis://fake", () => new FakeRedis(server) as unknown as Redis);
 }
 
-const stageEvent = (stage: "assemble_context" | "outline" | "draft_sections"): ScriptStreamEvent =>
-  ({ type: "stage_started", stage }) as ScriptStreamEvent;
+const stageEvent = (
+  stage: "assemble_context" | "outline" | "draft_sections",
+): ScriptStreamEvent => ({
+  type: "stage_started",
+  stage,
+});
 const completeEvent: ScriptStreamEvent = {
   type: "complete",
   scriptId: scriptIdSchema.parse(SCRIPT_ID),
