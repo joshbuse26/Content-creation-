@@ -19,7 +19,7 @@ import {
 import { researchDocIdSchema, scriptIdSchema, type ScriptId } from "@/lib/types/ids";
 import { generateHookCandidates } from "@/pipelines/stages/hooks";
 import { generateOutline } from "@/pipelines/stages/outline";
-import { resolveStyleCard } from "@/pipelines/stages/style-resolver";
+import { resolveStyleCard, resolveTrainedVoiceProfile } from "@/pipelines/stages/style-resolver";
 import {
   factCheckPrompt,
   qualityFixPrompt,
@@ -163,10 +163,16 @@ export async function runScriptPipeline(
     // resolves the style card; generation === null keeps the legacy
     // voice-profile card assembleContext already set. Archetype and partner
     // cards flow through the SAME styleCard seam as channel-learned cards.
+    const resolutionProfile = await resolveTrainedVoiceProfile(
+      deps.store,
+      input.workspaceId,
+      input.generation,
+      voiceProfile,
+    );
     const styleCard: StyleCard | null =
       input.generation === null
         ? base.styleCard
-        : await resolveStyleCard(input.generation, voiceProfile);
+        : await resolveStyleCard(input.generation, resolutionProfile);
     state.context = { ...base, styleCard };
     return state.context;
   };

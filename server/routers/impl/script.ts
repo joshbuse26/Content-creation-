@@ -5,7 +5,7 @@ import type { scriptContracts } from "@/lib/types/api";
 import { generationTargetSchema, type GenerationTarget } from "@/lib/types/entities";
 import type { Script, ScriptSection } from "@/lib/types/entities";
 import type { QualityGateReport } from "@/lib/types/pipeline";
-import { resolveStyleCard } from "@/pipelines/stages/style-resolver";
+import { resolveStyleCard, resolveTrainedVoiceProfile } from "@/pipelines/stages/style-resolver";
 import { assembleContext } from "@/pipelines/script/context";
 import { getEngineDeps, type EngineDeps } from "@/pipelines/script/deps";
 import { dispatchPipelineJob } from "@/pipelines/script/execute";
@@ -131,8 +131,14 @@ export const scriptImpl = {
     // A licensed script-level voice must have its signed license on file.
     assertLicensedVoiceUsable(profile);
     // Resolve the card now so mode errors (unknown archetype, unlicensed
-    // partner) surface at dispatch, before any charge or script row.
-    await resolveStyleCard(input.generation, profile);
+    // partner, no trained voice) surface at dispatch, before any charge or row.
+    const resolutionProfile = await resolveTrainedVoiceProfile(
+      deps.store,
+      ctx.workspaceId,
+      input.generation,
+      profile,
+    );
+    await resolveStyleCard(input.generation, resolutionProfile);
     await requireCreditsWithOverage(ctx.workspaceId, CREDIT_COSTS.scriptGeneration);
     const script = await deps.store.createScript({
       workspaceId: ctx.workspaceId,

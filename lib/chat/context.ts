@@ -3,7 +3,7 @@ import type { CoachContext, CoachStyleContext } from "@/lib/types/chat";
 import { coachContextSchema } from "@/lib/types/chat";
 import type { ProjectId, WorkspaceId } from "@/lib/types/ids";
 import { getStageDeps, type StageDeps } from "@/pipelines/stages/deps";
-import { resolveStyleCard } from "@/pipelines/stages/style-resolver";
+import { resolveStyleCard, resolveTrainedVoiceProfile } from "@/pipelines/stages/style-resolver";
 import { logger } from "@/lib/logger";
 
 /**
@@ -73,7 +73,15 @@ async function resolveActiveStyle(
   }
 
   try {
-    const card = await resolveStyleCard(target, channelProfiles[0] ?? null, deps.partners);
+    // For train_on_my_channel, resolve against the trained profile the target
+    // names (prefer it over the first channel profile).
+    const resolutionProfile = await resolveTrainedVoiceProfile(
+      deps.engine.store,
+      workspaceId,
+      target,
+      channelProfiles.find((p) => p.id === target.voiceProfileId) ?? channelProfiles[0] ?? null,
+    );
+    const card = await resolveStyleCard(target, resolutionProfile, deps.partners);
     return {
       source: target.mode,
       archetypeId: target.mode === "archetype" ? target.archetypeId : null,

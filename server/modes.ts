@@ -31,13 +31,12 @@ function hasSubstantialLicensedCorpus(profile: VoiceProfile): boolean {
  *  - partnered_named: rejected unless FEATURE_PARTNERED_NAMED is on. Even
  *    with the flag on, C1's resolver must additionally verify the partner
  *    row is `enabled` (which the DB CHECK ties to signed license fields).
- *  - train_on_my_channel: still rejected in this wave — the enum value and
- *    the derivation contract (WAVE-D-PLAN §2c: voice.trainFromChannel +
- *    trainStyleCardFromChannel + a source="trained" voice profile) are
- *    frozen in D0, but D2 wires the mode end-to-end. Once a trained card
- *    exists for the project's channel it BECOMES resolvable (the resolver
- *    seam is in place, pipelines/stages/style-resolver.ts); until then this
- *    guard rejects with a clear "train a voice first" message.
+ *  - train_on_my_channel (D2, WAVE-D-PLAN §2c): now ALLOWED at the mode level.
+ *    The target carries the trained voice profile's id (the schema requires it),
+ *    and pipelines/stages/style-resolver.ts resolves that source="trained"
+ *    card — throwing a clear "train a voice first" error if the id does not
+ *    resolve to a trained card. The mode guard no longer rejects it (the real
+ *    derivation ships in server/voice/train.ts + voice.trainFromChannel).
  */
 
 export function isPartneredNamedEnabled(): boolean {
@@ -52,19 +51,10 @@ export function assertGenerationModeAllowed(mode: GenerationMode): void {
       message: "Partnered creator voices are not available on this deployment.",
     });
   }
-  if (mode === "train_on_my_channel") {
-    // TODO(D2): resolve a source="trained" voice profile for the project's
-    // channel instead of rejecting when one exists (train a voice first,
-    // else this clear error). The derivation contract is frozen in D0
-    // (server/voice/train.ts, voice.trainFromChannel); only the end-to-end
-    // wiring + consent flow remain. Keep rejecting until then.
-    throw new TRPCError({
-      code: "NOT_IMPLEMENTED",
-      message:
-        "Training on your own channel isn't wired up yet — train a voice from your " +
-        "channel first (coming soon), then this mode will use it.",
-    });
-  }
+  // train_on_my_channel: available (D2). Whether a trained card actually
+  // exists for the selected voiceProfileId is enforced at resolution time
+  // (style-resolver), where the profile is loaded — that is the layer that
+  // can say "train a voice first" with the channel in hand.
 }
 
 /**

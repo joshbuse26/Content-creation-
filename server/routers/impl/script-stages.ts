@@ -19,7 +19,7 @@ import { getStageDeps, type StageDeps } from "@/pipelines/stages/deps";
 import { generateHookCandidates } from "@/pipelines/stages/hooks";
 import { generateOutline } from "@/pipelines/stages/outline";
 import { runMeteredSyncStage } from "@/pipelines/stages/run";
-import { resolveStyleCard } from "@/pipelines/stages/style-resolver";
+import { resolveStyleCard, resolveTrainedVoiceProfile } from "@/pipelines/stages/style-resolver";
 import { topicsPrompt } from "@/prompts";
 import { requireCreditsWithOverage } from "@/server/billing";
 import { CREDIT_COSTS } from "@/server/credits";
@@ -107,10 +107,18 @@ async function contextForProject(
   ]);
   if (voiceProfileId !== null && voiceProfile === null) notFound("voice profile");
   const base = assembleContext({ frame, researchDocs, avatar, voiceProfile });
+  // For train_on_my_channel, resolve against the trained profile the target
+  // names (loaded workspace-scoped), not the section-level voice profile.
+  const resolutionProfile = await resolveTrainedVoiceProfile(
+    store,
+    ctx.workspaceId,
+    generation,
+    voiceProfile,
+  );
   const styleCard =
     generation === null
       ? base.styleCard
-      : await resolveStyleCard(generation, voiceProfile, deps.partners);
+      : await resolveStyleCard(generation, resolutionProfile, deps.partners);
   return { context: { ...base, styleCard }, frame };
 }
 
@@ -142,9 +150,16 @@ export const scriptStagesImpl = {
     // the repo read is workspace-scoped, so a foreign channel is NOT_FOUND.
     const channel: Channel | null = await deps.channels.get(ctx.workspaceId, input.channelId);
     if (channel === null) notFound("channel");
-    const styleCard: StyleCard | null = await resolveStyleCard(
+    // train_on_my_channel resolves against the trained profile the target names.
+    const resolutionProfile = await resolveTrainedVoiceProfile(
+      deps.engine.store,
+      ctx.workspaceId,
       input.generation,
       null,
+    );
+    const styleCard: StyleCard | null = await resolveStyleCard(
+      input.generation,
+      resolutionProfile,
       deps.partners,
     );
     await requireCreditsWithOverage(ctx.workspaceId, CREDIT_COSTS.scriptTopics);
@@ -285,8 +300,14 @@ export const scriptStagesImpl = {
     // A licensed script-level voice must have its signed license on file.
     assertLicensedVoiceUsable(voiceProfile);
     // Resolve the card NOW so mode errors (unknown archetype, unlicensed
-    // partner) surface at dispatch, before any charge or job.
-    const styleCard = await resolveStyleCard(input.generation, voiceProfile, deps.partners);
+    // partner, no trained voice) surface at dispatch, before any charge or job.
+    const resolutionProfile = await resolveTrainedVoiceProfile(
+      store,
+      ctx.workspaceId,
+      input.generation,
+      voiceProfile,
+    );
+    const styleCard = await resolveStyleCard(input.generation, resolutionProfile, deps.partners);
     if (
       input.hook !== null &&
       styleCard !== null &&
