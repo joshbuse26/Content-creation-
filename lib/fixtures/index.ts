@@ -5,6 +5,8 @@ import {
   channelSchema,
   channelStatsSnapshotSchema,
   chapterSetSchema,
+  chatMessageSchema,
+  chatThreadSchema,
   creditLedgerEntrySchema,
   descriptionSchema,
   descriptionTemplateSchema,
@@ -21,11 +23,15 @@ import {
   tagSetSchema,
   thumbnailConceptSchema,
   titleSetSchema,
+  trainStyleCardResultSchema,
   userSchema,
   voiceProfileSchema,
   workspaceSchema,
+  type ChatMessage,
   type ScriptSection,
 } from "@/lib/types/entities";
+import { coachContextSchema } from "@/lib/types/chat";
+import { CHAT_TOOL_NAMES } from "@/lib/types/enums";
 import { qualityGateReportSchema } from "@/lib/types/pipeline";
 
 /**
@@ -72,6 +78,13 @@ export const FIXTURE_IDS = {
   // A second workspace that the fixture user is NOT a member of — used by
   // cross-tenant denial tests.
   otherWorkspace: "00000000-0000-4000-8000-000000000099",
+  // Wave D: chat + trained-voice fixtures (WAVE-D-PLAN §2a/§2c).
+  voiceProfileTrained: "00000000-0000-4000-8000-0000000000a0",
+  chatThread: "00000000-0000-4000-8000-0000000000b0",
+  chatThreadWorkspace: "00000000-0000-4000-8000-0000000000b1",
+  chatMessageUser: "00000000-0000-4000-8000-0000000000b2",
+  chatMessageAssistant: "00000000-0000-4000-8000-0000000000b3",
+  chatMessageTool: "00000000-0000-4000-8000-0000000000b4",
 } as const;
 
 const T0 = new Date("2026-09-01T12:00:00.000Z");
@@ -552,3 +565,186 @@ export const fixtureApiKey = apiKeySchema.parse({
   revokedAt: null,
   createdAt: T0,
 });
+
+// ---------------------------------------------------------------------------
+// Wave D — trained voice + chat fixtures (WAVE-D-PLAN §2a/§2c)
+// ---------------------------------------------------------------------------
+
+/**
+ * A source="trained" voice profile — first-class alongside the archetype
+ * cards. The `voice.trainFromChannel` stub returns a card of this shape; D2
+ * replaces the stub with the real transcript→LLM derivation.
+ */
+export const fixtureTrainedVoiceProfile = voiceProfileSchema.parse({
+  id: FIXTURE_IDS.voiceProfileTrained,
+  workspaceId: FIXTURE_IDS.workspace,
+  channelId: FIXTURE_IDS.channel,
+  name: "Casey — trained from channel",
+  source: "trained",
+  styleCard: {
+    voice: {
+      pov: "First person, talks to one viewer like a friend across the counter.",
+      diction: "Plain-spoken expert; defines a term once, then uses it freely.",
+      rhythm: "Mostly short sentences; one longer build before each payoff.",
+    },
+    tone: {
+      register: "Warm, curious, quietly confident; jokes in the asides.",
+      never: "condescending; hype without evidence",
+    },
+    pacing: { wpmTarget: 148, sectionSeconds: 85, rehookSeconds: 70 },
+    hookPatterns: [
+      { technique: "open_loop", guidance: "Pose the tension the video resolves; hold the answer." },
+      { technique: "stakes", guidance: "Name what it costs the viewer to get this wrong." },
+    ],
+    ctaHabits: {
+      placement: "after_payoff",
+      placementPct: null,
+      phrasingStyle: "One low-pressure ask tied to the value just delivered.",
+      maxPerVideo: 1,
+    },
+    bannedClaims: ["guaranteed_results", "medical_claims"],
+    readingLevel: { minGrade: 6, maxGrade: 9 },
+    energy: 3,
+    exampleSnippets: [],
+    thumbnailPresetId: null,
+  },
+  licenseDocUrl: null,
+  licenseSignedAt: null,
+  trainedFromChannelId: FIXTURE_IDS.channel,
+  trainedAt: T1,
+  ...stamps,
+});
+
+/** Result shape returned by the `voice.trainFromChannel` stub. */
+export const fixtureTrainStyleCardResult = trainStyleCardResultSchema.parse({
+  voiceProfile: fixtureTrainedVoiceProfile,
+  remix: false,
+  sampledVideoIds: ["dQfixture001", "dQfixture002", "dQfixture003"],
+});
+
+/** Project-scoped chat thread (the common case: coaching one video). */
+export const fixtureChatThread = chatThreadSchema.parse({
+  id: FIXTURE_IDS.chatThread,
+  workspaceId: FIXTURE_IDS.workspace,
+  projectId: FIXTURE_IDS.project,
+  title: "Budget espresso video — planning",
+  ...stamps,
+});
+
+/** Workspace-level coach thread (projectId null). */
+export const fixtureChatThreadWorkspace = chatThreadSchema.parse({
+  id: FIXTURE_IDS.chatThreadWorkspace,
+  workspaceId: FIXTURE_IDS.workspace,
+  projectId: null,
+  title: "Channel coach",
+  ...stamps,
+});
+
+/**
+ * An ordered message page for fixtureChatThread: a user ask, the assistant's
+ * reply proposing a credit-costing tool, and the tool result after confirm.
+ */
+export const fixtureChatMessages: ChatMessage[] = z.array(chatMessageSchema).parse([
+  {
+    id: FIXTURE_IDS.chatMessageUser,
+    threadId: FIXTURE_IDS.chatThread,
+    workspaceId: FIXTURE_IDS.workspace,
+    role: "user",
+    content: "Give me some topic ideas for the budget espresso video.",
+    toolCalls: null,
+    toolCallId: null,
+    creditsCharged: 0,
+    seq: 0,
+    createdAt: T0,
+  },
+  {
+    id: FIXTURE_IDS.chatMessageAssistant,
+    threadId: FIXTURE_IDS.chatThread,
+    workspaceId: FIXTURE_IDS.workspace,
+    role: "assistant",
+    content:
+      "Happy to. I can pull fresh topic candidates grounded in your niche and recent " +
+      "outliers — that runs the topics tool (1 credit). Want me to?",
+    toolCalls: [
+      {
+        toolCallId: "call_topics_1",
+        name: "list_topics",
+        args: { channelId: FIXTURE_IDS.channel, count: 5 },
+        estimatedCredits: 1,
+      },
+    ],
+    toolCallId: null,
+    creditsCharged: 0,
+    seq: 1,
+    createdAt: new Date(T0.getTime() + 4_000),
+  },
+  {
+    id: FIXTURE_IDS.chatMessageTool,
+    threadId: FIXTURE_IDS.chatThread,
+    workspaceId: FIXTURE_IDS.workspace,
+    role: "tool",
+    content: "Generated 5 topic candidates grounded in the channel niche.",
+    toolCalls: null,
+    toolCallId: "call_topics_1",
+    creditsCharged: 1,
+    seq: 2,
+    createdAt: new Date(T0.getTime() + 9_000),
+  },
+]);
+
+/**
+ * A representative assembled CoachContext (the grounding buildCoachContext
+ * returns for the fixture project). Self-validating via coachContextSchema.
+ */
+export const fixtureCoachContext = coachContextSchema.parse({
+  workspaceId: FIXTURE_IDS.workspace,
+  projectId: FIXTURE_IDS.project,
+  projectTitle: "Budget espresso setup vs. the $2k rig",
+  channelTitle: "Deep Dive with Casey",
+  nicheKeywords: ["home espresso", "coffee gear", "latte art"],
+  style: {
+    source: "own_channel",
+    archetypeId: null,
+    card: fixtureVoiceProfile.styleCard,
+  },
+  audience: {
+    sophistication: "intermediate",
+    topPains: [
+      "Spent $700+ on an espresso setup and still pulls sour shots",
+      "Overwhelmed by conflicting grinder advice",
+    ],
+    topMotivations: [
+      "Cafe-quality drinks at home to justify the investment",
+      "Mastery and ritual — coffee as a craft hobby",
+    ],
+    vocabularyNotes:
+      "Comfortable with 'extraction', 'puck prep', 'RDT'; explain 'preinfusion' on first use.",
+  },
+  research: {
+    docCount: 1,
+    totalWords: 68,
+    titles: ["Research brief: budget espresso performance"],
+  },
+  uniqueAngle:
+    "Blind-test a $200 stack against my $2,000 daily rig — where does the money actually go?",
+  durationMinutes: 12,
+});
+
+/**
+ * Expected per-tool credit estimates (WAVE-D-PLAN §2b). A static, keyless
+ * fixture kept decoupled from lib/chat/tools.ts (which imports server code);
+ * the D0 tools test cross-checks it against estimateToolCredits so the two
+ * can never silently diverge.
+ */
+export const fixtureChatToolEstimates: Record<string, number> = z
+  .record(z.enum(CHAT_TOOL_NAMES), z.number().int().nonnegative())
+  .parse({
+    list_topics: 1,
+    make_outline: 1,
+    make_hooks: 1,
+    draft_script: 4,
+    revise_section: 2,
+    make_titles: 1,
+    thumbnail_brief: 0,
+    fetch_research: 1,
+  });

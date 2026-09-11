@@ -1,5 +1,6 @@
 {
-  "$comment": "Reviewed false positives for the named-creator copy-lint (tests/copy-lint.test.ts). Each entry is an EXACT matched substring the patterns may ignore. Add an entry only after confirming the phrase does not claim to sound/write like a real, named creator. partnerAllowlist entries additionally require FEATURE_PARTNERED_NAMED to be on and a signed partner license on file for that creator.",
+  "$comment": "Reviewed false positives for the copy-lint (tests/copy-lint.test.ts). `allowlist`/`partnerAllowlist` are EXACT matched substrings the named-creator patterns may ignore (add only after confirming the phrase does not claim to sound/write like a real, named creator; partnerAllowlist additionally requires FEATURE_PARTNERED_NAMED on and a signed partner license). `grokXaiAllowlist` (Wave D) holds EXACT string literals in app/** or components/** that legitimately contain 'Grok'/'xAI' and are NOT user-facing (add only after confirming it never renders to a user; the LLM vendor is never named in UI).",
   "allowlist": [],
-  "partnerAllowlist": []
+  "partnerAllowlist": [],
+  "grokXaiAllowlist": []
 }
