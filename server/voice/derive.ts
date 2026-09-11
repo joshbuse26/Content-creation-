@@ -3,6 +3,8 @@ import { containsRealCreatorName } from "@/lib/seed-lint";
 import {
   analyzeSimilarity,
   exceedsSimilarity,
+  REMIX_VERBATIM_RUN_BLOCK,
+  segmentSourcesIntoSpans,
   type SimilarityOptions,
 } from "@/lib/similarity-guard";
 import { styleCardSchema, type StyleCard } from "@/lib/types/entities";
@@ -20,11 +22,20 @@ import { trainVoicePrompt } from "@/prompts";
  * deterministic synthesizer in fixture mode (zero keys). Both return a card
  * that satisfies the frozen styleCardSchema.
  *
- * `sanitizeRemixCard` is the REMIX guard: a competitor remix must be an
- * ORIGINAL card, so any derived exampleSnippet that reproduces a competitor
- * transcript span (over the same similarity threshold the licensed guard
- * uses) is dropped, and a snippet or name carrying a real-person reference is
- * removed. Own-channel cards skip this (the snippets are the user's own).
+ * `sanitizeDerivedCard` is the ORIGINALITY guard for any card derived from a
+ * source that is not a proven-owned channel (a competitor remix OR training on
+ * an unverified/public channel — D2 P0-1). A guarded card must be ORIGINAL, so
+ * EVERY free-text field — voice.{pov,diction,rhythm}, tone.{register,never},
+ * ctaHabits.phrasingStyle, every hookPatterns[].guidance, and exampleSnippets[]
+ * — is scanned against the competitor sources (similarity guard) and for
+ * real-person names (seed-lint); any field that reproduces competitor wording
+ * or names a real person is neutralized to a generic craft description (a
+ * snippet is dropped and the pool backfills). The competitor sources are first
+ * segmented into short spans so an embedded 4–7 word catchphrase is caught
+ * (D2 P1-4). `sanitizeRemixCard` is the back-compatible alias. The card NAME is
+ * name-checked by the caller (train.ts) with the same seed-lint plus the
+ * named-creator-claim patterns. Proven-owned own-channel cards skip this guard
+ * (their snippets and title are the user's own).
  */
 
 // ---------------------------------------------------------------------------
@@ -174,52 +185,125 @@ export interface RemixSanitizeResult {
   card: StyleCard;
   /** Snippets removed because they overlapped the competitor source or named a person. */
   droppedSnippets: string[];
+  /** Structured free-text fields neutralized to a generic default (voice.pov, tone.register, …). */
+  neutralizedFields: string[];
 }
 
 /**
- * Enforce the remix contract on a derived card: every exampleSnippet that
- * reproduces a competitor transcript span (over `threshold`) OR carries a
- * real-person reference is dropped. A fresh ORIGINAL line from the craft pool
- * backfills once so the card is not left empty when possible. The derived
- * name/voice text is already name-checked by the caller (seed-lint); this
- * guards the SNIPPETS specifically against verbatim competitor reuse.
+ * Generic ORIGINAL craft defaults — the neutral replacement for any structured
+ * free-text field that reproduces competitor wording or names a real person.
+ * These are the same lines the deterministic synthesizer emits, so a clean
+ * fixture card is left byte-for-byte unchanged (nothing to neutralize).
  */
-export function sanitizeRemixCard(
+const GENERIC_FIELD_DEFAULTS = {
+  pov: "First person, speaking directly to one viewer.",
+  diction: "Plain-spoken and concrete; everyday words over jargon.",
+  rhythm: "Mostly short sentences with one longer build before each payoff.",
+  register: "Warm, curious, measured.",
+  never: "condescending; hype without evidence",
+  phrasingStyle: "One low-pressure ask tied to the value just delivered.",
+} as const;
+
+/**
+ * Enforce the originality contract on a derived card: EVERY free-text field is
+ * scanned against the competitor sources (similarity guard, at catchphrase
+ * scale — sources are segmented into short spans) and for real-person names
+ * (seed-lint). A structured field that fails is replaced with a generic craft
+ * default; an exampleSnippet that fails is dropped and, when all are dropped,
+ * the original craft pool backfills. The card NAME is guarded by the caller.
+ */
+export function sanitizeDerivedCard(
   card: StyleCard,
   competitorSources: readonly string[],
   threshold: number,
   options?: Partial<SimilarityOptions>,
 ): RemixSanitizeResult {
+  // Segment the competitor corpus into short spans so an embedded 4–7 word
+  // catchphrase is caught (D2 P1-4); block even a short verbatim run (remix
+  // must be original), which the licensed guard would permit.
+  const sources = segmentSourcesIntoSpans(competitorSources);
+  const isClean = (text: string): boolean =>
+    isCleanField(text, sources, threshold, options, REMIX_VERBATIM_RUN_BLOCK);
+
+  const neutralizedFields: string[] = [];
+  const neutralize = (path: string, value: string, fallback: string): string => {
+    if (isClean(value)) return value;
+    neutralizedFields.push(path);
+    return fallback;
+  };
+
+  const voice = {
+    pov: neutralize("voice.pov", card.voice.pov, GENERIC_FIELD_DEFAULTS.pov),
+    diction: neutralize("voice.diction", card.voice.diction, GENERIC_FIELD_DEFAULTS.diction),
+    rhythm: neutralize("voice.rhythm", card.voice.rhythm, GENERIC_FIELD_DEFAULTS.rhythm),
+  };
+  const tone = {
+    register: neutralize("tone.register", card.tone.register, GENERIC_FIELD_DEFAULTS.register),
+    never: neutralize("tone.never", card.tone.never, GENERIC_FIELD_DEFAULTS.never),
+  };
+  const ctaHabits = {
+    ...card.ctaHabits,
+    phrasingStyle: neutralize(
+      "ctaHabits.phrasingStyle",
+      card.ctaHabits.phrasingStyle,
+      GENERIC_FIELD_DEFAULTS.phrasingStyle,
+    ),
+  };
+  const hookPatterns = card.hookPatterns.map((h, i) => ({
+    technique: h.technique,
+    guidance: neutralize(
+      `hookPatterns[${String(i)}].guidance`,
+      h.guidance,
+      HOOK_GUIDANCE[h.technique],
+    ),
+  }));
+
   const dropped: string[] = [];
   const clean: string[] = [];
   for (const snippet of card.exampleSnippets) {
-    if (isCleanRemixSnippet(snippet, competitorSources, threshold, options)) {
-      clean.push(snippet);
-    } else {
-      dropped.push(snippet);
-    }
+    if (isClean(snippet)) clean.push(snippet);
+    else dropped.push(snippet);
   }
   // Backfill from the original craft pool (regenerate) when every derived
   // snippet was dropped, keeping only pool lines that are themselves clean.
   const finalSnippets =
     clean.length > 0
       ? clean
-      : REMIX_SNIPPET_POOL.filter((candidate) =>
-          isCleanRemixSnippet(candidate, competitorSources, threshold, options),
-        ).slice(0, 2);
+      : REMIX_SNIPPET_POOL.filter((candidate) => isClean(candidate)).slice(0, 2);
+
   return {
-    card: styleCardSchema.parse({ ...card, exampleSnippets: finalSnippets.slice(0, 4) }),
+    card: styleCardSchema.parse({
+      ...card,
+      voice,
+      tone,
+      ctaHabits,
+      hookPatterns,
+      exampleSnippets: finalSnippets.slice(0, 4),
+    }),
     droppedSnippets: dropped,
+    neutralizedFields,
   };
 }
 
-function isCleanRemixSnippet(
-  snippet: string,
-  competitorSources: readonly string[],
+/**
+ * Back-compatible alias for {@link sanitizeDerivedCard}. The competitor-remix
+ * path is one guarded case of the same originality contract.
+ */
+export const sanitizeRemixCard = sanitizeDerivedCard;
+
+/**
+ * A single free-text field is clean iff it names no real person AND does not
+ * reproduce a competitor span over the threshold. `verbatimRunBlock` is the
+ * stricter remix run limit; `sources` are expected pre-segmented into spans.
+ */
+function isCleanField(
+  text: string,
+  sources: readonly string[],
   threshold: number,
-  options?: Partial<SimilarityOptions>,
+  options: Partial<SimilarityOptions> | undefined,
+  verbatimRunBlock: number,
 ): boolean {
-  if (containsRealCreatorName(snippet)) return false;
-  const report = analyzeSimilarity(snippet, competitorSources, options);
-  return !exceedsSimilarity(report, threshold);
+  if (containsRealCreatorName(text)) return false;
+  const report = analyzeSimilarity(text, sources, options);
+  return !exceedsSimilarity(report, threshold, verbatimRunBlock);
 }

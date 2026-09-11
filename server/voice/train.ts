@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { getConfig } from "@/lib/config";
 import { getProviders } from "@/lib/providers";
 import type { LlmProvider, TranscriptProvider, YoutubeProvider } from "@/lib/providers/types";
+import { claimsSoundsLikeNamedCreator } from "@/lib/named-creator-claim";
 import { containsRealCreatorName } from "@/lib/seed-lint";
 import type { TrainStyleCardInput, TrainStyleCardResult } from "@/lib/types/entities";
 import type { ChannelId, UserId, WorkspaceId } from "@/lib/types/ids";
@@ -15,7 +16,7 @@ import type { EngineMode } from "@/pipelines/script/llm-json";
 import { settleCharge } from "@/pipelines/script/settle-charge";
 import type { EngineStore } from "@/pipelines/script/store";
 import { getStageDeps } from "@/pipelines/stages/deps";
-import { deriveStyleCard, sanitizeRemixCard } from "./derive";
+import { deriveStyleCard, sanitizeDerivedCard } from "./derive";
 
 /**
  * train_on_my_channel derivation (WAVE-D-PLAN §2c) — the real implementation
@@ -31,9 +32,16 @@ import { deriveStyleCard, sanitizeRemixCard } from "./derive";
  *     capped at TRANSCRIPT_CAP.
  *  3. Derive a structured StyleCard via the LlmProvider seam (fixture-twin is
  *     deterministic + keyless).
- *  4. REMIX: sanitize the card so no exampleSnippet reproduces competitor
- *     wording (similarity guard) and no real-person name lands (seed-lint);
- *     the derived name falls back to a generic default if it names a person.
+ *  4. ORIGINALITY GUARD (trust rule, D2 P0-1): a source channel is
+ *     PROVEN-OWNED only when its mode === "oauth" (the user authenticated it).
+ *     ANY other training — a competitor remix, OR training on a merely-public
+ *     (unverified) channel a user could connect without proving ownership — is
+ *     treated as remix-equivalent and GUARDED: sanitizeDerivedCard scans every
+ *     free-text field so none reproduces competitor wording (similarity guard)
+ *     or carries a real-person name (seed-lint), and the card is named
+ *     generically (never the source channel's real title). Verbatim own
+ *     snippets and the real channel title are allowed ONLY for a proven-owned
+ *     (oauth) own channel.
  *  5. Charge trainVoice credits — requireCreditsWithOverage at dispatch +
  *     idempotent completion charge keyed `trainVoice:<channel+sample hash>`
  *     (a re-train of the same sample is free and overwrites the same row).
@@ -138,7 +146,15 @@ export async function trainStyleCardFromChannel(
   const remix = input.remixFrom !== null && input.remixFrom.length > 0;
   const remixFrom = remix ? (input.remixFrom as string[]) : [];
 
-  // 2. Sample transcripts (TranscriptProvider only).
+  // Trust rule (D2 P0-1): a channel is PROVEN-OWNED only when the user
+  // authenticated it (mode === "oauth"). A remix, OR training on any
+  // unverified/public channel, is GUARDED — treated as remix-equivalent:
+  // full originality guard, original card, generic name.
+  const provenOwned = channel.mode === "oauth";
+  const guarded = remix || !provenOwned;
+
+  // 2. Sample transcripts (TranscriptProvider only). The SOURCE is the
+  //    competitor channels for a remix, else the (own/connected) channel.
   const { videoIds, texts } = remix
     ? await sampleTranscripts(deps, remixFrom, null)
     : await sampleTranscripts(deps, [channel.youtubeChannelId], input.sampleVideoIds);
@@ -152,41 +168,56 @@ export async function trainStyleCardFromChannel(
     });
   }
 
-  // 5a. Dispatch credit gate BEFORE the LLM derivation (never work you can't pay for).
+  // Sampled-video hash — the shared idempotency base for BOTH the dispatch
+  // overage gate and the completion charge, so a re-train of the identical
+  // sample never re-meters overage (D2 P2-5) and never double-charges.
+  const sampleHash = createHash("sha1")
+    .update(`${input.channelId}|${remix ? "remix" : "own"}|${[...videoIds].sort().join(",")}`)
+    .digest("hex")
+    .slice(0, 32);
+  const chargeKey = `trainVoice:${sampleHash}`;
+
+  // 5a. Dispatch credit gate BEFORE the LLM derivation (never work you can't
+  //     pay for). Keyed on the sample hash so a zero-balance paid user's
+  //     re-train of the same sample dedupes against the completion charge's
+  //     overage grant instead of metering a second time (D2 P2-5).
   await requireCreditsWithOverage(workspaceId, CREDIT_COSTS.trainVoice, {
     store: deps.billingStore,
     actorUserId: ctx.actorUserId ?? null,
+    idempotencyKey: chargeKey,
   });
 
   // 3. Derive the structured StyleCard (LLM seam / deterministic fixture twin).
+  //    A guarded card is derived as ORIGINAL (structural patterns, original
+  //    snippets) and never leaks the real source title into the derivation.
   let styleCard = await deriveStyleCard({
     mode: deps.mode,
     llm: deps.llm,
-    channelTitle: remix ? "the remixed source" : channel.title,
+    channelTitle: guarded ? "the source channel" : channel.title,
     transcripts: texts,
-    remix,
+    remix: guarded,
   });
 
-  // 4. Remix guard: original snippets only (no verbatim competitor reuse),
-  //    no real-person names anywhere on the card.
-  if (remix) {
-    styleCard = sanitizeRemixCard(
+  // 4. Originality guard: scan EVERY free-text field so none reproduces the
+  //    source's wording (similarity guard) or carries a real-person name
+  //    (seed-lint). Own verbatim snippets survive only on the proven-owned path.
+  if (guarded) {
+    styleCard = sanitizeDerivedCard(
       styleCard,
       texts,
       getConfig().LICENSED_SIMILARITY_MAX_OVERLAP,
     ).card;
   }
 
-  // Name: user-supplied, else a generic default. A remix name that names a
-  // real person is rejected and replaced with the generic default (seed-lint).
-  const fallbackName = remix ? "Remixed voice" : `${channel.title} voice`;
+  // Name: proven-owned own channels may carry the real channel title. A
+  // guarded card gets a generic default and is rejected back to it if the
+  // (user-supplied or derived) name names a real creator or claims to sound
+  // like one (seed-lint + the shared named-creator-claim patterns).
+  const fallbackName = guarded ? "Remixed voice" : `${channel.title} voice`;
   let name = (input.name ?? fallbackName).trim();
-  if (name.length === 0 || (remix && containsRealCreatorName(name))) name = "Remixed voice";
-  if (!remix && containsRealCreatorName(name) && input.name === null) {
-    // Own-channel default derived from a name-shaped channel title — keep the
-    // creator's own title (their own channel), never blocked; guard only the
-    // remix path against naming a real creator.
-    name = `${channel.title} voice`;
+  if (name.length === 0) name = fallbackName;
+  if (guarded && (containsRealCreatorName(name) || claimsSoundsLikeNamedCreator(name))) {
+    name = "Remixed voice";
   }
 
   const trainedFromChannelId = remix ? remixProvenanceId(remixFrom) : input.channelId;
@@ -204,17 +235,13 @@ export async function trainStyleCardFromChannel(
 
   // 5b. Completion charge — idempotent on the channel + sampled-video hash so a
   //     re-train of the same sample is free (and overwrote the same row).
-  const sampleHash = createHash("sha1")
-    .update(`${input.channelId}|${remix ? "remix" : "own"}|${[...videoIds].sort().join(",")}`)
-    .digest("hex")
-    .slice(0, 32);
   await settleCharge(deps.store, {
     workspaceId,
     delta: -CREDIT_COSTS.trainVoice,
     reason: "train_voice",
     actorUserId: ctx.actorUserId ?? null,
     projectId: null,
-    idempotencyKey: `trainVoice:${sampleHash}`,
+    idempotencyKey: chargeKey,
   });
 
   return { voiceProfile, remix, sampledVideoIds: videoIds };

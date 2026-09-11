@@ -1,4 +1,6 @@
 import { TRPCError } from "@trpc/server";
+import { claimsSoundsLikeNamedCreator } from "@/lib/named-creator-claim";
+import { containsRealCreatorName } from "@/lib/seed-lint";
 import type { VoiceProfile } from "@/lib/types/entities";
 import { getEngineDeps } from "@/pipelines/script/deps";
 import type { HandlerOpts } from "./_shared";
@@ -23,6 +25,19 @@ export const voiceProfileImpl = {
   },
 
   async rename({ ctx, input }: HandlerOpts<RenameInput>): Promise<VoiceProfile> {
+    // Name-lint the new name at runtime (D2 P1-3): a clean card must not be
+    // renamed into a real creator's name ("MrBeast voice") or a sound-alike
+    // claim ("Sounds like <creator>"). Reuses the same seed-lint + shared
+    // named-creator-claim patterns the create/derivation path and copy-lint use.
+    const newName = input.name.trim();
+    if (containsRealCreatorName(newName) || claimsSoundsLikeNamedCreator(newName)) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message:
+          "That name references a real creator or claims to sound like one. " +
+          "Pick a name that describes the voice (its tone or craft), not a person.",
+      });
+    }
     const deps = await getEngineDeps();
     const updated = await deps.store.renameVoiceProfile(
       ctx.workspaceId,

@@ -433,3 +433,56 @@ picker (project style row): lists trained cards (select for generation, rename, 
 "Train from your channel" form (optional sample video IDs), and a competitor-remix input with
 copy stating it is an ORIGINAL card inspired by structure, never a clone. Both actions show the
 credit cost and confirm before charging. No "Grok"/"xAI" anywhere (copy-lint green).
+
+## 2026-09-11 — D2 originality-guard hardening (adversarial fixes)
+
+**Trust rule: a card is guarded unless its source channel is PROVEN-OWNED.** The
+originality guard is no longer keyed on the trust-based `remix` flag alone (a user
+could `connectPublic` ANY channel with no ownership proof — `mode:"public"` — and
+train on it as "own", pulling verbatim competitor transcripts into an ungated card
+named with the competitor's real title). A channel is PROVEN-OWNED only when
+`channel.mode === "oauth"` (the user authenticated it). In `server/voice/train.ts`,
+`guarded = remix || channel.mode !== "oauth"`. Any guarded training (a competitor
+remix OR training on a merely-public/unverified channel) is treated as
+remix-equivalent: derived as an ORIGINAL card (structural patterns, original
+snippets — never verbatim transcript text), scanned by the full originality guard,
+and named generically ("Remixed voice", never the source channel's real title).
+Own verbatim snippets and the real channel title are allowed ONLY on the
+oauth-proven own path. (P0-1)
+
+**The guard scans EVERY free-text field, not just exampleSnippets.**
+`sanitizeDerivedCard` (in `server/voice/derive.ts`; `sanitizeRemixCard` is the
+back-compat alias) runs voice.{pov,diction,rhythm}, tone.{register,never},
+ctaHabits.phrasingStyle, every hookPatterns[].guidance, and exampleSnippets[]
+through the similarity guard (vs the competitor sources) AND seed-lint (real
+names). A structured field that reproduces competitor wording or names a real
+person is neutralized to a generic craft default; a snippet is dropped and the
+craft pool backfills. The card NAME is guarded by the caller with seed-lint plus
+the shared named-creator-claim patterns. (P0-2)
+
+**Name-lint is a shared runtime check, not just the create-time denylist.** The
+named-creator "sound-alike" claim patterns live in one place —
+`lib/named-creator-claim.ts` (`claimsSoundsLikeNamedCreator` +
+`NAMED_CREATOR_CLAIM_PATTERNS`) — reused by the build-time copy-lint test AND the
+runtime guards. `voiceProfile.rename` now rejects (typed BAD_REQUEST) a new name
+that names a real creator or claims to sound like one, closing the post-creation
+rename bypass; train's card-naming uses the same combined check. The pattern
+verbs are two-case (`[Ss]ounds?…`) so a user-typed capitalized claim ("Sounds
+like Casey") trips while the NAME stays case-sensitive (`[A-Z]`) so "sounds like
+you" never does. (P1-3)
+
+**Similarity guard runs at catchphrase scale for remix.** Passing multi-thousand-
+token transcripts whole defeated short-catchphrase detection. The remix guard now
+segments the competitor corpus into short spans (`segmentIntoSpans` in
+`lib/similarity-guard.ts`) before comparing, so exact-containment and the
+adaptive-n ratio operate at catchphrase scale, and blocks even a short verbatim
+run (`REMIX_VERBATIM_RUN_BLOCK = 5`, passed to `exceedsSimilarity`'s new optional
+`verbatimRunBlock`) — stricter than the licensed-voice `MAX_VERBATIM_RUN` (8),
+which is UNCHANGED (a licensed voice may imitate, a remix must be original). An
+embedded 4–7 word competitor catchphrase is now caught. (P1-4)
+
+**trainVoice dispatch overage is idempotent per sample.** The dispatch
+`requireCreditsWithOverage` now passes the same `trainVoice:<channel + sampled-
+video hash>` idempotency key the completion `settleCharge` uses, so a zero-balance
+paid user's re-train of the identical sample dedupes the overage grant+meter
+instead of metering twice (the completion charge already no-op'd). (P2-5)
