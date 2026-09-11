@@ -531,6 +531,22 @@ export const voiceProfileContracts = {
     input: workspaceScopedSchema,
     output: z.array(voiceProfileSchema),
   },
+  /**
+   * Rename a voice profile the workspace owns (WAVE-D-PLAN §2c — trained
+   * cards are managed alongside archetypes). No credits; tenancy-scoped.
+   */
+  rename: {
+    input: workspaceScopedSchema.extend({
+      voiceProfileId: voiceProfileIdSchema,
+      name: z.string().min(1).max(120),
+    }),
+    output: voiceProfileSchema,
+  },
+  /** Delete a voice profile the workspace owns. No credits; tenancy-scoped. */
+  remove: {
+    input: workspaceScopedSchema.extend({ voiceProfileId: voiceProfileIdSchema }),
+    output: z.object({ deleted: z.boolean() }),
+  },
 } as const;
 
 // --------------------------------------------------------------------------

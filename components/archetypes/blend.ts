@@ -86,3 +86,16 @@ export function crossoverTarget(blend: CrossoverBlend): GenerationTarget {
     voiceProfileId: null,
   };
 }
+
+/** A trained voice selection (WAVE-D-PLAN §2c) — carries the profile's id. */
+export function trainedTarget(
+  voiceProfileId: GenerationTarget["voiceProfileId"],
+): GenerationTarget {
+  return {
+    mode: "train_on_my_channel",
+    archetypeId: null,
+    crossover: null,
+    partnerId: null,
+    voiceProfileId,
+  };
+}

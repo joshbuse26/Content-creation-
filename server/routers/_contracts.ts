@@ -173,12 +173,22 @@ export const voiceProfileRouter = router({
     .input(voiceProfileContracts.list.input)
     .output(voiceProfileContracts.list.output)
     .query((opts) => voiceProfileImpl.list(opts)),
+  rename: workspaceProcedure("voiceProfile", "update")
+    .use(general)
+    .input(voiceProfileContracts.rename.input)
+    .output(voiceProfileContracts.rename.output)
+    .mutation((opts) => voiceProfileImpl.rename(opts)),
+  remove: workspaceProcedure("voiceProfile", "delete")
+    .use(general)
+    .input(voiceProfileContracts.remove.input)
+    .output(voiceProfileContracts.remove.output)
+    .mutation((opts) => voiceProfileImpl.remove(opts)),
 });
 
 // voice — Wave D (WAVE-D-PLAN §2c): train_on_my_channel StyleCard derivation.
-// D0 CONTRACT STUB: returns a plausible trained voice profile (fixture); D2
-// wires the real consent-gated transcript→LLM derivation + persistence.
-// Generation-class (the strict policy stands so D2's LLM cost is gated).
+// D2: real consent-gated transcript→LLM derivation + persistence of a
+// source="trained" voice profile, charged trainVoice credits. Generation-class
+// (metering + the read-only lockdown gate apply through the `generation` mw).
 export const voiceRouter = router({
   trainFromChannel: workspaceProcedure("voiceProfile", "create")
     .use(general)

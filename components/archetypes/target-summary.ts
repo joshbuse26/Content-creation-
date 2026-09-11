@@ -19,6 +19,6 @@ export function targetLabel(
     case "partnered_named":
       return "Partnered voice";
     case "train_on_my_channel":
-      return "Channel voice";
+      return "Trained voice";
   }
 }

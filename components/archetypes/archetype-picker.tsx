@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import type { Archetype, GenerationTarget } from "@/lib/types/entities";
 import type { ArchetypeId } from "@/lib/types/enums";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +17,8 @@ import { HOOK_STYLE_LABELS, paceLabel } from "./presentation";
  * preview; the server merge is authoritative). `partnered_named` renders
  * NOTHING unless the NEXT_PUBLIC feature flag is present at build time —
  * and the server rejects it regardless while FEATURE_PARTNERED_NAMED is
- * off. `train_on_my_channel` is deliberately absent (v1).
+ * off. Trained voices (WAVE-D-PLAN §2c) surface as an optional "Trained
+ * voices" tab when the host passes a `trainedSlot` (the TrainVoicePanel).
  */
 
 /** Hidden-safe code path: no partnered UI exists unless this build flag is on. */
@@ -25,7 +26,7 @@ const PARTNERED_UI =
   process.env.NEXT_PUBLIC_FEATURE_PARTNERED_NAMED === "1" ||
   process.env.NEXT_PUBLIC_FEATURE_PARTNERED_NAMED === "true";
 
-type PickerTab = "single" | "crossover" | "partnered";
+type PickerTab = "single" | "crossover" | "partnered" | "trained";
 
 const DEFAULT_WEIGHT_A = 0.6;
 
@@ -36,6 +37,14 @@ export interface ArchetypePickerProps {
   /** Offer an explicit "Channel voice" (no archetype) option. */
   allowNone?: boolean;
   disabled?: boolean;
+  /** Trained-voice surface (WAVE-D-PLAN §2c). When set, a "Trained voices" tab appears. */
+  trainedSlot?: ReactNode;
+}
+
+function initialTab(value: GenerationTarget | null, hasTrained: boolean): PickerTab {
+  if (value?.mode === "crossover") return "crossover";
+  if (value?.mode === "train_on_my_channel" && hasTrained) return "trained";
+  return "single";
 }
 
 export function ArchetypePicker({
@@ -44,8 +53,9 @@ export function ArchetypePicker({
   onChange,
   allowNone = false,
   disabled = false,
+  trainedSlot,
 }: ArchetypePickerProps) {
-  const [tab, setTab] = useState<PickerTab>(value?.mode === "crossover" ? "crossover" : "single");
+  const [tab, setTab] = useState<PickerTab>(initialTab(value, trainedSlot != null));
   const [slotA, setSlotA] = useState<ArchetypeId | null>(value?.crossover?.a ?? null);
   const [slotB, setSlotB] = useState<ArchetypeId | null>(value?.crossover?.b ?? null);
   const [weightA, setWeightA] = useState<number>(value?.crossover?.weightA ?? DEFAULT_WEIGHT_A);
@@ -56,6 +66,7 @@ export function ArchetypePicker({
   const tabs: TabDef<PickerTab>[] = [
     { id: "single", label: "Single style" },
     { id: "crossover", label: "Crossover" },
+    ...(trainedSlot != null ? [{ id: "trained" as const, label: "Trained voices" }] : []),
     ...(PARTNERED_UI ? [{ id: "partnered" as const, label: "Partnered" }] : []),
   ];
 
@@ -224,6 +235,8 @@ export function ArchetypePicker({
           )}
         </div>
       ) : null}
+
+      {tab === "trained" && trainedSlot != null ? <div>{trainedSlot}</div> : null}
 
       {tab === "partnered" && PARTNERED_UI ? (
         <div className="rounded-lg border border-dashed border-zinc-300 p-6 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">

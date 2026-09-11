@@ -7,6 +7,7 @@ import type { ProjectId } from "@/lib/types/ids";
 import { trpc } from "@/components/providers/trpc";
 import { useWorkspace } from "@/components/providers/workspace-context";
 import { ArchetypePicker } from "@/components/archetypes/archetype-picker";
+import { TrainVoicePanel } from "@/components/archetypes/train-voice-panel";
 import { targetLabel } from "@/components/archetypes/target-summary";
 import { Button } from "@/components/ui/button";
 import { IconChevronDown, IconChevronUp, IconWarning } from "@/components/ui/icons";
@@ -140,6 +141,13 @@ export function ProjectStyleRow({ projectId }: { projectId: ProjectId }) {
               value={target}
               allowNone
               onChange={applyChange}
+              trainedSlot={
+                <TrainVoicePanel
+                  value={target}
+                  onChange={applyChange}
+                  disabled={saveMutation.isPending}
+                />
+              }
             />
           )}
         </div>
