@@ -1,11 +1,26 @@
 import { randomUUID } from "node:crypto";
 import type { z } from "zod";
-import { fixtureChatMessages, fixtureChatThread, fixtureChatThreadWorkspace } from "@/lib/fixtures";
 import type { chatContracts } from "@/lib/types/api";
 import type { ChatMessage, ChatThread } from "@/lib/types/entities";
-import { chatMessageIdSchema, chatThreadIdSchema } from "@/lib/types/ids";
-import { estimateToolCredits } from "@/lib/chat/tools";
-import { notFound, type HandlerOpts } from "./_shared";
+import { chatMessageIdSchema } from "@/lib/types/ids";
+import { getChatTool } from "@/lib/chat/tools";
+import { getChatStore } from "@/server/chat/store";
+import { executeChatTool } from "@/server/chat/execute";
+import { badRequest, notFound, type HandlerOpts } from "./_shared";
+
+/**
+ * chat router (Wave D — WAVE-D-PLAN §2a), D1 real implementation replacing
+ * the D0 stubs. Thread + message storage is Drizzle-backed in production and
+ * a fixture-seeded in-memory store keyless (server/chat/store.ts); the
+ * streamed assistant reply is served over /api/chat-stream (the chat SSE
+ * union), and tool execution goes through confirmTool → the EXISTING staged
+ * handlers (server/chat/execute.ts), sharing the staged UI's idempotent
+ * ledger path.
+ *
+ * Every handler is tenancy-scoped twice over: workspaceProcedure enforces
+ * authz upstream, and each store read filters on workspace_id so a
+ * cross-workspace thread or message is NOT_FOUND.
+ */
 
 type ListThreadsInput = z.output<typeof chatContracts.listThreads.input>;
 type GetThreadInput = z.output<typeof chatContracts.getThread.input>;
@@ -15,37 +30,12 @@ type ConfirmToolInput = z.output<typeof chatContracts.confirmTool.input>;
 type RenameThreadInput = z.output<typeof chatContracts.renameThread.input>;
 type DeleteThreadInput = z.output<typeof chatContracts.deleteThread.input>;
 
-/**
- * chat router (Wave D — WAVE-D-PLAN §2a) — FROZEN CONTRACT STUBS. D0 freezes
- * the surface and returns realistic fixtures so a chat screen + tool flow can
- * be built against it keylessly. D1 replaces these bodies with real thread
- * storage, system-context assembly (buildCoachContext), streamed replies
- * (chat SSE union), and tool proposal→confirm→staged-pipeline execution.
- *
- * Zero-cost by contract: none of these procedures charge credits — the
- * credit-costing happens inside tool execution (confirmTool → staged handler,
- * D1), sharing the staged UI's idempotent ledger path.
- *
- * All handlers are tenancy-scoped: workspaceProcedure enforces authz upstream,
- * and the stubs only ever surface fixtures for the caller's own workspace.
- */
-
-/** The stub's known threads, scoped to the fixture workspace. */
-function stubThreads(): ChatThread[] {
-  return [fixtureChatThread, fixtureChatThreadWorkspace];
-}
-
-function findStubThread(threadId: string): ChatThread | null {
-  return stubThreads().find((t) => t.id === threadId) ?? null;
-}
-
 export const chatImpl = {
   async listThreads({ ctx, input }: HandlerOpts<ListThreadsInput>): Promise<ChatThread[]> {
-    const threads = stubThreads()
-      .filter((t) => t.workspaceId === ctx.workspaceId)
-      .filter((t) => input.projectId === null || t.projectId === input.projectId)
-      .slice(0, input.limit);
-    return Promise.resolve(threads);
+    return getChatStore().listThreads(ctx.workspaceId, {
+      projectId: input.projectId,
+      limit: input.limit,
+    });
   },
 
   async getThread({ ctx, input }: HandlerOpts<GetThreadInput>): Promise<{
@@ -53,30 +43,22 @@ export const chatImpl = {
     messages: ChatMessage[];
     nextCursor: number | null;
   }> {
-    const thread = findStubThread(input.threadId);
-    if (thread === null || thread.workspaceId !== ctx.workspaceId) notFound("chat thread");
-    // Page by seq: return messages with seq > cursor, capped at limit.
-    const after = input.cursor ?? -1;
-    const all = fixtureChatMessages
-      .filter((m) => m.threadId === input.threadId && m.seq > after)
-      .sort((a, b) => a.seq - b.seq);
-    const messages = all.slice(0, input.limit);
-    const last = messages[messages.length - 1];
-    const nextCursor = last !== undefined && all.length > messages.length ? last.seq : null;
-    return Promise.resolve({ thread, messages, nextCursor });
+    const store = getChatStore();
+    const thread = await store.getThread(ctx.workspaceId, input.threadId);
+    if (thread === null) notFound("chat thread");
+    const { messages, nextCursor } = await store.getMessages(ctx.workspaceId, input.threadId, {
+      cursor: input.cursor,
+      limit: input.limit,
+    });
+    return { thread, messages, nextCursor };
   },
 
   async createThread({ ctx, input }: HandlerOpts<CreateThreadInput>): Promise<ChatThread> {
-    const now = new Date();
-    const thread: ChatThread = {
-      id: chatThreadIdSchema.parse(randomUUID()),
+    return getChatStore().createThread({
       workspaceId: ctx.workspaceId,
       projectId: input.projectId,
       title: input.title,
-      createdAt: now,
-      updatedAt: now,
-    };
-    return Promise.resolve(thread);
+    });
   },
 
   async sendMessage({ ctx, input }: HandlerOpts<SendMessageInput>): Promise<{
@@ -85,21 +67,30 @@ export const chatImpl = {
     streamPath: string;
     status: "streaming";
   }> {
-    const thread = findStubThread(input.threadId);
-    if (thread === null || thread.workspaceId !== ctx.workspaceId) notFound("chat thread");
-    const userMessageId = chatMessageIdSchema.parse(randomUUID());
+    const store = getChatStore();
+    const thread = await store.getThread(ctx.workspaceId, input.threadId);
+    if (thread === null) notFound("chat thread");
+
+    // Persist the user message now (durable + seq-ordered); the assistant
+    // reply is generated and persisted by the SSE route at the id we mint here.
+    const userMessage = await store.appendMessage({
+      threadId: input.threadId,
+      workspaceId: ctx.workspaceId,
+      role: "user",
+      content: input.content,
+    });
     const assistantMessageId = chatMessageIdSchema.parse(randomUUID());
-    // D1 serves the streamed reply over the chat SSE union at this path.
+
     const streamPath =
       `/api/chat-stream?workspaceId=${encodeURIComponent(ctx.workspaceId)}` +
       `&threadId=${encodeURIComponent(input.threadId)}` +
       `&messageId=${encodeURIComponent(assistantMessageId)}`;
-    return Promise.resolve({
-      userMessageId,
+    return {
+      userMessageId: userMessage.id,
       assistantMessageId,
       streamPath,
       status: "streaming",
-    });
+    };
   },
 
   async confirmTool({ ctx, input }: HandlerOpts<ConfirmToolInput>): Promise<{
@@ -108,31 +99,62 @@ export const chatImpl = {
     estimatedCredits: number;
     status: "accepted";
   }> {
-    const thread = findStubThread(input.threadId);
-    if (thread === null || thread.workspaceId !== ctx.workspaceId) notFound("chat thread");
-    // D0 stub acks. The real estimate resolves from the stored proposal's
-    // tool name (D1); if the args carry a `name` hint, quote it, else 0.
-    const name = typeof input.args.name === "string" ? input.args.name : "";
-    return Promise.resolve({
+    const store = getChatStore();
+    const thread = await store.getThread(ctx.workspaceId, input.threadId);
+    if (thread === null) notFound("chat thread");
+
+    // Locate the stored proposal (on an assistant message's tool_calls) so the
+    // tool NAME is authoritative — the client only echoes the id + args.
+    const messages = await store.listMessages(ctx.workspaceId, input.threadId);
+    const proposal = messages
+      .flatMap((m) => m.toolCalls ?? [])
+      .find((c) => c.toolCallId === input.toolCallId);
+    if (proposal === undefined) notFound("tool proposal");
+
+    const tool = getChatTool(proposal.name);
+    if (tool === null) notFound("chat tool");
+
+    // Re-validate the (possibly user-edited) args against the tool's frozen
+    // arg schema before anything runs or charges.
+    const validated = tool.argsSchema.safeParse(input.args);
+    if (!validated.success) {
+      badRequest(`invalid arguments for ${proposal.name}: ${validated.error.message}`);
+    }
+    const args = validated.data as Record<string, unknown>;
+
+    // Execute via the existing staged handler (shared idempotent charge path,
+    // licensed guard + mode checks intact). Credits may throw PRECONDITION_FAILED.
+    const result = await executeChatTool({ ctx, name: proposal.name, args });
+
+    await store.appendMessage({
+      threadId: input.threadId,
+      workspaceId: ctx.workspaceId,
+      role: "tool",
+      content: result.summary,
+      toolCallId: input.toolCallId,
+      creditsCharged: result.creditsCharged,
+    });
+
+    return {
       toolCallId: input.toolCallId,
       accepted: true,
-      estimatedCredits: estimateToolCredits(name, input.args),
+      estimatedCredits: result.creditsCharged,
       status: "accepted",
-    });
+    };
   },
 
   async renameThread({ ctx, input }: HandlerOpts<RenameThreadInput>): Promise<ChatThread> {
-    const thread = findStubThread(input.threadId);
-    if (thread === null || thread.workspaceId !== ctx.workspaceId) notFound("chat thread");
-    return Promise.resolve({ ...thread, title: input.title, updatedAt: new Date() });
+    const thread = await getChatStore().renameThread(ctx.workspaceId, input.threadId, input.title);
+    if (thread === null) notFound("chat thread");
+    return thread;
   },
 
   async deleteThread({
     ctx,
     input,
   }: HandlerOpts<DeleteThreadInput>): Promise<{ deleted: boolean }> {
-    const thread = findStubThread(input.threadId);
-    if (thread === null || thread.workspaceId !== ctx.workspaceId) notFound("chat thread");
-    return Promise.resolve({ deleted: true });
+    const deleted = await getChatStore().deleteThread(ctx.workspaceId, input.threadId);
+    if (!deleted) notFound("chat thread");
+    return { deleted };
   },
 };
