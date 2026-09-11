@@ -23,6 +23,7 @@ import {
 import type {
   ChannelId,
   FrameId,
+  IdeaId,
   ProjectId,
   ResearchDocId,
   RevisionId,
@@ -85,6 +86,17 @@ export class DrizzleEngineStore implements EngineStore {
       .select()
       .from(schema.projects)
       .where(and(eq(schema.projects.id, projectId), eq(schema.projects.workspaceId, workspaceId)))
+      .limit(1);
+    const row = rows[0];
+    return row === undefined ? null : projectSchema.parse(row);
+  }
+
+  async getProjectByIdea(workspaceId: WorkspaceId, ideaId: IdeaId): Promise<Project | null> {
+    const rows = await getDb()
+      .select()
+      .from(schema.projects)
+      .where(and(eq(schema.projects.workspaceId, workspaceId), eq(schema.projects.ideaId, ideaId)))
+      .orderBy(desc(schema.projects.createdAt))
       .limit(1);
     const row = rows[0];
     return row === undefined ? null : projectSchema.parse(row);

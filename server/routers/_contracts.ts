@@ -268,6 +268,21 @@ export const ideasRouter = router({
     .input(ideasContracts.requestBatch.input)
     .output(ideasContracts.requestBatch.output)
     .mutation(({ ctx, input }) => ideasHandlers.requestBatch({ ctx, input })),
+  outliers: workspaceProcedure("idea", "read")
+    .use(general)
+    .input(ideasContracts.outliers.input)
+    .output(ideasContracts.outliers.output)
+    .query(({ ctx, input }) => ideasHandlers.outliers({ ctx, input })),
+  searchDemand: workspaceProcedure("idea", "read")
+    .use(general)
+    .input(ideasContracts.searchDemand.input)
+    .output(ideasContracts.searchDemand.output)
+    .query(({ ctx, input }) => ideasHandlers.searchDemand({ ctx, input })),
+  useIdea: workspaceProcedure("idea", "update")
+    .use(general)
+    .input(ideasContracts.useIdea.input)
+    .output(ideasContracts.useIdea.output)
+    .mutation(({ ctx, input }) => ideasHandlers.useIdea({ ctx, input })),
 });
 
 export const projectRouter = router({

@@ -14,6 +14,7 @@ import type {
 import type {
   ChannelId,
   FrameId,
+  IdeaId,
   ProjectId,
   ResearchDocId,
   RevisionId,
@@ -193,6 +194,8 @@ export interface EngineStore {
   // Workspace / project / channel context
   getWorkspacePlan(workspaceId: WorkspaceId): Promise<Plan | null>;
   getProject(workspaceId: WorkspaceId, projectId: ProjectId): Promise<Project | null>;
+  /** The project an idea was promoted into, if any (D3 "use this idea" reload). */
+  getProjectByIdea(workspaceId: WorkspaceId, ideaId: IdeaId): Promise<Project | null>;
   listProjects(workspaceId: WorkspaceId, filter: ProjectListFilter): Promise<Project[]>;
   createProject(project: NewProject): Promise<Project>;
   updateProject(

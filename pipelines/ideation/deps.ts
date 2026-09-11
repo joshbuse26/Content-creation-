@@ -3,7 +3,7 @@ import { getConfig } from "@/lib/config";
 import type { JsonCache } from "@/lib/cache";
 import { createJsonCache } from "@/lib/cache";
 import { getProviders } from "@/lib/providers";
-import type { LlmProvider, YoutubeProvider } from "@/lib/providers/types";
+import type { LlmProvider, SearchProvider, YoutubeProvider } from "@/lib/providers/types";
 import type { EngineMode } from "@/pipelines/script/llm-json";
 import { getEngineStore, type EngineStore } from "@/pipelines/script/store";
 import { getSharedQuotaTracker, type QuotaTracker } from "@/pipelines/sync/quota";
@@ -22,6 +22,8 @@ export interface IdeationDeps {
   mode: EngineMode;
   llm: LlmProvider;
   youtube: YoutubeProvider;
+  /** Web search seam — the search-demand signal (D3) reads through this. */
+  search: SearchProvider;
   /** Shared YouTube quota ledger + circuit breaker (spec §8). */
   quota: QuotaTracker;
   /** Search-result (24h) and channel-median (7d) cache. */
@@ -53,6 +55,7 @@ export async function getIdeationDeps(): Promise<IdeationDeps> {
       mode: getConfig().PROVIDERS,
       llm: providers.llm,
       youtube: providers.youtube,
+      search: providers.search,
       quota: await getSharedQuotaTracker(),
       cache: await buildCache(),
       store: getIdeationStore(),

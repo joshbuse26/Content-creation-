@@ -399,6 +399,27 @@ export const ideaSchema = z.object({
 });
 export type Idea = z.infer<typeof ideaSchema>;
 
+/**
+ * Search-demand signal for a pre-write concept/topic (Wave-D D3). A
+ * lightweight, provider-derived proxy for how much audience demand a topic
+ * has right now — computed from the EXISTING web SearchProvider's result set
+ * (never a new paid API, never scraping). Deterministic and keyless in
+ * fixture mode. `score` is 0-100; `level` buckets it for the UI badge.
+ */
+export const demandLevelSchema = z.enum(["low", "moderate", "high"]);
+export type DemandLevel = z.infer<typeof demandLevelSchema>;
+
+export const demandSignalSchema = z.object({
+  topic: z.string(),
+  score: z.number().int().min(0).max(100),
+  level: demandLevelSchema,
+  /** Number of provider results the signal was derived from. */
+  sampleCount: z.number().int().nonnegative(),
+  /** Which provider seam produced the signal (never a paid demand API). */
+  provider: z.literal("web_search"),
+});
+export type DemandSignal = z.infer<typeof demandSignalSchema>;
+
 export const projectSchema = z.object({
   id: projectIdSchema,
   workspaceId: workspaceIdSchema,

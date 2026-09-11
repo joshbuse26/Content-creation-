@@ -10,12 +10,19 @@ import { searchCacheKey, type JsonCache } from "@/lib/cache";
 
 export const SEARCH_CACHE_TTL_SECONDS = 24 * 60 * 60;
 export const MEDIAN_CACHE_TTL_SECONDS = 7 * 24 * 60 * 60;
+/** Search-demand signals refresh daily (D3), keyed by normalized topic. */
+export const DEMAND_CACHE_TTL_SECONDS = 24 * 60 * 60;
 
 export { searchCacheKey };
 
 /** 7-day channel-median cache key (spec §5.3 "channel medians cached 7d"). */
 export function medianCacheKey(channelYtid: string): string {
   return `yt:chmedian:${channelYtid}`;
+}
+
+/** 24h search-demand cache key, keyed by normalized topic (D3). */
+export function demandCacheKey(normalizedTopic: string): string {
+  return `demand:${normalizedTopic}`;
 }
 
 interface Entry {

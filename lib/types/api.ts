@@ -39,11 +39,13 @@ import {
   channelStatsSnapshotSchema,
   chapterSetSchema,
   creditLedgerEntrySchema,
+  demandSignalSchema,
   descriptionSchema,
   descriptionTemplateSchema,
   frameSchema,
   ideaSchema,
   membershipSchema,
+  nicheVideoSchema,
   pipelineRunSchema,
   projectSchema,
   researchDocSchema,
@@ -226,6 +228,48 @@ export const ideasContracts = {
   requestBatch: {
     input: workspaceScopedSchema.extend({ channelId: channelIdSchema }),
     output: jobAcceptedSchema,
+  },
+  /**
+   * D3 discovery surface: the raw outlier index (niche_videos) for the
+   * channel's niche — high-performing concepts with the outlier ratio,
+   * performance, evidence URL and format tags. `nicheKeyword` narrows to one
+   * of the channel's keywords; omit for the whole niche. Additive/read-only.
+   */
+  outliers: {
+    input: workspaceScopedSchema.extend({
+      channelId: channelIdSchema,
+      nicheKeyword: z.string().min(1).max(60).nullable().default(null),
+      limit: z.number().int().min(1).max(100).default(40),
+    }),
+    output: z.array(nicheVideoSchema),
+  },
+  /**
+   * D3 search-demand signal: a lightweight demand proxy per topic, read
+   * through the EXISTING web SearchProvider (no new paid API, no scraping;
+   * deterministic + keyless in fixture mode). `topics` empty ⇒ the channel's
+   * niche keywords. Additive/read-only.
+   */
+  searchDemand: {
+    input: workspaceScopedSchema.extend({
+      channelId: channelIdSchema,
+      topics: z.array(z.string().min(1).max(200)).max(20).default([]),
+    }),
+    output: z.array(demandSignalSchema),
+  },
+  /**
+   * D3 one-click "use this idea": promote the idea into a project (or reload
+   * the one it was already promoted into) and seed a CHOSEN frame carrying
+   * the idea's angle as the steerable unique angle, so it flows into the
+   * framing/outline path and buildCoachContext. `angle` sharpens the seed
+   * before writing; `targetMinutes` sets the seed duration. Additive.
+   */
+  useIdea: {
+    input: workspaceScopedSchema.extend({
+      ideaId: ideaIdSchema,
+      angle: z.string().min(1).max(2000).nullable().default(null),
+      targetMinutes: z.number().int().positive().max(120).nullable().default(null),
+    }),
+    output: z.object({ idea: ideaSchema, project: projectSchema, frame: frameSchema }),
   },
 } as const;
 

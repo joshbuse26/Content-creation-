@@ -32,6 +32,7 @@ import {
   voiceProfileIdSchema,
   type ChannelId,
   type FrameId,
+  type IdeaId,
   type ProjectId,
   type ResearchDocId,
   type RevisionId,
@@ -129,6 +130,12 @@ export class InMemoryEngineStore implements EngineStore {
   getProject(workspaceId: WorkspaceId, projectId: ProjectId): Promise<Project | null> {
     return Promise.resolve(
       cloneOrNull(this.projects.find((p) => p.id === projectId && p.workspaceId === workspaceId)),
+    );
+  }
+
+  getProjectByIdea(workspaceId: WorkspaceId, ideaId: IdeaId): Promise<Project | null> {
+    return Promise.resolve(
+      cloneOrNull(this.projects.find((p) => p.workspaceId === workspaceId && p.ideaId === ideaId)),
     );
   }
 
