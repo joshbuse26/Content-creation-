@@ -80,4 +80,34 @@ describe("config", () => {
   it("rejects invalid enum values instead of defaulting", () => {
     expect(() => parseEnv({ PROVIDERS: "prod" })).toThrow(/PROVIDERS/);
   });
+
+  describe("LICENSED_SIMILARITY_MAX_OVERLAP (legal-risk guard threshold)", () => {
+    it("defaults to 0.08 when unset", () => {
+      expect(parseEnv({}).LICENSED_SIMILARITY_MAX_OVERLAP).toBe(0.08);
+    });
+
+    it("rejects 1.0 — a threshold that can never be exceeded disables the ratio check", () => {
+      expect(() => parseEnv({ LICENSED_SIMILARITY_MAX_OVERLAP: "1" })).toThrow(
+        /LICENSED_SIMILARITY_MAX_OVERLAP/,
+      );
+      expect(() => parseEnv({ LICENSED_SIMILARITY_MAX_OVERLAP: "1.0" })).toThrow(
+        /LICENSED_SIMILARITY_MAX_OVERLAP/,
+      );
+    });
+
+    it("rejects values above the 0.5 cap and non-positive values", () => {
+      expect(() => parseEnv({ LICENSED_SIMILARITY_MAX_OVERLAP: "0.75" })).toThrow(
+        /LICENSED_SIMILARITY_MAX_OVERLAP/,
+      );
+      expect(() => parseEnv({ LICENSED_SIMILARITY_MAX_OVERLAP: "0" })).toThrow(
+        /LICENSED_SIMILARITY_MAX_OVERLAP/,
+      );
+    });
+
+    it("accepts a sane in-range override", () => {
+      expect(
+        parseEnv({ LICENSED_SIMILARITY_MAX_OVERLAP: "0.12" }).LICENSED_SIMILARITY_MAX_OVERLAP,
+      ).toBe(0.12);
+    });
+  });
 });

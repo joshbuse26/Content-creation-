@@ -75,9 +75,11 @@ describe("analyzeSimilarity", () => {
     expect(report.maxOverlap).toBeGreaterThan(0.08);
   });
 
-  it("empty source or too-short output cannot fire", () => {
-    expect(analyzeSimilarity("some text here at all", []).maxOverlap).toBe(0);
-    expect(analyzeSimilarity("one two three four", ["one two three four"]).maxOverlap).toBe(0);
+  it("an EMPTY source corpus cannot fire (fail-closed is the guard wrapper's job)", () => {
+    const report = analyzeSimilarity("some text here at all", []);
+    expect(report.maxOverlap).toBe(0);
+    expect(report.exactContainment).toBe(false);
+    expect(report.maxVerbatimRun).toBe(0);
   });
 
   it("long output is covered by multiple sliding windows", () => {
@@ -86,20 +88,91 @@ describe("analyzeSimilarity", () => {
   });
 });
 
+// P1-1 / P2-4: the guard must catch verbatim reuse at the SCALE OF THE MATERIAL
+// — short catchphrases (< 5 words) that no-op the plain 5-gram/200-word ratio,
+// and a single verbatim sentence a 200-word window dilutes below the threshold.
+describe("verbatim reuse detection (short snippets + diluted runs)", () => {
+  it("a reproduced SHORT catchphrase (< 5 words) is caught by exact containment", () => {
+    // Four-word source verbatim inside otherwise-original text: the plain
+    // 5-gram set is empty for it, but containment still fires. (Regression for
+    // P1-1: this previously scored ratio 0 and passed as 'clean'.)
+    const output = `${words(60, "own")} here is the thing ${words(60, "words")}`;
+    const report = analyzeSimilarity(output, ["here is the thing"]);
+    expect(report.exactContainment).toBe(true);
+    expect(exceedsSimilarity(report, 0.08)).toBe(true);
+  });
+
+  it("an identical short passage is flagged even when the 5-gram window is empty", () => {
+    const report = analyzeSimilarity("one two three four", ["one two three four"]);
+    expect(report.exactContainment).toBe(true);
+    expect(exceedsSimilarity(report, 0.08)).toBe(true);
+  });
+
+  it("a >= 8-token verbatim run is blocked despite a tiny window ratio (P2-4)", () => {
+    // One 12-word verbatim sentence buried in 400 words of original text: the
+    // worst 200-word window ratio stays well under 8%, but the absolute
+    // verbatim-run rule fires regardless.
+    const borrowed = "the espresso puck cracked cleanly along the same diagonal fault line again";
+    const output = `${words(200, "mine")} ${borrowed} ${words(200, "also")}`;
+    const report = analyzeSimilarity(output, [borrowed]);
+    expect(report.maxOverlap).toBeLessThanOrEqual(0.08);
+    expect(report.maxVerbatimRun).toBeGreaterThanOrEqual(8);
+    expect(exceedsSimilarity(report, 0.08)).toBe(true);
+  });
+
+  it("incidental short overlap (< 8 tokens, no whole snippet) does not fire", () => {
+    // A 4-word coincidental overlap with a long source: below the run rule,
+    // not a whole snippet, ratio ~0 → clean.
+    const output = `${words(80, "mine")} alpha beta gamma delta ${words(80, "more")}`;
+    const source = `alpha beta gamma delta ${words(30, "src")}`;
+    const report = analyzeSimilarity(output, [source]);
+    expect(report.exactContainment).toBe(false);
+    expect(report.maxVerbatimRun).toBeLessThan(8);
+    expect(exceedsSimilarity(report, 0.08)).toBe(false);
+  });
+});
+
 describe("exceedsSimilarity", () => {
   it("is strict: exactly at the threshold does not exceed", () => {
     expect(
       exceedsSimilarity(
-        { maxOverlap: 0.08, windowCount: 1, worstWindowStart: 0, matchedNgrams: [] },
+        {
+          maxOverlap: 0.08,
+          windowCount: 1,
+          worstWindowStart: 0,
+          matchedNgrams: [],
+          exactContainment: false,
+          maxVerbatimRun: 0,
+        },
         0.08,
       ),
     ).toBe(false);
     expect(
       exceedsSimilarity(
-        { maxOverlap: 0.081, windowCount: 1, worstWindowStart: 0, matchedNgrams: [] },
+        {
+          maxOverlap: 0.081,
+          windowCount: 1,
+          worstWindowStart: 0,
+          matchedNgrams: [],
+          exactContainment: false,
+          maxVerbatimRun: 0,
+        },
         0.08,
       ),
     ).toBe(true);
+  });
+
+  it("fires on exact containment or a long verbatim run even at ratio 0", () => {
+    const base = { maxOverlap: 0, windowCount: 0, worstWindowStart: 0, matchedNgrams: [] };
+    expect(exceedsSimilarity({ ...base, exactContainment: true, maxVerbatimRun: 3 }, 0.08)).toBe(
+      true,
+    );
+    expect(exceedsSimilarity({ ...base, exactContainment: false, maxVerbatimRun: 8 }, 0.08)).toBe(
+      true,
+    );
+    expect(exceedsSimilarity({ ...base, exactContainment: false, maxVerbatimRun: 7 }, 0.08)).toBe(
+      false,
+    );
   });
 });
 

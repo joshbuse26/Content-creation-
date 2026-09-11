@@ -76,13 +76,21 @@ const envSchema = z
 
     /**
      * Licensed-voice similarity guard threshold (PRODUCT-CONTRACTS §7): the
-     * maximum allowed 5-gram overlap ratio in any 200-word window between a
-     * licensed-voice section and its source snippets. Above this, the section
-     * is auto-rewritten once and then hard-failed. Default 0.08 (8%).
+     * maximum allowed adaptive-n-gram overlap ratio in any 200-word window
+     * between a licensed-voice section and its source snippets. Above this, the
+     * section is auto-rewritten once and then hard-failed. Default 0.08 (8%).
+     *
+     * Bounded (0, 0.5]: it must be strictly below 1 — a value of 1.0 can never
+     * be exceeded (`ratio > 1` is impossible), which would silently DISABLE the
+     * ratio check on the legal-risk gate — and is capped at 0.5 because any
+     * higher would let a section that is half-copied pass. Invalid values still
+     * fail fast at startup. (The exact-containment and verbatim-run checks are
+     * absolute and are NOT governed by this threshold, so they hold even if it
+     * is set loose.)
      */
     LICENSED_SIMILARITY_MAX_OVERLAP: z.preprocess(
       emptyToUndefined,
-      z.coerce.number().gt(0).max(1).default(0.08),
+      z.coerce.number().gt(0).lt(1).max(0.5).default(0.08),
     ),
 
     RESEND_API_KEY: optionalString,
