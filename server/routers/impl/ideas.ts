@@ -6,7 +6,7 @@ import { getIdeationDeps } from "@/pipelines/ideation/deps";
 import { IDEA_BATCH_CREDIT_COST } from "@/pipelines/ideation/ideas";
 import { processIdeationJob } from "@/pipelines/ideation/jobs";
 import { dispatchPipelineJob } from "@/pipelines/script/execute";
-import { requireCredits } from "@/server/credits";
+import { exemptionFromCtx, isCtxCreditExempt, requireCredits } from "@/server/credits";
 import { JOB_NAMES, QUEUE_NAMES } from "@/queue/queues";
 import { badRequest, jobAccepted, notFound, preconditionFailed, type HandlerOpts } from "./_shared";
 
@@ -96,7 +96,7 @@ export const ideasHandlers = {
 
   /** Extra idea batch — 1 credit (spec §7), charged on completion. */
   async requestBatch({ ctx, input }: HandlerOpts<RequestBatchInput>) {
-    await requireCredits(ctx.workspaceId, IDEA_BATCH_CREDIT_COST);
+    await requireCredits(ctx.workspaceId, IDEA_BATCH_CREDIT_COST, exemptionFromCtx(ctx));
     const deps = await getIdeationDeps();
     const channel = await deps.channelRepo.get(ctx.workspaceId, input.channelId);
     if (channel === null) notFound("channel");
@@ -108,7 +108,7 @@ export const ideasHandlers = {
     const payload = {
       workspaceId: input.workspaceId,
       channelId: input.channelId,
-      chargeCredits: true,
+      chargeCredits: !isCtxCreditExempt(ctx),
       actorUserId: ctx.userId as string,
       // Each requested batch is its own run (and its own idempotent
       // 1-credit charge) even on the same day.

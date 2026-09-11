@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { logger } from "@/lib/logger";
 import type { UserId, WorkspaceId } from "@/lib/types/ids";
-import { OVERDRAFT_FLOOR } from "@/server/credits";
+import { isCreditExempt, OVERDRAFT_FLOOR, type CreditExemption } from "@/server/credits";
 import { getBillingStore, type BillingStore } from "@/server/billing/store";
 import {
   GRACE_PERIOD_DAYS,
@@ -41,7 +41,7 @@ export interface OverageMeter {
   record(customerId: string, credits: number, idempotencyKey: string): Promise<void>;
 }
 
-export interface OverageOptions {
+export interface OverageOptions extends CreditExemption {
   /**
    * Dedupe key for this dispatch (e.g. the pipeline input hash). Defaults
    * to a random UUID — pass one wherever a retry could re-dispatch.
@@ -93,6 +93,7 @@ export async function requireCreditsWithOverage(
   cost: number,
   options: OverageOptions = {},
 ): Promise<void> {
+  if (isCreditExempt(options.userEmail, options.workspaceRole)) return;
   const store = options.store ?? getBillingStore();
   const workspace = await store.getWorkspace(workspaceId);
   if (workspace === null) {

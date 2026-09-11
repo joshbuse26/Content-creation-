@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PRODUCT_NAME } from "@/lib/branding";
+import { getConfig } from "@/lib/config";
 import { ARCHETYPE_SEEDS } from "@/lib/archetypes";
 import {
   displayCopy,
@@ -108,14 +109,17 @@ function EnergyBars({ energy }: { energy: number }) {
 }
 
 export default function LandingPage() {
+  const fixtureMode = getConfig().PROVIDERS === "fixture";
+  const enterHref = fixtureMode ? "/projects" : "/login";
+  const enterLabel = fixtureMode ? "Enter the app" : "Write your first script free";
   return (
     <div>
       {/* Hero */}
-      <section className="mx-auto max-w-5xl px-6 pt-20 pb-16 sm:pt-28">
+      <section className="mx-auto max-w-5xl px-6 pt-20 pb-16 sm:pt-28" data-testid="marketing-hero">
         <p className="text-sm font-medium tracking-wide text-emerald-700 uppercase dark:text-emerald-400">
           AI scriptwriting for YouTube
         </p>
-        <h1 className="mt-3 max-w-3xl font-(family-name:--font-display) text-4xl leading-tight font-semibold tracking-tight sm:text-6xl">
+        <h1 className="mt-3 max-w-3xl font-display text-4xl leading-tight font-semibold tracking-tight text-zinc-900 sm:text-6xl dark:text-zinc-50">
           Pick a style. Get your next video.
         </h1>
         <p className="mt-5 max-w-2xl text-lg text-zinc-600 dark:text-zinc-400">
@@ -125,10 +129,10 @@ export default function LandingPage() {
         </p>
         <div className="mt-8 flex flex-wrap items-center gap-4">
           <Link
-            href="/login"
+            href={enterHref}
             className="rounded-md bg-emerald-700 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-500"
           >
-            Write your first script free
+            {enterLabel}
           </Link>
           <span className="text-sm text-zinc-500 dark:text-zinc-400">
             8 free credits · no card required
@@ -139,7 +143,7 @@ export default function LandingPage() {
       {/* Archetype showcase */}
       <section className="border-y border-zinc-200 bg-white py-16 dark:border-zinc-800 dark:bg-zinc-900/40">
         <div className="mx-auto max-w-5xl px-6">
-          <h2 className="font-(family-name:--font-display) text-2xl font-semibold sm:text-3xl">
+          <h2 className="font-display text-2xl font-semibold text-zinc-900 sm:text-3xl dark:text-zinc-50">
             Twelve styles, one for every kind of video
           </h2>
           <p className="mt-2 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
@@ -180,7 +184,7 @@ export default function LandingPage() {
 
       {/* How it works */}
       <section className="mx-auto max-w-5xl px-6 py-16">
-        <h2 className="font-(family-name:--font-display) text-2xl font-semibold sm:text-3xl">
+        <h2 className="font-display text-2xl font-semibold text-zinc-900 sm:text-3xl dark:text-zinc-50">
           Idea to record-ready, one staged pipeline
         </h2>
         <div className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
@@ -199,9 +203,12 @@ export default function LandingPage() {
       </section>
 
       {/* Features */}
-      <section className="border-t border-zinc-200 bg-white py-16 dark:border-zinc-800 dark:bg-zinc-900/40">
+      <section
+        className="border-t border-zinc-200 bg-white py-16 dark:border-zinc-800 dark:bg-zinc-900/40"
+        data-testid="marketing-features"
+      >
         <div className="mx-auto max-w-5xl px-6">
-          <h2 className="font-(family-name:--font-display) text-2xl font-semibold sm:text-3xl">
+          <h2 className="font-display text-2xl font-semibold text-zinc-900 sm:text-3xl dark:text-zinc-50">
             An editor built for talking, not typing
           </h2>
           <div className="mt-8 grid gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
@@ -220,7 +227,7 @@ export default function LandingPage() {
       {/* Pricing */}
       <section className="border-t border-zinc-200 py-16 dark:border-zinc-800">
         <div className="mx-auto max-w-5xl px-6">
-          <h2 className="font-(family-name:--font-display) text-2xl font-semibold sm:text-3xl">
+          <h2 className="font-display text-2xl font-semibold text-zinc-900 sm:text-3xl dark:text-zinc-50">
             Pricing
           </h2>
           <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
@@ -268,8 +275,8 @@ export default function LandingPage() {
       </section>
 
       {/* Closing CTA */}
-      <section className="mx-auto max-w-5xl px-6 py-20 text-center">
-        <h2 className="font-(family-name:--font-display) text-3xl font-semibold">
+      <section className="mx-auto max-w-5xl px-6 py-20 text-center" data-testid="marketing-cta">
+        <h2 className="font-display text-3xl font-semibold text-zinc-900 dark:text-zinc-50">
           Your next video, scripted this afternoon.
         </h2>
         <p className="mx-auto mt-3 max-w-xl text-sm text-zinc-500 dark:text-zinc-400">
@@ -277,10 +284,10 @@ export default function LandingPage() {
           actually finishes.
         </p>
         <Link
-          href="/login"
+          href={enterHref}
           className="mt-6 inline-block rounded-md bg-emerald-700 px-6 py-3 text-sm font-semibold text-white hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-500"
         >
-          Start free
+          {fixtureMode ? "Enter the app" : "Start free"}
         </Link>
       </section>
     </div>

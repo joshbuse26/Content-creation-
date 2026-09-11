@@ -302,7 +302,7 @@ describe("tools/call", () => {
     expect(ok.isError).toBeUndefined();
   });
 
-  it("generate_script charges 6 credits through the shared pipeline (idempotency keys set)", async () => {
+  it("generate_script runs the shared pipeline; MCP acts as the workspace owner so the free-admin bypass skips the ledger", async () => {
     const { secret } = await mintKey();
     const result = await callTool(secret, "generate_script", {
       project_id: fixtureProject.id,
@@ -312,22 +312,17 @@ describe("tools/call", () => {
     const accepted = JSON.parse(result.content[0]?.text ?? "{}") as Record<string, unknown>;
     expect(accepted.status).toBe("queued");
     expect(typeof accepted.scriptId).toBe("string");
-    // Fixture mode runs the pipeline inline — the charges landed. Wave C
-    // (C1): `script.generate` is the staged ORCHESTRATOR, so MCP rides the
-    // same itemized per-stage metering (outline 1 + hooks 1 + draft 4 = 6,
-    // each idempotency-keyed) — no MCP bypass of stage metering.
+    // MCP authenticates as the workspace owner (server/mcp/auth.ts). Owners
+    // are credit-exempt, so the staged orchestrator still runs but skipDebit
+    // keeps the ledger empty. Writer/viewer gating is covered by the impl
+    // P0 tests (fixtureCtx has no role) and credits-exempt.test.ts.
     const charges = deps.store.creditEntries.filter((e) =>
       ["script_outline", "script_hooks", "script_draft"].includes(e.reason),
     );
-    expect(charges.map((e) => e.delta)).toEqual([-1, -1, -4]);
-    expect(charges.reduce((sum, e) => sum + e.delta, 0)).toBe(-6);
-    for (const charge of charges) {
-      expect(charge.idempotencyKey).toMatch(/^(outline|hooks|draft):/);
-      expect(charge.actorUserId).toBe(FIXTURE_IDS.user);
-    }
+    expect(charges).toEqual([]);
   });
 
-  it("generate_script is refused with a domain error at 0 credits", async () => {
+  it("generate_script at 0 credits still runs for the workspace owner (role exempt)", async () => {
     const workspace = getSharedWorkspaceStore().workspaces.find(
       (w) => w.id === FIXTURE_IDS.workspace,
     );
@@ -338,8 +333,9 @@ describe("tools/call", () => {
       project_id: fixtureProject.id,
       frame_id: fixtureFrame.id,
     });
-    expect(result.isError).toBe(true);
-    expect(result.content[0]?.text).toContain("PRECONDITION_FAILED");
+    expect(result.isError).toBeUndefined();
+    const accepted = JSON.parse(result.content[0]?.text ?? "{}") as Record<string, unknown>;
+    expect(accepted.status).toBe("queued");
     expect(deps.store.creditEntries).toHaveLength(0);
   });
 

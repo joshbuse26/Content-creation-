@@ -30,6 +30,7 @@ const MAX_SOURCES = 8;
 export interface ResearchPipelineParams {
   input: ResearchJobInput;
   actorUserId: string | null;
+  creditExempt?: boolean;
 }
 
 interface ResearchRunState {
@@ -172,6 +173,7 @@ export async function runResearchPipeline(
       actorUserId: params.actorUserId,
       projectId: input.projectId,
       idempotencyKey: `research_run:${inputHash}`,
+      ...(params.creditExempt === true ? { skipDebit: true } : {}),
     });
   }
   return result;

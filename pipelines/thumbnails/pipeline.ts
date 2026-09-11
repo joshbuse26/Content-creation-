@@ -45,6 +45,7 @@ export interface ThumbnailPipelineDeps {
 export interface ThumbnailPipelineParams {
   input: ThumbnailJobInput;
   actorUserId: string | null;
+  creditExempt?: boolean;
   /**
    * Archetype id whose thumbnail preset (PRODUCT-CONTRACTS §5) is folded
    * into the prompt — resolved by the router from the project's mode fields
@@ -191,6 +192,7 @@ export async function runThumbnailPipeline(
       actorUserId: params.actorUserId,
       projectId: input.projectId,
       idempotencyKey: `thumbnail:${inputHash}`,
+      ...(params.creditExempt === true ? { skipDebit: true } : {}),
     });
   }
 

@@ -10,6 +10,7 @@ import { IconExternal, IconWarning } from "@/components/ui/icons";
 import { ErrorState, LoadingState } from "@/components/ui/state";
 import { useToast } from "@/components/ui/toast";
 import { fmtDate, fmtDateTime, fmtNumber } from "@/components/lib/format";
+import { isUiCreditExempt } from "@/components/lib/credits-ui";
 import type { BillingStatus } from "@/server/billing/status";
 import { PAID_PLANS, PLAN_RANK, TIERS, type PaidPlan } from "@/server/billing/tiers";
 
@@ -71,6 +72,7 @@ export function BillingPanel() {
 
   const { plan, creditBalance, billingCycleAnchor, ledger } = summaryQuery.data;
   const status = statusQuery.data;
+  const exempt = isUiCreditExempt(workspace?.role, status?.creditExempt);
   const isOwner = workspace?.role === "owner";
   const ownerHint = isOwner ? undefined : "Only the workspace owner can manage billing";
   const tier = TIERS[plan];
@@ -183,109 +185,127 @@ export function BillingPanel() {
           </CardBody>
         </Card>
         <Card>
-          <CardHeader title="Credits" subtitle="A full script costs 6; a revision pass 2." />
+          <CardHeader
+            title="Credits"
+            subtitle={
+              exempt
+                ? "This account is not billed for generation."
+                : "A full script costs 6; a revision pass 2."
+            }
+          />
           <CardBody className="space-y-3">
             <div>
-              <p className="text-4xl font-semibold tracking-tight">{fmtNumber(creditBalance)}</p>
+              <p className="text-4xl font-semibold tracking-tight">
+                {exempt ? "Unlimited" : fmtNumber(creditBalance)}
+              </p>
               <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                of {fmtNumber(tier.monthlyCredits)} this cycle
+                {exempt
+                  ? "Credit balance checks and debits are skipped."
+                  : `of ${fmtNumber(tier.monthlyCredits)} this cycle`}
               </p>
             </div>
-            <div
-              role="progressbar"
-              aria-valuenow={cyclePct}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label="Credits remaining this cycle"
-              className="h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800"
-            >
-              <div
-                className="h-full rounded-full bg-emerald-600 transition-all dark:bg-emerald-500"
-                style={{ width: `${String(cyclePct)}%` }}
-              />
-            </div>
-            {status?.overageEnabled === true ? (
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                {status.overageUsed > 0 ? (
-                  <>
-                    <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                      {fmtNumber(status.overageUsed)}
-                    </span>{" "}
-                    of {fmtNumber(status.overageCeiling)} overage credits used this cycle at $
-                    {status.overageUnitUsd.toFixed(2)} each.
-                  </>
-                ) : (
-                  <>
-                    If you run out, up to {fmtNumber(status.overageCeiling)} overage credits at $
-                    {status.overageUnitUsd.toFixed(2)} each keep you generating.
-                  </>
-                )}
-              </p>
-            ) : null}
+            {exempt ? null : (
+              <>
+                <div
+                  role="progressbar"
+                  aria-valuenow={cyclePct}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label="Credits remaining this cycle"
+                  className="h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800"
+                >
+                  <div
+                    className="h-full rounded-full bg-emerald-600 transition-all dark:bg-emerald-500"
+                    style={{ width: `${String(cyclePct)}%` }}
+                  />
+                </div>
+                {status?.overageEnabled === true ? (
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    {status.overageUsed > 0 ? (
+                      <>
+                        <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                          {fmtNumber(status.overageUsed)}
+                        </span>{" "}
+                        of {fmtNumber(status.overageCeiling)} overage credits used this cycle at $
+                        {status.overageUnitUsd.toFixed(2)} each.
+                      </>
+                    ) : (
+                      <>
+                        If you run out, up to {fmtNumber(status.overageCeiling)} overage credits at
+                        ${status.overageUnitUsd.toFixed(2)} each keep you generating.
+                      </>
+                    )}
+                  </p>
+                ) : null}
+              </>
+            )}
           </CardBody>
         </Card>
       </div>
 
-      <div>
-        <h3 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-          {plan === "free" ? "Pick a plan" : "Change plan"}
-        </h3>
-        <div className="grid gap-4 sm:grid-cols-3">
-          {PAID_PLANS.map((paidPlan) => {
-            const t = TIERS[paidPlan];
-            const isCurrent = paidPlan === plan;
-            const isUpgrade = PLAN_RANK[paidPlan] > PLAN_RANK[plan];
-            return (
-              <Card key={paidPlan}>
-                <CardBody className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="font-semibold">{t.label}</p>
-                    {isCurrent ? <Badge tone="emerald">Current</Badge> : null}
-                  </div>
-                  <p>
-                    <span className="text-2xl font-semibold tracking-tight">
-                      ${fmtNumber(t.priceUsdMonthly)}
-                    </span>
-                    <span className="text-sm text-zinc-500 dark:text-zinc-400">/mo</span>
-                  </p>
-                  <ul className="space-y-1 text-xs text-zinc-600 dark:text-zinc-400">
-                    <li>{fmtNumber(t.monthlyCredits)} credits / month</li>
-                    <li>
-                      {t.channelLimit === null
-                        ? "Unlimited channels"
-                        : `${String(t.channelLimit)} channel${t.channelLimit === 1 ? "" : "s"}`}
-                    </li>
-                    <li>
-                      {String(t.seatLimit)} seat{t.seatLimit === 1 ? "" : "s"}
-                    </li>
-                  </ul>
-                  {isCurrent ? null : (
-                    <Button
-                      size="sm"
-                      variant={isUpgrade ? "primary" : "secondary"}
-                      disabled={!isOwner}
-                      busy={
-                        checkoutMutation.isPending && checkoutMutation.variables.plan === t.plan
-                      }
-                      title={ownerHint}
-                      onClick={() => {
-                        startCheckout(paidPlan);
-                      }}
-                    >
-                      <IconExternal size={12} /> {isUpgrade ? `Upgrade to ${t.label}` : "Switch"}
-                    </Button>
-                  )}
-                </CardBody>
-              </Card>
-            );
-          })}
+      {exempt ? null : (
+        <div>
+          <h3 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+            {plan === "free" ? "Pick a plan" : "Change plan"}
+          </h3>
+          <div className="grid gap-4 sm:grid-cols-3">
+            {PAID_PLANS.map((paidPlan) => {
+              const t = TIERS[paidPlan];
+              const isCurrent = paidPlan === plan;
+              const isUpgrade = PLAN_RANK[paidPlan] > PLAN_RANK[plan];
+              return (
+                <Card key={paidPlan}>
+                  <CardBody className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="font-semibold">{t.label}</p>
+                      {isCurrent ? <Badge tone="emerald">Current</Badge> : null}
+                    </div>
+                    <p>
+                      <span className="text-2xl font-semibold tracking-tight">
+                        ${fmtNumber(t.priceUsdMonthly)}
+                      </span>
+                      <span className="text-sm text-zinc-500 dark:text-zinc-400">/mo</span>
+                    </p>
+                    <ul className="space-y-1 text-xs text-zinc-600 dark:text-zinc-400">
+                      <li>{fmtNumber(t.monthlyCredits)} credits / month</li>
+                      <li>
+                        {t.channelLimit === null
+                          ? "Unlimited channels"
+                          : `${String(t.channelLimit)} channel${t.channelLimit === 1 ? "" : "s"}`}
+                      </li>
+                      <li>
+                        {String(t.seatLimit)} seat{t.seatLimit === 1 ? "" : "s"}
+                      </li>
+                    </ul>
+                    {isCurrent ? null : (
+                      <Button
+                        size="sm"
+                        variant={isUpgrade ? "primary" : "secondary"}
+                        disabled={!isOwner}
+                        busy={
+                          checkoutMutation.isPending && checkoutMutation.variables.plan === t.plan
+                        }
+                        title={ownerHint}
+                        onClick={() => {
+                          startCheckout(paidPlan);
+                        }}
+                      >
+                        <IconExternal size={12} /> {isUpgrade ? `Upgrade to ${t.label}` : "Switch"}
+                      </Button>
+                    )}
+                  </CardBody>
+                </Card>
+              );
+            })}
+          </div>
+          {plan !== "free" ? (
+            <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+              Downgrades take effect at the next billing cycle; upgrades start a new cycle right
+              away.
+            </p>
+          ) : null}
         </div>
-        {plan !== "free" ? (
-          <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-            Downgrades take effect at the next billing cycle; upgrades start a new cycle right away.
-          </p>
-        ) : null}
-      </div>
+      )}
 
       <Card>
         <CardHeader title="Recent credit activity" />

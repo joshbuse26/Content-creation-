@@ -17,6 +17,7 @@ import { IconCheck, IconClock, IconPlay, IconRefresh, IconSparkle } from "@/comp
 import { ErrorState, LoadingState } from "@/components/ui/state";
 import { useToast } from "@/components/ui/toast";
 import { fmtDuration } from "@/components/lib/format";
+import { creditCostLabel, isUiCreditExempt } from "@/components/lib/credits-ui";
 import { HOOK_STYLE_LABELS } from "@/components/archetypes/presentation";
 import { useScriptStream } from "./use-script-stream";
 import { StreamView } from "./stream-view";
@@ -56,7 +57,8 @@ const STEP_BLURBS: Record<StepId, string> = {
 };
 
 export function StagedGeneratePanel() {
-  const { workspaceId } = useWorkspace();
+  const { workspaceId, workspace } = useWorkspace();
+  const creditExempt = isUiCreditExempt(workspace?.role);
   const projectId = useProjectId();
   const { toast } = useToast();
   const utils = trpc.useUtils();
@@ -230,7 +232,13 @@ export function StagedGeneratePanel() {
               ? ` · ${chosenFrame.format} · ${chosenFrame.targetMinutes} min target`
               : ""}
             {" · "}
-            <span className="tabular-nums">{flow.creditsSpent}</span> credits charged this flow
+            {creditExempt ? (
+              <span>Unlimited generation on this account</span>
+            ) : (
+              <>
+                <span className="tabular-nums">{flow.creditsSpent}</span> credits charged this flow
+              </>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -256,7 +264,8 @@ export function StagedGeneratePanel() {
               });
             }}
           >
-            <IconPlay size={14} /> Generate all ({GENERATE_ALL_COST} credits)
+            <IconPlay size={14} /> Generate all
+            {creditExempt ? "" : ` (${GENERATE_ALL_COST} credits)`}
           </Button>
         </div>
       </div>
@@ -407,6 +416,24 @@ export function StagedGeneratePanel() {
 // Step cards
 // ---------------------------------------------------------------------------
 
+function useCreditSuffix(cost: number): string {
+  const { workspace } = useWorkspace();
+  if (isUiCreditExempt(workspace?.role)) return "";
+  return ` (${creditCostLabel(cost, false)})`;
+}
+
+function StepCostLabel({ step }: { step: StepId }) {
+  const { workspace } = useWorkspace();
+  const exempt = isUiCreditExempt(workspace?.role);
+  return (
+    <span className="ml-auto text-[11px] text-zinc-500 dark:text-zinc-400">
+      {exempt
+        ? "Included — not billed"
+        : `${STEP_COSTS[step]} credit${STEP_COSTS[step] === 1 ? "" : "s"} — charged when you run it`}
+    </span>
+  );
+}
+
 function StepCard({
   step,
   flow,
@@ -425,9 +452,7 @@ function StepCard({
           <Badge tone={status === "done" ? "emerald" : "neutral"}>
             {status === "done" ? "done" : status}
           </Badge>
-          <span className="ml-auto text-[11px] text-zinc-500 dark:text-zinc-400">
-            {STEP_COSTS[step]} credit{STEP_COSTS[step] === 1 ? "" : "s"} — charged when you run it
-          </span>
+          <StepCostLabel step={step} />
         </div>
         <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">{STEP_BLURBS[step]}</p>
         {children}
@@ -450,6 +475,7 @@ function TopicsStep({
   onGenerate: () => void;
 }) {
   const [draftTitle, setDraftTitle] = useState("");
+  const costSuffix = useCreditSuffix(1);
   return (
     <StepCard step="topics" flow={flow}>
       <div className="flex flex-wrap items-center gap-2">
@@ -461,7 +487,7 @@ function TopicsStep({
           onClick={onGenerate}
         >
           <IconSparkle size={13} />
-          {flow.topics === null ? "Generate topics (1 credit)" : "Regenerate topics (1 credit)"}
+          {flow.topics === null ? `Generate topics${costSuffix}` : `Regenerate topics${costSuffix}`}
         </Button>
         <Button
           variant="ghost"
@@ -563,6 +589,7 @@ function OutlineStep({
     dispatch({ type: "outline_edited", outline });
   };
   const totalSeconds = flow.outline?.sections.reduce((acc, s) => acc + s.targetSeconds, 0) ?? 0;
+  const costSuffix = useCreditSuffix(1);
   return (
     <StepCard step="outline" flow={flow}>
       {locked ? (
@@ -575,8 +602,8 @@ function OutlineStep({
             <Button variant="primary" size="sm" busy={busy} onClick={onGenerate}>
               <IconSparkle size={13} />
               {flow.outline === null
-                ? "Generate outline (1 credit)"
-                : "Regenerate outline (1 credit)"}
+                ? `Generate outline${costSuffix}`
+                : `Regenerate outline${costSuffix}`}
             </Button>
             {flow.outline !== null ? (
               <span className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -646,6 +673,7 @@ function HooksStep({
   onGenerate: () => void;
 }) {
   const locked = stepStatus(flow, "hooks") === "locked";
+  const costSuffix = useCreditSuffix(1);
   return (
     <StepCard step="hooks" flow={flow}>
       {locked ? (
@@ -654,7 +682,9 @@ function HooksStep({
         <>
           <Button variant="primary" size="sm" busy={busy} onClick={onGenerate}>
             <IconSparkle size={13} />
-            {flow.hooks === null ? "Generate 3 hooks (1 credit)" : "Regenerate hooks (1 credit)"}
+            {flow.hooks === null
+              ? `Generate 3 hooks${costSuffix}`
+              : `Regenerate hooks${costSuffix}`}
           </Button>
           {flow.hooks !== null ? (
             <div
@@ -708,6 +738,7 @@ function DraftStep({
   onReset: () => void;
 }) {
   const locked = stepStatus(flow, "draft") === "locked";
+  const costSuffix = useCreditSuffix(4);
   return (
     <StepCard step="draft" flow={flow}>
       {locked ? (
@@ -715,7 +746,7 @@ function DraftStep({
       ) : (
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="primary" busy={busy} onClick={onStart}>
-            <IconPlay size={14} /> Write the draft (4 credits)
+            <IconPlay size={14} /> Write the draft{costSuffix}
           </Button>
           <span className="text-xs text-zinc-500 dark:text-zinc-400">
             Sections stream in live; retention, voice and fact-check passes run inside.

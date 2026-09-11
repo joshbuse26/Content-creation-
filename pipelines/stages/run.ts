@@ -44,6 +44,8 @@ export async function runMeteredSyncStage<T>(params: {
   input: unknown;
   cost: number;
   actorUserId: string | null;
+  /** Free-admin bypass: skip the completion debit. */
+  creditExempt?: boolean;
   compute: () => Promise<T>;
 }): Promise<T> {
   const { deps, stage } = params;
@@ -116,6 +118,7 @@ export async function runMeteredSyncStage<T>(params: {
     actorUserId: params.actorUserId,
     projectId: params.projectId,
     idempotencyKey: `${stage}:${inputHash}`,
+    ...(params.creditExempt === true ? { skipDebit: true } : {}),
   });
 
   return value.result;

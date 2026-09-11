@@ -225,6 +225,40 @@ describe("metering through the chat tool path", () => {
     expect((err as TRPCError).code).toBe("PRECONDITION_FAILED");
     expect(deps.engine.store.creditEntries).toHaveLength(0);
   });
+
+  it("an ADMIN_EMAILS writer at 0 credits confirms without a debit (free-admin bypass)", async () => {
+    const workspace = getSharedWorkspaceStore().workspaces.find(
+      (w) => w.id === FIXTURE_IDS.workspace,
+    );
+    if (workspace === undefined) throw new Error("fixture workspace missing");
+    workspace.creditBalance = 0;
+
+    const proposal = await seedProposal(
+      "make_hooks",
+      { projectId: fixtureProject.id, generation: archetypeGen },
+      1,
+    );
+    const exemptCtx: WorkspaceHandlerCtx = {
+      ...fixtureCtx,
+      userEmail: "joshbuse@hexbandit.io",
+      role: "writer",
+    };
+    process.env.ADMIN_EMAILS = "joshbuse@hexbandit.io";
+    resetConfigForTests();
+    const result = await chatImpl.confirmTool({
+      ctx: exemptCtx,
+      input: {
+        workspaceId: fixtureCtx.workspaceId,
+        threadId,
+        toolCallId: proposal.toolCallId,
+        args: proposal.args,
+      },
+    });
+    expect(result.status).toBe("accepted");
+    expect(deps.engine.store.creditEntries).toHaveLength(0);
+    delete process.env.ADMIN_EMAILS;
+    resetConfigForTests();
+  });
 });
 
 describe("licensed-voice guard via the chat draft tool", () => {

@@ -22,7 +22,7 @@ import { runMeteredSyncStage } from "@/pipelines/stages/run";
 import { resolveStyleCard } from "@/pipelines/stages/style-resolver";
 import { topicsPrompt } from "@/prompts";
 import { requireCreditsWithOverage } from "@/server/billing";
-import { CREDIT_COSTS } from "@/server/credits";
+import { CREDIT_COSTS, exemptionFromCtx, isCtxCreditExempt } from "@/server/credits";
 import { assertGenerationTargetAllowed, assertLicensedVoiceUsable } from "@/server/modes";
 import { JOB_NAMES, QUEUE_NAMES } from "@/queue/queues";
 import {
@@ -147,7 +147,11 @@ export const scriptStagesImpl = {
       null,
       deps.partners,
     );
-    await requireCreditsWithOverage(ctx.workspaceId, CREDIT_COSTS.scriptTopics);
+    await requireCreditsWithOverage(
+      ctx.workspaceId,
+      CREDIT_COSTS.scriptTopics,
+      exemptionFromCtx(ctx),
+    );
 
     const outliers =
       channel.nicheKeywords.length === 0
@@ -171,6 +175,7 @@ export const scriptStagesImpl = {
       input: { input, outliers: outlierSnapshot },
       cost: CREDIT_COSTS.scriptTopics,
       actorUserId: ctx.userId,
+      creditExempt: isCtxCreditExempt(ctx),
       compute: async () => {
         const result = await generateJson({
           mode: deps.engine.mode,
@@ -215,7 +220,11 @@ export const scriptStagesImpl = {
       input.frameId,
       input.generation,
     );
-    await requireCreditsWithOverage(ctx.workspaceId, CREDIT_COSTS.scriptOutline);
+    await requireCreditsWithOverage(
+      ctx.workspaceId,
+      CREDIT_COSTS.scriptOutline,
+      exemptionFromCtx(ctx),
+    );
     const steered = steerByTopic(context, input.topic);
 
     const outline = await runMeteredSyncStage<Outline>({
@@ -226,6 +235,7 @@ export const scriptStagesImpl = {
       input,
       cost: CREDIT_COSTS.scriptOutline,
       actorUserId: ctx.userId,
+      creditExempt: isCtxCreditExempt(ctx),
       compute: () =>
         generateOutline({ mode: deps.engine.mode, llm: deps.engine.llm, context: steered }),
     });
@@ -238,7 +248,11 @@ export const scriptStagesImpl = {
     assertGenerationTargetAllowed(input.generation);
     const deps = await getStageDeps();
     const { context } = await contextForProject(deps, ctx, input.projectId, null, input.generation);
-    await requireCreditsWithOverage(ctx.workspaceId, CREDIT_COSTS.scriptHooks);
+    await requireCreditsWithOverage(
+      ctx.workspaceId,
+      CREDIT_COSTS.scriptHooks,
+      exemptionFromCtx(ctx),
+    );
     // Contract: outline null ⇒ synthesize a scaffold from the chosen frame
     // (deterministic code, not a metered LLM call) — it only gives the hook
     // writer the video's shape.
@@ -252,6 +266,7 @@ export const scriptStagesImpl = {
       input,
       cost: CREDIT_COSTS.scriptHooks,
       actorUserId: ctx.userId,
+      creditExempt: isCtxCreditExempt(ctx),
       compute: () =>
         generateHookCandidates({
           mode: deps.engine.mode,
@@ -296,7 +311,11 @@ export const scriptStagesImpl = {
         `hook technique "${input.hook.style}" is not in the style card's allowed patterns (${styleCard.hookPatterns.map((p) => p.technique).join(", ")})`,
       );
     }
-    await requireCreditsWithOverage(ctx.workspaceId, CREDIT_COSTS.scriptDraft);
+    await requireCreditsWithOverage(
+      ctx.workspaceId,
+      CREDIT_COSTS.scriptDraft,
+      exemptionFromCtx(ctx),
+    );
 
     const script = await store.createScript({
       workspaceId: ctx.workspaceId,
@@ -315,6 +334,7 @@ export const scriptStagesImpl = {
       generation: input.generation,
       scriptId: script.id,
       actorUserId: ctx.userId as string,
+      creditExempt: isCtxCreditExempt(ctx),
       dispatch: "draft" as const,
       presetOutline: input.outline,
       chosenHook: input.hook,

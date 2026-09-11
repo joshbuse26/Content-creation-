@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PRODUCT_NAME } from "@/lib/branding";
+import { getConfig } from "@/lib/config";
 
 export function Wordmark({ className = "" }: { className?: string }) {
   return (
@@ -14,6 +15,8 @@ export function Wordmark({ className = "" }: { className?: string }) {
 }
 
 export function SiteNav() {
+  const fixtureMode = getConfig().PROVIDERS === "fixture";
+  const enterHref = fixtureMode ? "/projects" : "/login";
   return (
     <header className="border-b border-zinc-200 dark:border-zinc-800">
       <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-6">
@@ -27,17 +30,19 @@ export function SiteNav() {
           >
             Free tools
           </Link>
+          {fixtureMode ? null : (
+            <Link
+              href="/login"
+              className="font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+            >
+              Sign in
+            </Link>
+          )}
           <Link
-            href="/login"
-            className="font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-          >
-            Sign in
-          </Link>
-          <Link
-            href="/login"
+            href={enterHref}
             className="rounded-md bg-emerald-700 px-3.5 py-2 font-medium text-white hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-500"
           >
-            Start writing
+            {fixtureMode ? "Enter the app" : "Start writing"}
           </Link>
         </nav>
       </div>

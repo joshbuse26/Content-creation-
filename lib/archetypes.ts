@@ -9,21 +9,19 @@ import type { ArchetypeId } from "@/lib/types/enums";
  * load, so drift from the contract fails the test suite immediately.
  *
  * These are GENERIC archetypes: every style card and preset is original
- * craft describing a content FORMAT, never a real creator. `TODO(seed-copy)`
- * marks copy pending from Josh's content pipeline (pitch text after the
- * marker is working copy, safe to show); exampleSnippets stay placeholders
- * until original seed passages arrive — never paste real creators' words.
+ * craft describing a content FORMAT, never a real creator. Pitch, signature
+ * phrases, audience copy, and exampleSnippets are original seed passages —
+ * never paste a real creator's words.
  */
 
 const T0 = new Date("2026-09-10T00:00:00.000Z");
 const stamps = { createdAt: T0, updatedAt: T0 };
 
-const SNIPPET_PLACEHOLDERS = ["TODO(seed-copy)", "TODO(seed-copy)"];
-
 interface ArchetypeSeedInput {
   id: ArchetypeId;
   displayName: string;
   pitch: string;
+  exampleSnippets: string[];
   sort: number;
   styleCard: Omit<StyleCard, "exampleSnippets" | "thumbnailPresetId">;
   thumbnailPreset: Omit<Archetype["thumbnailPreset"], "id">;
@@ -37,7 +35,7 @@ function seed(input: ArchetypeSeedInput): Archetype {
     sort: input.sort,
     styleCard: {
       ...input.styleCard,
-      exampleSnippets: SNIPPET_PLACEHOLDERS,
+      exampleSnippets: input.exampleSnippets,
       // Preset keyed to the same archetype (§1/§5).
       thumbnailPresetId: input.id,
     },
@@ -50,7 +48,12 @@ export const ARCHETYPE_SEEDS: readonly Archetype[] = [
   seed({
     id: "high-stakes-challenge",
     displayName: "High-Stakes Challenge",
-    pitch: "TODO(seed-copy): Big bets, real consequences, and a countdown that never stops.",
+    pitch: "Big bets, real consequences, and a countdown that never stops.",
+    exampleSnippets: [
+      'Signature: "the clock is the antagonist." Name the number, the deadline, and what happens if it hits zero \u2014 then start moving.',
+      "Audience: people who stay for the outcome, not the lore. They want to feel the risk is real and see you take it on camera.",
+      "If I lose this, the build is scrap. Forty-seven minutes. Watch the timer \u2014 I am not cutting away until it hits zero or I am done.",
+    ],
     sort: 1,
     styleCard: {
       voice: {
@@ -94,7 +97,12 @@ export const ARCHETYPE_SEEDS: readonly Archetype[] = [
   seed({
     id: "calm-explainer",
     displayName: "Calm Explainer",
-    pitch: "TODO(seed-copy): Complicated things made clear, one unhurried step at a time.",
+    pitch: "Complicated things made clear, one unhurried step at a time.",
+    exampleSnippets: [
+      'Signature: "let\'s look at this together." Slow the idea down until a first-timer can repeat it back.',
+      "Audience: curious adults who bounce when a video talks down to them or sprints past the hard part. They want the simple version first, then the why.",
+      "Before we name the parts, here is the whole machine in one breath. Ready? It only does three jobs. Everything else is a detail we will hang on those three pegs.",
+    ],
     sort: 2,
     styleCard: {
       voice: {
@@ -146,7 +154,12 @@ export const ARCHETYPE_SEEDS: readonly Archetype[] = [
   seed({
     id: "data-storyteller",
     displayName: "Data Storyteller",
-    pitch: "TODO(seed-copy): The numbers have a plot twist — charts that read like stories.",
+    pitch: "The numbers have a plot twist — charts that read like stories.",
+    exampleSnippets: [
+      'Signature: "the chart has a plot twist." Lead with the surprising number, then earn it.',
+      "Audience: viewers who like receipts. They will pause on a graph if you tell them what to look at, and they will leave if you imply cause from a coincidence.",
+      "This line should be flat. It is not. That spike is not a rounding error \u2014 and the boring explanation is wrong. Stay with the axis for one minute.",
+    ],
     sort: 3,
     styleCard: {
       voice: {
@@ -193,7 +206,12 @@ export const ARCHETYPE_SEEDS: readonly Archetype[] = [
   seed({
     id: "investigative-narrator",
     displayName: "Investigative Narrator",
-    pitch: "TODO(seed-copy): Follow the paper trail — patient, sourced, and impossible to pause.",
+    pitch: "Follow the paper trail — patient, sourced, and impossible to pause.",
+    exampleSnippets: [
+      'Signature: "follow the paper, not the rumor." Date, place, document \u2014 then the next door.',
+      "Audience: patient watchers who want a trail they could check themselves. They punish speculation stated as fact and reward sourced restraint.",
+      "The memo is dated a Tuesday in March. Nobody filed it. I am going to walk you through every page I was allowed to see, and stop exactly where the record stops.",
+    ],
     sort: 4,
     styleCard: {
       voice: {
@@ -245,7 +263,12 @@ export const ARCHETYPE_SEEDS: readonly Archetype[] = [
   seed({
     id: "rapid-listicle",
     displayName: "Rapid Listicle",
-    pitch: "TODO(seed-copy): Ten things, zero filler — the countdown that respects your time.",
+    pitch: "Ten things, zero filler — the countdown that respects your time.",
+    exampleSnippets: [
+      'Signature: "ten things, no padding." Each item gets a name, a reason, and a way out.',
+      "Audience: scanners. They will skip an intro, but they will stay if every beat earns the next number and the ranking rule is said out loud.",
+      "Item one is the one I still get wrong. Here is the test I use now, in one sentence, so you can steal it before we even hit item two.",
+    ],
     sort: 5,
     styleCard: {
       voice: {
@@ -290,7 +313,12 @@ export const ARCHETYPE_SEEDS: readonly Archetype[] = [
   seed({
     id: "contrarian-essayist",
     displayName: "Contrarian Essayist",
-    pitch: "TODO(seed-copy): The take everyone repeats is wrong — here is the case against it.",
+    pitch: "The take everyone repeats is wrong — here is the case against it.",
+    exampleSnippets: [
+      'Signature: "the take everyone repeats is incomplete." Steelman it, then show the missing piece.',
+      "Audience: people who like an argument more than a dunk. They will hear you out if you are fair to the other side first.",
+      "I used to say this too. It sounds clean. The clean version skips the one measurement that made me change my mind \u2014 I will show you that measurement before I ask you to.",
+    ],
     sort: 6,
     styleCard: {
       voice: {
@@ -337,7 +365,12 @@ export const ARCHETYPE_SEEDS: readonly Archetype[] = [
   seed({
     id: "hands-on-builder",
     displayName: "Hands-On Builder",
-    pitch: "TODO(seed-copy): Real tools, real mistakes, a finished thing by the end.",
+    pitch: "Real tools, real mistakes, a finished thing by the end.",
+    exampleSnippets: [
+      'Signature: "real tools, real mistakes, a finished thing." Narrate the decision while your hands are still in it.',
+      "Audience: makers who want to copy the method, not the myth of a perfect first take. They stay for the salvage, the cost, and the last five minutes of proof.",
+      "This joint is supposed to be square. It is not. I am not hiding the gap \u2014 here is the shim, here is why I am using it, and here is what it costs me later.",
+    ],
     sort: 7,
     styleCard: {
       voice: {
@@ -385,7 +418,12 @@ export const ARCHETYPE_SEEDS: readonly Archetype[] = [
   seed({
     id: "friendly-coach",
     displayName: "Friendly Coach",
-    pitch: "TODO(seed-copy): Meet yourself where you are — small wins, every session.",
+    pitch: "Meet yourself where you are — small wins, every session.",
+    exampleSnippets: [
+      'Signature: "meet yourself where you are." One adjustment, one small win, then the next.',
+      "Audience: people mid-practice who need a calm voice and a specific cue, not a transformation promise. They leave at shame and stay for the next rep.",
+      "Do not fix your whole form today. Change one thing: exhale before you move. That is the whole session. We will stack the next cue next time.",
+    ],
     sort: 8,
     styleCard: {
       voice: {
@@ -437,7 +475,12 @@ export const ARCHETYPE_SEEDS: readonly Archetype[] = [
   seed({
     id: "deadpan-comedian",
     displayName: "Deadpan Comedian",
-    pitch: "TODO(seed-copy): Delivered completely straight — the joke is that there is no joke.",
+    pitch: "Delivered completely straight — the joke is that there is no joke.",
+    exampleSnippets: [
+      'Signature: "delivered completely straight." The joke is that there is no joke \u2014 keep the face still.',
+      "Audience: viewers who like understatement and will click away the moment you wink. They want the absurd treated like a status report.",
+      "I have prepared a briefing on why the toaster is a hostile roommate. I will not raise my voice. The evidence is on slide two, which is the crumb tray.",
+    ],
     sort: 9,
     styleCard: {
       voice: {
@@ -481,7 +524,12 @@ export const ARCHETYPE_SEEDS: readonly Archetype[] = [
   seed({
     id: "hype-gamer",
     displayName: "Hype Gamer",
-    pitch: "TODO(seed-copy): Full-send energy, clutch moments, and zero dead air.",
+    pitch: "Full-send energy, clutch moments, and zero dead air.",
+    exampleSnippets: [
+      'Signature: "no dead air, clutch on the clock." Name the run, then drop into the moment.',
+      "Audience: people who want energy without toxicity. They will skip a rant and stay for a clean callout of why the play mattered.",
+      "This is the last stock. If I hesitate I am done. Watch the leftover cooldown \u2014 that is the whole fight, and we are not talking over it.",
+    ],
     sort: 10,
     styleCard: {
       voice: {
@@ -528,7 +576,12 @@ export const ARCHETYPE_SEEDS: readonly Archetype[] = [
   seed({
     id: "cozy-vlogger",
     displayName: "Cozy Vlogger",
-    pitch: "TODO(seed-copy): Slow mornings, small rituals — a quiet corner of the internet.",
+    pitch: "Slow mornings, small rituals — a quiet corner of the internet.",
+    exampleSnippets: [
+      'Signature: "slow mornings, small rituals." Describe the light before you describe the plan.',
+      "Audience: people looking for a quiet corner, not a productivity lecture. They stay for texture and leave at hustle.",
+      "The kettle clicked before I sat down. Rain on the left window, a too-big mug, and one thing I want to finish before noon. That is the whole plot of today.",
+    ],
     sort: 11,
     styleCard: {
       voice: {
@@ -574,8 +627,12 @@ export const ARCHETYPE_SEEDS: readonly Archetype[] = [
   seed({
     id: "story-time-confessional",
     displayName: "Story-Time Confessional",
-    pitch:
-      "TODO(seed-copy): The story they still can't believe happened — told straight to camera.",
+    pitch: "The story they still can't believe happened — told straight to camera.",
+    exampleSnippets: [
+      'Signature: "okay, back up." Start at the unbelievable beat, then rewind with kindness to everyone in the story.',
+      "Audience: people who want a story told to camera, not a dunk on a private person. They stay for the turn and leave at cruelty.",
+      "I am standing in a parking lot holding a cake I should not have bought. Give me ninety seconds and I will tell you how I got here, and who I still owe an apology.",
+    ],
     sort: 12,
     styleCard: {
       voice: {

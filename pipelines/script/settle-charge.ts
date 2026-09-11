@@ -41,6 +41,7 @@ export async function settleCharge(
   store: Pick<EngineStore, "recordCredits">,
   charge: CreditRecord & { idempotencyKey: string },
 ): Promise<void> {
+  if (charge.skipDebit === true) return;
   try {
     await store.recordCredits(charge);
   } catch (err) {

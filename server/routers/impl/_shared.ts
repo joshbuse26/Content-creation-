@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
+import type { Role } from "@/lib/types/enums";
 import type { UserId, WorkspaceId } from "@/lib/types/ids";
 
 /**
@@ -21,6 +22,10 @@ import type { UserId, WorkspaceId } from "@/lib/types/ids";
 export interface WorkspaceHandlerCtx {
   userId: UserId;
   workspaceId: WorkspaceId;
+  /** Present when the handler ran through workspaceProcedure. */
+  role?: Role;
+  userEmail?: string | null;
+  session?: { user?: { email?: string | null } } | null;
 }
 
 export interface HandlerOpts<TInput> {

@@ -1,6 +1,9 @@
 import { TRPCError } from "@trpc/server";
 import { eq } from "drizzle-orm";
 import { getDb, hasDb, schema } from "@/db";
+import { getConfig } from "@/lib/config";
+import { isCreditExempt as isCreditExemptCore } from "@/lib/credits-exempt";
+import type { Role } from "@/lib/types/enums";
 import type { WorkspaceId } from "@/lib/types/ids";
 import { getSharedWorkspaceStore } from "@/server/workspace/memory";
 
@@ -51,11 +54,46 @@ export async function getCreditBalance(workspaceId: WorkspaceId): Promise<number
   return rows[0]?.creditBalance ?? null;
 }
 
+export type CreditExemption = {
+  userEmail?: string | null;
+  workspaceRole?: Role | null;
+};
+
+/** True when the actor is on ADMIN_EMAILS (case-insensitive) or is a workspace owner/admin. */
+export function isCreditExempt(
+  userEmail: string | null | undefined,
+  workspaceRole: Role | null | undefined,
+): boolean {
+  return isCreditExemptCore(userEmail, workspaceRole, getConfig().ADMIN_EMAILS);
+}
+
+export function exemptionFromCtx(ctx: {
+  role?: Role | null;
+  userEmail?: string | null;
+  session?: { user?: { email?: string | null } } | null;
+}): CreditExemption {
+  return {
+    userEmail: ctx.userEmail ?? ctx.session?.user?.email ?? null,
+    workspaceRole: ctx.role ?? null,
+  };
+}
+
+export function isCtxCreditExempt(ctx: Parameters<typeof exemptionFromCtx>[0]): boolean {
+  const exemption = exemptionFromCtx(ctx);
+  return isCreditExempt(exemption.userEmail, exemption.workspaceRole);
+}
+
 /**
  * Throws PRECONDITION_FAILED unless the workspace can afford `cost` without
- * dropping below the overdraft floor.
+ * dropping below the overdraft floor. Exempt actors (ADMIN_EMAILS or
+ * owner/admin role) skip the check and are never blocked.
  */
-export async function requireCredits(workspaceId: WorkspaceId, cost: number): Promise<void> {
+export async function requireCredits(
+  workspaceId: WorkspaceId,
+  cost: number,
+  exemption: CreditExemption = {},
+): Promise<void> {
+  if (isCreditExempt(exemption.userEmail, exemption.workspaceRole)) return;
   const balance = await getCreditBalance(workspaceId);
   if (balance === null) {
     throw new TRPCError({ code: "NOT_FOUND", message: "workspace not found" });

@@ -105,6 +105,24 @@ const envSchema = z
     S3_SECRET_ACCESS_KEY: optionalString,
 
     LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error", "fatal"]).default("info"),
+
+    /**
+     * Comma-separated product-admin emails that skip credit gating and
+     * are never debited (free-admin bypass). Compared case-insensitively.
+     * Workspace owners/admins are also exempt via isCreditExempt.
+     */
+    ADMIN_EMAILS: z.preprocess((v) => {
+      if (typeof v !== "string" || v.trim() === "") return [];
+      const seen = new Set<string>();
+      const out: string[] = [];
+      for (const part of v.split(",")) {
+        const email = part.trim().toLowerCase();
+        if (email === "" || seen.has(email)) continue;
+        seen.add(email);
+        out.push(email);
+      }
+      return out;
+    }, z.array(z.string()).default([])),
   })
   .superRefine((env, ctx) => {
     const isBuildPhase = env.NEXT_PHASE === "phase-production-build";

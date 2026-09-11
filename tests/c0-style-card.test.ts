@@ -98,12 +98,16 @@ describe("archetype seeds (frozen catalog)", () => {
     }
   });
 
-  it("keeps exampleSnippets and pitch as TODO(seed-copy) placeholders", () => {
+  it("ships original pitch and exampleSnippets with no TODO(seed-copy) markers", () => {
     for (const a of ARCHETYPE_SEEDS) {
-      expect(a.pitch.startsWith("TODO(seed-copy)")).toBe(true);
+      expect(a.pitch.startsWith("TODO(seed-copy)")).toBe(false);
+      expect(a.pitch).not.toContain("TODO(seed-copy)");
+      expect(a.pitch.length).toBeGreaterThan(20);
       expect(a.styleCard.exampleSnippets.length).toBeGreaterThanOrEqual(2);
       for (const snippet of a.styleCard.exampleSnippets) {
-        expect(snippet).toContain("TODO(seed-copy)");
+        expect(snippet).not.toContain("TODO(seed-copy)");
+        expect(snippet.length).toBeGreaterThan(20);
+        expect(snippet.length).toBeLessThanOrEqual(400);
       }
     }
   });

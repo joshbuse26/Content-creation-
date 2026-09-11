@@ -16,7 +16,7 @@ import {
 } from "@/pipelines/script/readability";
 import { JOB_NAMES, QUEUE_NAMES } from "@/queue/queues";
 import { requireCreditsWithOverage } from "@/server/billing";
-import { CREDIT_COSTS } from "@/server/credits";
+import { CREDIT_COSTS, exemptionFromCtx, isCtxCreditExempt } from "@/server/credits";
 import { badRequest, jobAccepted, notFound, preconditionFailed, type HandlerOpts } from "./_shared";
 
 type RunInput = z.output<typeof revisionContracts.run.input>;
@@ -28,7 +28,11 @@ type RejectInput = z.output<typeof revisionContracts.reject.input>;
 export const revisionImpl = {
   /** Runs the revision pass; 2 credits charged on completion. */
   async run({ ctx, input }: HandlerOpts<RunInput>) {
-    await requireCreditsWithOverage(ctx.workspaceId, CREDIT_COSTS.revisionPass);
+    await requireCreditsWithOverage(
+      ctx.workspaceId,
+      CREDIT_COSTS.revisionPass,
+      exemptionFromCtx(ctx),
+    );
     const deps = await getEngineDeps();
     const script = await deps.store.getScript(ctx.workspaceId, input.scriptId);
     if (script === null) notFound("script");
@@ -37,6 +41,7 @@ export const revisionImpl = {
       scriptId: input.scriptId,
       ...(input.guidance !== undefined ? { guidance: input.guidance } : {}),
       actorUserId: ctx.userId as string,
+      creditExempt: isCtxCreditExempt(ctx),
     };
     await dispatchPipelineJob(QUEUE_NAMES.script, JOB_NAMES.revisionPass, payload, () =>
       handleRevisionPassJob(payload),
