@@ -21,10 +21,10 @@ const querySchema = z.object({ workspaceId: workspaceIdSchema });
 
 export async function GET(req: Request): Promise<Response> {
   const session = await getSessionWithFixtureFallback();
-  const sessionUserId = session?.user.id ?? "";
-  if (sessionUserId === "") {
+  if (session === null || session.user.id === "") {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  const sessionUserId = session.user.id;
 
   const denied = await enforceRateLimitHttp(
     "general",
