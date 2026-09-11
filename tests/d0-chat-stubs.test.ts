@@ -108,15 +108,18 @@ describe("chat mutations (zero-cost stubs)", () => {
     expect(out.streamPath).toContain(FIXTURE_IDS.chatThread);
   });
 
-  it("confirmTool acks the proposed call", async () => {
-    const out = await chatImpl.confirmTool({
-      ctx: fixtureCtx,
-      input: parse.confirmTool({ args: { name: "list_topics" } }),
-    });
-    expect(() => chatContracts.confirmTool.output.parse(out)).not.toThrow();
-    expect(out.accepted).toBe(true);
-    // Estimate resolves from the tool name hint (1 credit for topics).
-    expect(out.estimatedCredits).toBe(1);
+  it("confirmTool requires a real stored proposal (D1 lookup guard)", async () => {
+    // D1 replaced the D0 ack-only stub: confirmTool now resolves the proposal
+    // from the thread's persisted tool_calls, so an unknown toolCallId is
+    // NOT_FOUND (never an ack). The real propose→confirm→execute→meter path is
+    // covered with full deps in tests/d1-chat.test.ts.
+    const err = await chatImpl
+      .confirmTool({
+        ctx: fixtureCtx,
+        input: parse.confirmTool({ toolCallId: "call_does_not_exist" }),
+      })
+      .catch((e: unknown) => e);
+    expect((err as TRPCError).code).toBe("NOT_FOUND");
   });
 
   it("renameThread + deleteThread are contract-valid", async () => {
