@@ -1,4 +1,7 @@
 import type { z } from "zod";
+import { getConfig } from "@/lib/config";
+import { licensedGuardProfile, licensedSourceCorpus } from "@/lib/multi-voice";
+import { analyzeSimilarity, exceedsSimilarity } from "@/lib/similarity-guard";
 import type { revisionContracts } from "@/lib/types/api";
 import type { Revision, ScriptSection } from "@/lib/types/entities";
 import { applyDiffOps, DiffApplyError, rebaseDiffOps } from "@/pipelines/revision/apply";
@@ -84,6 +87,42 @@ export const revisionImpl = {
       }
       throw err;
     }
+
+    // Licensed-voice similarity guard (PRODUCT-CONTRACTS §7, P1-2): before the
+    // diff touches the live body, verify the RESULT is not over-similar to the
+    // licensed source. A suggestion that would make the section reproduce the
+    // source too closely is rejected (typed PRECONDITION_FAILED) with the body
+    // left unchanged and nothing persisted. The effective voice is the section's
+    // own override (multi-voice) when set, else the script-level voice; a
+    // non-licensed effective voice skips the check entirely.
+    const script = await deps.store.getScript(ctx.workspaceId, revision.scriptId);
+    const scriptProfile =
+      script === null || script.voiceProfileId === null
+        ? null
+        : await deps.store.getVoiceProfile(ctx.workspaceId, script.voiceProfileId);
+    const overrideProfile =
+      section.voiceProfileId === null
+        ? null
+        : await deps.store.getVoiceProfile(ctx.workspaceId, section.voiceProfileId);
+    const licensedProfile = licensedGuardProfile(overrideProfile, scriptProfile);
+    if (licensedProfile !== null) {
+      const sources = licensedSourceCorpus(licensedProfile);
+      if (sources.length === 0) {
+        // Fail closed: a licensed voice with no material can't be verified.
+        preconditionFailed(
+          "This licensed voice has no source material to check the result against, so the " +
+            "suggestion was not applied. Add example source passages, or choose a different voice.",
+        );
+      }
+      const report = analyzeSimilarity(newBody, sources);
+      if (exceedsSimilarity(report, getConfig().LICENSED_SIMILARITY_MAX_OVERLAP)) {
+        preconditionFailed(
+          "Applying this suggestion would reproduce the licensed source too closely, so it " +
+            "was not applied. Edit the suggestion to put the idea in your own words.",
+        );
+      }
+    }
+
     // Recompute script stats with the new body in place.
     const sections = await deps.store.listSections(ctx.workspaceId, revision.scriptId);
     const text = sections.map((s) => (s.id === section.id ? newBody : s.body)).join("\n\n");

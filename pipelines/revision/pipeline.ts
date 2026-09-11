@@ -1,6 +1,7 @@
 import { z } from "zod";
-import { LLM_MODELS } from "@/lib/config";
-import type { Revision } from "@/lib/types/entities";
+import { getConfig, LLM_MODELS } from "@/lib/config";
+import { licensedGuardProfile } from "@/lib/multi-voice";
+import type { Revision, VoiceProfile } from "@/lib/types/entities";
 import { scriptSectionIdSchema } from "@/lib/types/ids";
 import { REVISION_STAGES, type RevisionJobInput } from "@/lib/types/pipeline";
 import { revisionPrompt } from "@/prompts";
@@ -8,6 +9,7 @@ import { PipelineRunner, type PipelineResult } from "@/queue/pipeline-runner";
 import type { EngineDeps } from "@/pipelines/script/deps";
 import { synthRevisionSuggestions } from "@/pipelines/script/fixture-content";
 import { stageInputHash } from "@/pipelines/script/hash";
+import { runLicensedGuard, LicensedGuardBlockedError } from "@/pipelines/script/licensed-guard";
 import { generateJson } from "@/pipelines/script/llm-json";
 import type { NewRevision } from "@/pipelines/script/store";
 
@@ -92,6 +94,31 @@ export async function runRevisionPipeline(
             }),
           });
 
+          // Licensed-voice similarity guard (PRODUCT-CONTRACTS §7, P1-2): a
+          // suggestion whose EFFECTIVE voice is licensed has its `replacement`
+          // checked against the licensed source BEFORE it is persisted as a
+          // pending suggestion — over-similar replacements are auto-rewritten
+          // once, and dropped if still over the line, so no verbatim-reuse
+          // suggestion is ever offered. The effective voice is the section's own
+          // override (multi-voice) when set, else the script-level voice.
+          const overrideCache = new Map<string, VoiceProfile | null>();
+          const resolveLicensedProfile = async (
+            section: (typeof sections)[number],
+          ): Promise<VoiceProfile | null> => {
+            let override: VoiceProfile | null = null;
+            if (section.voiceProfileId !== null) {
+              const key = section.voiceProfileId as string;
+              if (!overrideCache.has(key)) {
+                overrideCache.set(
+                  key,
+                  await deps.store.getVoiceProfile(input.workspaceId, section.voiceProfileId),
+                );
+              }
+              override = overrideCache.get(key) ?? null;
+            }
+            return licensedGuardProfile(override, voiceProfile);
+          };
+
           // Validate every suggestion against the real sections; drop the
           // invalid rather than failing the run over one bad line range.
           const byId = new Map(sections.map((s) => [s.id as string, s]));
@@ -107,6 +134,24 @@ export async function runRevisionPipeline(
             ) {
               continue;
             }
+            let replacement = suggestion.replacement;
+            const licensedProfile = await resolveLicensedProfile(section);
+            if (licensedProfile !== null) {
+              try {
+                const guard = await runLicensedGuard({
+                  mode: deps.mode,
+                  llm: deps.llm,
+                  threshold: getConfig().LICENSED_SIMILARITY_MAX_OVERLAP,
+                  sections: [{ position: 0, body: replacement, licensedProfile }],
+                });
+                replacement = guard?.rewrites.get(0) ?? replacement;
+              } catch (err) {
+                // Still over the line after the one rewrite (or no material to
+                // check against): drop the suggestion rather than offer it.
+                if (err instanceof LicensedGuardBlockedError) continue;
+                throw err;
+              }
+            }
             rows.push({
               workspaceId: input.workspaceId,
               scriptId: input.scriptId,
@@ -116,7 +161,7 @@ export async function runRevisionPipeline(
                 {
                   lineStart: suggestion.lineStart,
                   lineEnd: Math.min(suggestion.lineEnd, lineCount),
-                  replacement: suggestion.replacement,
+                  replacement,
                 },
               ],
               rationale: suggestion.rationale,
