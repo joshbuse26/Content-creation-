@@ -11,7 +11,7 @@ import {
   THUMBNAIL_CREDIT_COST,
   type ThumbnailsJobData,
 } from "@/pipelines/thumbnails";
-import { requireCredits } from "@/server/credits";
+import { exemptionFromCtx, isCtxCreditExempt, requireCredits } from "@/server/credits";
 import { dispatchPipelineJob } from "@/pipelines/script/execute";
 import { JOB_NAMES, QUEUE_NAMES } from "@/queue/queues";
 import { jobAccepted, notFound, type HandlerOpts } from "./_shared";
@@ -37,7 +37,7 @@ type ChooseInput = z.output<typeof thumbnailsContracts.choose.input>;
 export const thumbnailsImpl = {
   /** Starts the 2-stage thumbnail pipeline; 3 credits charged on completion. */
   async generate({ ctx, input }: HandlerOpts<GenerateInput>) {
-    await requireCredits(ctx.workspaceId, THUMBNAIL_CREDIT_COST);
+    await requireCredits(ctx.workspaceId, THUMBNAIL_CREDIT_COST, exemptionFromCtx(ctx));
     const deps = await getEngineDeps();
     const project = await deps.store.getProject(ctx.workspaceId, input.projectId);
     if (project === null) notFound("project");
@@ -52,6 +52,7 @@ export const thumbnailsImpl = {
       // face field, so the job always runs without a reference for now.
       faceImageKey: null,
       actorUserId: ctx.userId,
+      creditExempt: isCtxCreditExempt(ctx),
       presetArchetypeId: preset?.id ?? null,
       // Additive contract field (REQUESTS-C3 #1) — the pipeline enforces
       // the preset's maxOverlayWords cap (reject, never silent truncation).

@@ -117,6 +117,8 @@ export interface ScriptPipelineParams {
   chosenHook?: HookCandidate | null;
   /** Defaults to "composite" (legacy single -6 charge). */
   metering?: ScriptRunMetering;
+  /** Free-admin bypass: skip completion debits. */
+  creditExempt?: boolean;
 }
 
 const sectionBodySchema = z.object({ body: z.string().min(1) });
@@ -653,6 +655,7 @@ export async function runScriptPipeline(
       actorUserId: params.actorUserId,
       projectId: input.projectId,
       idempotencyKey: charge.key,
+      ...(params.creditExempt === true ? { skipDebit: true } : {}),
     });
   };
 

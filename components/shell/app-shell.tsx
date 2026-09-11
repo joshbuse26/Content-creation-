@@ -7,6 +7,7 @@ import { Wordmark } from "@/components/marketing/site-chrome";
 import { IconChannel, IconFolder, IconGear, IconSparkle } from "@/components/ui/icons";
 import { useWorkspace } from "@/components/providers/workspace-context";
 import { fmtNumber } from "@/components/lib/format";
+import { isUiCreditExempt } from "@/components/lib/credits-ui";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 import { ChannelSwitcher } from "./channel-switcher";
 
@@ -63,7 +64,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                 href="/settings/billing"
                 className="font-medium text-emerald-700 hover:underline dark:text-emerald-400"
               >
-                {fmtNumber(workspace.creditBalance)} credits
+                {isUiCreditExempt(workspace.role)
+                  ? "Unlimited"
+                  : `${fmtNumber(workspace.creditBalance)} credits`}
               </Link>
             </div>
           ) : (

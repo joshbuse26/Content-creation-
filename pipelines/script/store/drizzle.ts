@@ -750,6 +750,7 @@ export class DrizzleEngineStore implements EngineStore {
   // -- credits --------------------------------------------------------------
 
   async recordCredits(record: CreditRecord): Promise<void> {
+    if (record.skipDebit === true) return;
     const idempotencyKey = record.idempotencyKey ?? null;
     await getDb().transaction(async (tx) => {
       const values = {

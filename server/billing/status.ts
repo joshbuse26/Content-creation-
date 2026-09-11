@@ -34,13 +34,15 @@ export interface BillingStatus {
   overageUsed: number;
   overageCeiling: number;
   overageUnitUsd: number;
+  /** Free-admin bypass — skip paywall / show unlimited. */
+  creditExempt: boolean;
 }
 
 const iso = (d: Date | null): string | null => (d === null ? null : d.toISOString());
 
 export async function getBillingStatus(
   workspaceId: WorkspaceId,
-  deps: { store?: BillingStore; now?: Date } = {},
+  deps: { store?: BillingStore; now?: Date; creditExempt?: boolean } = {},
 ): Promise<BillingStatus | null> {
   const store = deps.store ?? getBillingStore();
   const workspace = await store.getWorkspace(workspaceId);
@@ -60,5 +62,6 @@ export async function getBillingStatus(
     overageUsed: workspace.overageUsed,
     overageCeiling: OVERAGE_CEILING_CREDITS,
     overageUnitUsd: OVERAGE_UNIT_USD,
+    creditExempt: deps.creditExempt === true,
   };
 }

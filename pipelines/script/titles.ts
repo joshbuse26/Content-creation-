@@ -27,6 +27,7 @@ const scoresSchema = z.object({ scores: z.array(z.number().min(0).max(100)) });
 export interface TitlesPipelineParams {
   input: TitlesJobInput;
   actorUserId: string | null;
+  creditExempt?: boolean;
 }
 
 interface TitlesRunState {
@@ -143,6 +144,7 @@ export async function runTitlesPipeline(
       actorUserId: params.actorUserId,
       projectId: input.projectId,
       idempotencyKey: `titles:${stageInputHash(input)}`,
+      ...(params.creditExempt === true ? { skipDebit: true } : {}),
     });
   }
   return { result, titleSet: saved };

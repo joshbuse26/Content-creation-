@@ -3,6 +3,7 @@ import type { z } from "zod";
 import { logger } from "@/lib/logger";
 import type { channelContracts } from "@/lib/types/api";
 import type { Channel, ChannelStatsSnapshot } from "@/lib/types/entities";
+import type { Role } from "@/lib/types/enums";
 import type { UserId, WorkspaceId } from "@/lib/types/ids";
 import type { JobAccepted } from "@/lib/types/api";
 import { assertChannelLimit, getBillingStore } from "@/server/billing";
@@ -27,6 +28,9 @@ import { QuotaExceededError } from "@/pipelines/sync/quota";
 export interface WorkspaceHandlerCtx {
   userId: UserId;
   workspaceId: WorkspaceId;
+  role?: Role;
+  userEmail?: string | null;
+  session?: { user?: { email?: string | null } } | null;
 }
 
 type In<K extends keyof typeof channelContracts> = z.output<(typeof channelContracts)[K]["input"]>;

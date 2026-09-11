@@ -22,7 +22,7 @@ import {
 } from "@/pipelines/script/readability";
 import { regenerateSectionPrompt } from "@/prompts";
 import { assertWorkspaceNotReadOnly, requireCreditsWithOverage } from "@/server/billing";
-import { CREDIT_COSTS } from "@/server/credits";
+import { CREDIT_COSTS, exemptionFromCtx, isCtxCreditExempt } from "@/server/credits";
 import { assertGenerationTargetAllowed, assertLicensedVoiceUsable } from "@/server/modes";
 import { exportScript } from "@/server/export";
 import { JOB_NAMES, QUEUE_NAMES } from "@/queue/queues";
@@ -139,7 +139,11 @@ export const scriptImpl = {
       profile,
     );
     await resolveStyleCard(input.generation, resolutionProfile);
-    await requireCreditsWithOverage(ctx.workspaceId, CREDIT_COSTS.scriptGeneration);
+    await requireCreditsWithOverage(
+      ctx.workspaceId,
+      CREDIT_COSTS.scriptGeneration,
+      exemptionFromCtx(ctx),
+    );
     const script = await deps.store.createScript({
       workspaceId: ctx.workspaceId,
       projectId: input.projectId,
@@ -156,6 +160,7 @@ export const scriptImpl = {
       generation: input.generation,
       scriptId: script.id,
       actorUserId: ctx.userId as string,
+      creditExempt: isCtxCreditExempt(ctx),
       dispatch: "generate" as const,
     };
     await dispatchPipelineJob(QUEUE_NAMES.script, JOB_NAMES.generateScript, payload, () =>

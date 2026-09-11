@@ -12,6 +12,7 @@ import { Button, IconButton } from "@/components/ui/button";
 import { IconArrowUp, IconPlus, IconSparkle, IconTrash, IconPencil } from "@/components/ui/icons";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
 import { useToast } from "@/components/ui/toast";
+import { isUiCreditExempt } from "@/components/lib/credits-ui";
 import { useChatStream } from "./use-chat-stream";
 import { toolLabel } from "./tool-labels";
 
@@ -195,6 +196,8 @@ function ChatThreadView({
   projectId: ProjectId | null;
 }) {
   const { toast } = useToast();
+  const { workspace } = useWorkspace();
+  const creditExempt = isUiCreditExempt(workspace?.role);
   const utils = trpc.useUtils();
   const stream = useChatStream();
   const [composer, setComposer] = useState("");
@@ -292,7 +295,7 @@ function ChatThreadView({
     onSuccess: (ack) => {
       refetch();
       toast(
-        ack.estimatedCredits > 0
+        !creditExempt && ack.estimatedCredits > 0
           ? `Done — ${ack.estimatedCredits} credit${ack.estimatedCredits === 1 ? "" : "s"} charged.`
           : "Done.",
         "success",
@@ -345,7 +348,9 @@ function ChatThreadView({
       <header className="flex items-center justify-between gap-2 border-b border-zinc-200 px-4 py-2.5 dark:border-zinc-800">
         <h2 className="truncate text-sm font-semibold">{thread?.title ?? "Conversation"}</h2>
         <div className="flex items-center gap-1">
-          {creditsCharged > 0 ? (
+          {creditExempt ? (
+            <span className="mr-1 text-xs text-zinc-500 dark:text-zinc-400">Unlimited</span>
+          ) : creditsCharged > 0 ? (
             <span className="mr-1 text-xs text-zinc-500 dark:text-zinc-400">
               {creditsCharged} credit{creditsCharged === 1 ? "" : "s"} this chat
             </span>
@@ -504,21 +509,23 @@ function ToolCard({
   confirming: boolean;
 }) {
   const [skipped, setSkipped] = useState(false);
+  const { workspace } = useWorkspace();
+  const exempt = isUiCreditExempt(workspace?.role);
   if (skipped) return null;
   const credits = proposal.estimatedCredits;
   return (
     <div className="max-w-[85%] rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 dark:border-emerald-900 dark:bg-emerald-950/40">
       <p className="text-sm text-zinc-700 dark:text-zinc-200">
         {COACH_NAME} wants to run <span className="font-semibold">{toolLabel(proposal.name)}</span>
-        {credits > 0 ? (
+        {exempt || credits === 0 ? (
+          " — included"
+        ) : (
           <>
             {" — "}
             <span className="font-semibold">
               {credits} credit{credits === 1 ? "" : "s"}
             </span>
           </>
-        ) : (
-          " — free"
         )}
         .
       </p>

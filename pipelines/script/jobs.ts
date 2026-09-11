@@ -31,7 +31,10 @@ import { runTitlesPipeline } from "./titles";
  * applies (per-stage retries live inside the PipelineRunner).
  */
 
-const actor = z.object({ actorUserId: z.string().nullable().default(null) });
+const actor = z.object({
+  actorUserId: z.string().nullable().default(null),
+  creditExempt: z.boolean().optional().default(false),
+});
 
 /**
  * Wave C: one job name (frozen queue contract) carries three dispatch
@@ -68,11 +71,13 @@ function assertDone(result: { status: string; stage?: string; error?: string }, 
 export async function handleGenerateScriptJob(data: unknown): Promise<void> {
   const payload = scriptJobPayloadSchema.parse(data);
   const deps = await getEngineDeps();
-  const { scriptId, actorUserId, dispatch, presetOutline, chosenHook, ...input } = payload;
+  const { scriptId, actorUserId, creditExempt, dispatch, presetOutline, chosenHook, ...input } =
+    payload;
   const result = await runScriptPipeline(deps, {
     input,
     scriptId,
     actorUserId,
+    creditExempt,
     ...(dispatch === "draft" ? { presetOutline, chosenHook, metering: "draft" as const } : {}),
     ...(dispatch === "generate" ? { metering: "itemized" as const } : {}),
   });
@@ -82,8 +87,8 @@ export async function handleGenerateScriptJob(data: unknown): Promise<void> {
 export async function handleResearchJob(data: unknown): Promise<void> {
   const payload = researchJobPayloadSchema.parse(data);
   const deps = await getEngineDeps();
-  const { actorUserId, ...input } = payload;
-  const result = await runResearchPipeline(deps, { input, actorUserId });
+  const { actorUserId, creditExempt, ...input } = payload;
+  const result = await runResearchPipeline(deps, { input, actorUserId, creditExempt });
   assertDone(result, "research");
 }
 
@@ -98,15 +103,15 @@ export async function handleProposeFramesJob(data: unknown): Promise<void> {
 export async function handleRevisionPassJob(data: unknown): Promise<void> {
   const payload = revisionJobPayloadSchema.parse(data);
   const deps = await getEngineDeps();
-  const { actorUserId, ...input } = payload;
-  const { result } = await runRevisionPipeline(deps, { input, actorUserId });
+  const { actorUserId, creditExempt, ...input } = payload;
+  const { result } = await runRevisionPipeline(deps, { input, actorUserId, creditExempt });
   assertDone(result, "revision");
 }
 
 export async function handleTitlesJob(data: unknown): Promise<void> {
   const payload = titlesJobPayloadSchema.parse(data);
   const deps = await getEngineDeps();
-  const { actorUserId, ...input } = payload;
-  const { result } = await runTitlesPipeline(deps, { input, actorUserId });
+  const { actorUserId, creditExempt, ...input } = payload;
+  const { result } = await runTitlesPipeline(deps, { input, actorUserId, creditExempt });
   assertDone(result, "titles");
 }

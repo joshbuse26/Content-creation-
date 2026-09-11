@@ -35,6 +35,7 @@ const rawSuggestionsSchema = z.object({
 export interface RevisionPipelineParams {
   input: RevisionJobInput;
   actorUserId: string | null;
+  creditExempt?: boolean;
 }
 
 export async function runRevisionPipeline(
@@ -194,6 +195,7 @@ export async function runRevisionPipeline(
       actorUserId: params.actorUserId,
       projectId: script?.projectId ?? null,
       idempotencyKey: `revision_pass:${stageInputHash(input)}`,
+      ...(params.creditExempt === true ? { skipDebit: true } : {}),
     });
   }
   return { result, revisions: inserted };

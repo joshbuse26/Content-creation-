@@ -8,7 +8,7 @@ import { importTranscript, TranscriptImportError } from "@/pipelines/research/tr
 import { saveUpload, UploadCapError } from "@/pipelines/research/upload";
 import { JOB_NAMES, QUEUE_NAMES } from "@/queue/queues";
 import { requireCreditsWithOverage } from "@/server/billing";
-import { CREDIT_COSTS } from "@/server/credits";
+import { CREDIT_COSTS, exemptionFromCtx, isCtxCreditExempt } from "@/server/credits";
 import { badRequest, jobAccepted, notFound, type HandlerOpts } from "./_shared";
 
 type ListInput = z.output<typeof researchContracts.list.input>;
@@ -42,7 +42,11 @@ export const researchImpl = {
 
   /** Kicks off the research agent. 1 credit, charged on completion. */
   async search({ ctx, input }: HandlerOpts<SearchInput>) {
-    await requireCreditsWithOverage(ctx.workspaceId, CREDIT_COSTS.researchRun);
+    await requireCreditsWithOverage(
+      ctx.workspaceId,
+      CREDIT_COSTS.researchRun,
+      exemptionFromCtx(ctx),
+    );
     const deps = await getEngineDeps();
     const project = await deps.store.getProject(ctx.workspaceId, input.projectId);
     if (project === null) notFound("project");
@@ -52,6 +56,7 @@ export const researchImpl = {
       projectId: input.projectId,
       query: input.query,
       actorUserId: ctx.userId as string,
+      creditExempt: isCtxCreditExempt(ctx),
     };
     await dispatchPipelineJob(QUEUE_NAMES.script, JOB_NAMES.research, payload, () =>
       handleResearchJob(payload),

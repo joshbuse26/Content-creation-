@@ -3,6 +3,7 @@ import { z } from "zod";
 import { assertAccess } from "@/lib/authz";
 import { asUserId, workspaceIdSchema } from "@/lib/types/ids";
 import { getBillingStatus } from "@/server/billing/status";
+import { isCreditExempt } from "@/server/credits";
 import { getRoleResolver } from "@/server/membership";
 import { clientIpFromRequest, enforceRateLimitHttp } from "@/server/ratelimit";
 import { getSessionWithFixtureFallback } from "@/server/session";
@@ -20,10 +21,10 @@ const querySchema = z.object({ workspaceId: workspaceIdSchema });
 
 export async function GET(req: Request): Promise<Response> {
   const session = await getSessionWithFixtureFallback();
-  const sessionUserId = session?.user.id ?? "";
-  if (sessionUserId === "") {
+  if (session === null || session.user.id === "") {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  const sessionUserId = session.user.id;
 
   const denied = await enforceRateLimitHttp(
     "general",
@@ -37,8 +38,9 @@ export async function GET(req: Request): Promise<Response> {
     return NextResponse.json({ error: "invalid query" }, { status: 400 });
   }
 
+  let role;
   try {
-    await assertAccess(
+    role = await assertAccess(
       asUserId(sessionUserId),
       parsed.data.workspaceId,
       "billing",
@@ -49,7 +51,9 @@ export async function GET(req: Request): Promise<Response> {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const status = await getBillingStatus(parsed.data.workspaceId);
+  const status = await getBillingStatus(parsed.data.workspaceId, {
+    creditExempt: isCreditExempt(session.user.email, role),
+  });
   if (status === null) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }

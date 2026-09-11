@@ -143,6 +143,12 @@ export interface CreditRecord {
    * purchases, refunds).
    */
   idempotencyKey?: string | null;
+  /**
+   * When true, stores skip the ledger write AND the balance debit.
+   * Used for the free-admin bypass (ADMIN_EMAILS / owner-admin role).
+   * Not persisted — never a DB column.
+   */
+  skipDebit?: boolean;
 }
 
 export interface NewProject {

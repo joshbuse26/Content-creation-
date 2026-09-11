@@ -11,6 +11,15 @@ describe("config", () => {
     expect(config.PROVIDERS).toBe("fixture");
     expect(config.APP_URL).toBe("http://localhost:3000");
     expect(config.DATABASE_URL).toBeUndefined();
+    expect(config.ADMIN_EMAILS).toEqual([]);
+  });
+
+  it("parses ADMIN_EMAILS as a case-folded, de-duplicated list", () => {
+    expect(
+      parseEnv({ ADMIN_EMAILS: "Josh@HexBandit.io, writer@example.com, josh@hexbandit.io" })
+        .ADMIN_EMAILS,
+    ).toEqual(["josh@hexbandit.io", "writer@example.com"]);
+    expect(parseEnv({ ADMIN_EMAILS: "  " }).ADMIN_EMAILS).toEqual([]);
   });
 
   it("treats empty strings as unset", () => {
