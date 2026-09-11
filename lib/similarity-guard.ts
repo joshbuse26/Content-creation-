@@ -87,6 +87,32 @@ export interface SimilarityReport {
   maxVerbatimRun: number;
 }
 
+/**
+ * Segment free text into short catchphrase-scale spans (sentence + clause
+ * fragments) for use as a similarity SOURCE corpus. Passing multi-thousand-token
+ * transcripts whole defeats short-catchphrase detection (D2 P1-4): the adaptive
+ * n never lowers off a huge `minTokens`, exact-containment can only fire on a
+ * whole-transcript reproduction, and a ≤7-word borrowed catchphrase is diluted
+ * below the window ratio. Segmenting first makes each protected span short, so
+ * exact-containment and the adaptive-n ratio operate at catchphrase scale.
+ *
+ * Splits on sentence terminators and internal clause punctuation (commas,
+ * semicolons, colons, dashes) and newlines; empty/whitespace spans are dropped.
+ * Order and content are preserved (no rewriting) — a verbatim run inside one
+ * clause survives intact as its own span.
+ */
+export function segmentIntoSpans(text: string): string[] {
+  return text
+    .split(/[.!?;:,\n\r]+|\s[–—-]\s/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+/** `segmentIntoSpans` flattened over many source texts (transcripts). */
+export function segmentSourcesIntoSpans(texts: readonly string[]): string[] {
+  return texts.flatMap((t) => segmentIntoSpans(t));
+}
+
 /** Lowercase alphanumeric word tokens — the atoms both sides are compared on. */
 export function tokenizeWords(text: string): string[] {
   return text
@@ -276,15 +302,34 @@ export function analyzeSimilarity(
  * Strict over-the-line test. A section is over the line when ANY check fires:
  *  - the windowed ratio is strictly ABOVE the threshold (spec: > 8%), OR
  *  - a whole source snippet is reproduced verbatim (exactContainment), OR
- *  - a verbatim run of >= MAX_VERBATIM_RUN tokens is borrowed, whatever the ratio.
+ *  - a verbatim run of >= `verbatimRunBlock` tokens is borrowed, whatever the ratio.
+ *
+ * `verbatimRunBlock` defaults to MAX_VERBATIM_RUN (8) — the licensed-voice
+ * setting, unchanged. The competitor-remix guard passes a STRICTER value
+ * (REMIX_VERBATIM_RUN_BLOCK): a remix must be an original card, so it may not
+ * reproduce even a short competitor catchphrase, whereas a licensed voice is
+ * permitted to imitate up to a longer run (D2 P1-4).
  */
-export function exceedsSimilarity(report: SimilarityReport, threshold: number): boolean {
+export function exceedsSimilarity(
+  report: SimilarityReport,
+  threshold: number,
+  verbatimRunBlock: number = MAX_VERBATIM_RUN,
+): boolean {
   return (
     report.maxOverlap > threshold ||
     report.exactContainment ||
-    report.maxVerbatimRun >= MAX_VERBATIM_RUN
+    report.maxVerbatimRun >= verbatimRunBlock
   );
 }
+
+/**
+ * Verbatim-run block for the competitor-remix / unverified-source guard. A
+ * remix card must be ORIGINAL, so a borrowed run of this many consecutive
+ * competitor tokens is blocked — stricter than the licensed-voice
+ * MAX_VERBATIM_RUN (8), which permits imitation. Five tokens catches a typical
+ * 5–7 word catchphrase while staying above incidental 2–4 word phrase overlap.
+ */
+export const REMIX_VERBATIM_RUN_BLOCK = 5;
 
 export type GuardStatus = "clean" | "rewritten" | "blocked";
 

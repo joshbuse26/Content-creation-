@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { NAMED_CREATOR_CLAIM_PATTERNS } from "@/lib/named-creator-claim";
 import allowlistJson from "./copy-lint.allowlist.json";
 
 /**
@@ -21,19 +22,14 @@ const SCAN_DIRS = [join(ROOT, "app", "(marketing)"), join(ROOT, "components")];
 const EXTENSIONS = [".ts", ".tsx"];
 
 /**
- * Conservative named-creator claim patterns. "<ProperNoun>" is approximated
- * as a capitalized word (optionally two, e.g. a first + last name). Kept
- * high-precision on purpose: generic phrases ("sounds like a pro", "sounds
- * like you") never match because "a"/"you"/"the" are lowercase.
+ * Conservative named-creator claim patterns — the shared source of truth in
+ * lib/named-creator-claim.ts (D2 P1-3: the runtime rename/derivation guards
+ * reuse the exact same list). "<ProperNoun>" is approximated as a capitalized
+ * word (optionally two, e.g. a first + last name). Kept high-precision on
+ * purpose: generic phrases ("sounds like a pro", "sounds like you") never
+ * match because "a"/"you"/"the" are lowercase.
  */
-const PATTERNS: readonly RegExp[] = [
-  /\bsounds?\s+exactly\s+like\s+[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?/g,
-  /\bsounds?\s+like\s+[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?/g,
-  /\bwrites?\s+like\s+[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?/g,
-  /\bwrite\s+like\s+[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?/g,
-  /\bin\s+[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?(?:'|’)s\s+voice\b/g,
-  /\bjust\s+like\s+[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?\s+(?:writes|scripts|talks)\b/g,
-];
+const PATTERNS: readonly RegExp[] = NAMED_CREATOR_CLAIM_PATTERNS;
 
 interface AllowlistFile {
   allowlist: string[];
