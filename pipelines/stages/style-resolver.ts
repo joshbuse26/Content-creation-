@@ -17,7 +17,12 @@ import { getPartnerSource, resolvePartnerCard, type PartnerSource } from "./part
  *    (pipelines/stages/crossover.ts documents the rules).
  *  - partnered_named → the enabled partner's card (flag enforced upstream;
  *    record-level checks in pipelines/stages/partners.ts).
- *  - train_on_my_channel → rejected upstream; unreachable here.
+ *  - train_on_my_channel → rejected upstream (server/modes.ts) in this wave;
+ *    unreachable here until D2. RESOLUTION SEAM (WAVE-D-PLAN §2c): once a
+ *    source="trained" voice profile exists for the channel, D2 resolves its
+ *    styleCard here (first-class alongside archetype cards) instead of
+ *    throwing — the trained card lives on a voice_profiles row exactly like
+ *    every other card, so this becomes a lookup, not new plumbing.
  */
 export async function resolveStyleCard(
   generation: GenerationTarget | null,
@@ -53,8 +58,10 @@ export async function resolveStyleCard(
       return resolvePartnerCard(generation.partnerId, partners);
     }
     case "train_on_my_channel":
-      // assertGenerationTargetAllowed rejects this mode before any resolver
-      // runs; reaching here means a dispatch site skipped the guard.
+      // TODO(D2): resolve the channel's source="trained" voice profile card
+      // here (WAVE-D-PLAN §2c resolution seam). assertGenerationTargetAllowed
+      // rejects this mode before any resolver runs today; reaching here means
+      // a dispatch site skipped the guard.
       throw new TRPCError({
         code: "NOT_IMPLEMENTED",
         message: "Training on your own channel is not available yet.",

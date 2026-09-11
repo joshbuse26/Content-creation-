@@ -2,6 +2,8 @@ import { z } from "zod";
 import {
   apiKeyIdSchema,
   channelIdSchema,
+  chatMessageIdSchema,
+  chatThreadIdSchema,
   descriptionTemplateIdSchema,
   frameIdSchema,
   ideaIdSchema,
@@ -29,6 +31,9 @@ import {
   audienceAvatarSchema,
   avatarMotivationSchema,
   avatarPainSchema,
+  chatMessageSchema,
+  chatThreadSchema,
+  chatToolCallSchema,
   generationTargetSchema,
   channelSchema,
   channelStatsSnapshotSchema,
@@ -48,6 +53,8 @@ import {
   tagSetSchema,
   thumbnailConceptSchema,
   titleSetSchema,
+  trainStyleCardInputSchema,
+  trainStyleCardResultSchema,
   userSchema,
   voiceProfileSchema,
   workspaceSchema,
@@ -771,3 +778,115 @@ export const apiKeysContracts = {
     output: apiKeySchema,
   },
 } as const;
+
+// --------------------------------------------------------------------------
+// voice (Wave D — train_on_my_channel derivation, WAVE-D-PLAN §2c)
+// --------------------------------------------------------------------------
+
+export const voiceContracts = {
+  /**
+   * Derive a `source="trained"` StyleCard from the workspace's own channel
+   * (or a competitor remix). D0 STUB: returns a plausible trained voice
+   * profile (fixture) so the picker + chat context can be built keylessly.
+   * D2 replaces the body with the real consent-gated transcript→LLM
+   * derivation. Generation-class (metering + consent enforced in D2).
+   */
+  trainFromChannel: {
+    input: workspaceScopedSchema.extend(trainStyleCardInputSchema.shape),
+    output: trainStyleCardResultSchema,
+  },
+} as const;
+
+// --------------------------------------------------------------------------
+// chat (Wave D — chat-first surface, WAVE-D-PLAN §2a). Zero-cost by
+// contract: the credit-costing happens INSIDE tool execution (D1), never on
+// the chat procedures themselves.
+// --------------------------------------------------------------------------
+
+/**
+ * Ack returned by chat.sendMessage. The assistant reply is SSE-streamed
+ * (D1) over the chat event union (lib/types/chat.ts) at `streamPath`; this
+ * ack carries the persisted user message id and the pending assistant
+ * message id the stream will fill. D0 stub returns a deterministic ack.
+ */
+export const chatSendAckSchema = z.object({
+  userMessageId: chatMessageIdSchema,
+  assistantMessageId: chatMessageIdSchema,
+  /** SSE endpoint the client subscribes to for the streamed reply (D1). */
+  streamPath: z.string(),
+  status: z.literal("streaming"),
+});
+
+/** Ack returned by chat.confirmTool once a proposed tool call is accepted. */
+export const chatConfirmToolAckSchema = z.object({
+  toolCallId: z.string(),
+  accepted: z.boolean(),
+  /** Pre-execution credit quote (estimateToolCredits); charged in D1. */
+  estimatedCredits: z.number().int().nonnegative(),
+  status: z.literal("accepted"),
+});
+
+export const chatContracts = {
+  listThreads: {
+    input: workspaceScopedSchema.extend({
+      /** Filter to one project's threads; omit for all (incl. workspace coach). */
+      projectId: projectIdSchema.nullable().default(null),
+      limit: z.number().int().min(1).max(100).default(50),
+    }),
+    output: z.array(chatThreadSchema),
+  },
+  getThread: {
+    input: workspaceScopedSchema.extend({
+      threadId: chatThreadIdSchema,
+      /** Page of messages ordered by seq; cursor = last seq seen. */
+      limit: z.number().int().min(1).max(200).default(50),
+      cursor: z.number().int().nonnegative().nullable().default(null),
+    }),
+    output: z.object({
+      thread: chatThreadSchema,
+      messages: z.array(chatMessageSchema),
+      /** Next `cursor` when more messages remain; null when fully paged. */
+      nextCursor: z.number().int().nonnegative().nullable(),
+    }),
+  },
+  createThread: {
+    input: workspaceScopedSchema.extend({
+      /** null = workspace-level coach thread. */
+      projectId: projectIdSchema.nullable().default(null),
+      title: z.string().min(1).max(200),
+    }),
+    output: chatThreadSchema,
+  },
+  /** Post a user message; the assistant reply is SSE-streamed (D1). */
+  sendMessage: {
+    input: workspaceScopedSchema.extend({
+      threadId: chatThreadIdSchema,
+      content: z.string().min(1).max(10_000),
+    }),
+    output: chatSendAckSchema,
+  },
+  /** Execute a proposed credit-costing tool call after user confirm (D1). */
+  confirmTool: {
+    input: workspaceScopedSchema.extend({
+      threadId: chatThreadIdSchema,
+      toolCallId: z.string().min(1),
+      /** The (possibly user-edited) args to execute with. */
+      args: z.record(z.string(), z.unknown()),
+    }),
+    output: chatConfirmToolAckSchema,
+  },
+  renameThread: {
+    input: workspaceScopedSchema.extend({
+      threadId: chatThreadIdSchema,
+      title: z.string().min(1).max(200),
+    }),
+    output: chatThreadSchema,
+  },
+  deleteThread: {
+    input: workspaceScopedSchema.extend({ threadId: chatThreadIdSchema }),
+    output: z.object({ deleted: z.boolean() }),
+  },
+} as const;
+
+/** Re-export for the chat tool-call proposal shape (used by D1 + tests). */
+export const chatToolCallInputSchema = chatToolCallSchema;

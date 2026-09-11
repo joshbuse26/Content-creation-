@@ -5,6 +5,7 @@ import {
   billingContracts,
   channelContracts,
   chaptersContracts,
+  chatContracts,
   dashboardContracts,
   descriptionContracts,
   frameContracts,
@@ -17,6 +18,7 @@ import {
   templatesContracts,
   thumbnailsContracts,
   titlesContracts,
+  voiceContracts,
   voiceProfileContracts,
   workspaceContracts,
 } from "@/lib/types/api";
@@ -27,6 +29,7 @@ import { avatarHandlers } from "@/server/routers/impl/avatar";
 import { billingHandlers } from "@/server/routers/impl/billing";
 import { channelHandlers } from "@/server/routers/impl/channel";
 import { chaptersHandlers } from "@/server/routers/impl/chapters";
+import { chatImpl } from "@/server/routers/impl/chat";
 import { dashboardHandlers } from "@/server/routers/impl/dashboard";
 import { descriptionHandlers } from "@/server/routers/impl/description";
 import { frameImpl } from "@/server/routers/impl/frame";
@@ -40,6 +43,7 @@ import { tagsHandlers } from "@/server/routers/impl/tags";
 import { templatesImpl } from "@/server/routers/impl/templates";
 import { thumbnailsImpl } from "@/server/routers/impl/thumbnails";
 import { titlesImpl } from "@/server/routers/impl/titles";
+import { voiceImpl } from "@/server/routers/impl/voice";
 import { voiceProfileImpl } from "@/server/routers/impl/voiceProfile";
 import { workspaceHandlers } from "@/server/routers/impl/workspace";
 import { protectedProcedure, router, workspaceProcedure } from "@/server/trpc";
@@ -169,6 +173,61 @@ export const voiceProfileRouter = router({
     .input(voiceProfileContracts.list.input)
     .output(voiceProfileContracts.list.output)
     .query((opts) => voiceProfileImpl.list(opts)),
+});
+
+// voice — Wave D (WAVE-D-PLAN §2c): train_on_my_channel StyleCard derivation.
+// D0 CONTRACT STUB: returns a plausible trained voice profile (fixture); D2
+// wires the real consent-gated transcript→LLM derivation + persistence.
+// Generation-class (the strict policy stands so D2's LLM cost is gated).
+export const voiceRouter = router({
+  trainFromChannel: workspaceProcedure("voiceProfile", "create")
+    .use(general)
+    .use(generation)
+    .input(voiceContracts.trainFromChannel.input)
+    .output(voiceContracts.trainFromChannel.output)
+    .mutation((opts) => voiceImpl.trainFromChannel(opts)),
+});
+
+// chat — Wave D (WAVE-D-PLAN §2a): chat-first surface. D0 CONTRACT STUBS
+// (fixture-returning); D1 wires real thread storage, streamed replies, and
+// tool proposal→confirm→staged-pipeline execution. Zero-cost by contract —
+// the credit-costing happens inside tool execution (D1), never here.
+export const chatRouter = router({
+  listThreads: workspaceProcedure("chat", "read")
+    .use(general)
+    .input(chatContracts.listThreads.input)
+    .output(chatContracts.listThreads.output)
+    .query((opts) => chatImpl.listThreads(opts)),
+  getThread: workspaceProcedure("chat", "read")
+    .use(general)
+    .input(chatContracts.getThread.input)
+    .output(chatContracts.getThread.output)
+    .query((opts) => chatImpl.getThread(opts)),
+  createThread: workspaceProcedure("chat", "create")
+    .use(general)
+    .input(chatContracts.createThread.input)
+    .output(chatContracts.createThread.output)
+    .mutation((opts) => chatImpl.createThread(opts)),
+  sendMessage: workspaceProcedure("chat", "create")
+    .use(general)
+    .input(chatContracts.sendMessage.input)
+    .output(chatContracts.sendMessage.output)
+    .mutation((opts) => chatImpl.sendMessage(opts)),
+  confirmTool: workspaceProcedure("chat", "create")
+    .use(general)
+    .input(chatContracts.confirmTool.input)
+    .output(chatContracts.confirmTool.output)
+    .mutation((opts) => chatImpl.confirmTool(opts)),
+  renameThread: workspaceProcedure("chat", "update")
+    .use(general)
+    .input(chatContracts.renameThread.input)
+    .output(chatContracts.renameThread.output)
+    .mutation((opts) => chatImpl.renameThread(opts)),
+  deleteThread: workspaceProcedure("chat", "delete")
+    .use(general)
+    .input(chatContracts.deleteThread.input)
+    .output(chatContracts.deleteThread.output)
+    .mutation((opts) => chatImpl.deleteThread(opts)),
 });
 
 // ideas — B1 (server/routers/impl/ideas.ts): outlier index §5.3 + daily feed §5.4

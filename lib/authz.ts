@@ -38,6 +38,8 @@ export const RESOURCES = [
   // Wave C: seeded archetype catalog — readable by every member, writable
   // by no role (rows come from seed/fixture data only).
   "archetype",
+  // Wave D: chat threads/messages — content a writer creates and manages.
+  "chat",
 ] as const;
 export type Resource = (typeof RESOURCES)[number];
 
@@ -59,6 +61,7 @@ const WRITER_RESOURCES: readonly Resource[] = [
   "chapters",
   "avatar",
   "voiceProfile",
+  "chat",
 ];
 
 /** Admin adds channel management, members, templates, workspace settings. */
