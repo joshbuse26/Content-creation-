@@ -5,6 +5,8 @@ import {
   channelIdSchema,
   channelStatsSnapshotIdSchema,
   chapterSetIdSchema,
+  chatMessageIdSchema,
+  chatThreadIdSchema,
   creditLedgerEntryIdSchema,
   descriptionIdSchema,
   descriptionTemplateIdSchema,
@@ -30,6 +32,8 @@ import {
   archetypeIdSchema,
   bannedClaimTypeSchema,
   BANNED_CLAIM_TYPES,
+  chatRoleSchema,
+  chatToolNameSchema,
   channelModeSchema,
   contrastRuleSchema,
   creditReasonSchema,
@@ -342,6 +346,15 @@ export const voiceProfileSchema = z
     styleCard: styleCardSchema,
     licenseDocUrl: z.url().nullable(),
     licenseSignedAt: z.date().nullable(),
+    /**
+     * Wave-D (D0, WAVE-D-PLAN §2c) — provenance for a `source="trained"`
+     * card: the channel it was derived from and when. Both null for every
+     * non-trained source (archetype/own_channel/samples/licensed). The real
+     * consent-gated derivation ships in D2; these columns freeze now so a
+     * trained card is first-class alongside archetypes from the start.
+     */
+    trainedFromChannelId: channelIdSchema.nullable().default(null),
+    trainedAt: z.date().nullable().default(null),
     ...timestamps,
   })
   .refine(
@@ -349,7 +362,10 @@ export const voiceProfileSchema = z
     {
       message: "licensed voices require licenseDocUrl and licenseSignedAt",
     },
-  );
+  )
+  .refine((v) => v.source !== "trained" || v.trainedFromChannelId !== null, {
+    message: "trained voices require trainedFromChannelId",
+  });
 export type VoiceProfile = z.infer<typeof voiceProfileSchema>;
 
 export const nicheVideoSchema = z.object({
@@ -610,3 +626,93 @@ export const apiKeySchema = z.object({
   createdAt: z.date(),
 });
 export type ApiKey = z.infer<typeof apiKeySchema>;
+
+// ---------------------------------------------------------------------------
+// Chat (Wave D — WAVE-D-PLAN §2a). Chat-first surface: a thread is either
+// project-scoped (projectId set) or a workspace-level "coach" (projectId
+// null). Messages are ordered by (thread, seq); an assistant message may
+// carry tool_calls it proposes, and a `tool` message carries the result of
+// one such call (linked by tool_call_id). All tenancy-scoped.
+// ---------------------------------------------------------------------------
+
+/**
+ * A tool call proposed by the assistant (WAVE-D-PLAN §2b). Frozen shape: the
+ * chat persona proposes `name` + `args`; the user confirms; D1 executes the
+ * mapped staged handler and writes a `tool` result message. `estimatedCredits`
+ * is the pre-execution quote (`estimateToolCredits`), surfaced for the confirm
+ * dialog. Args are stored opaque here (validated against the per-tool
+ * argsSchema in lib/chat/tools.ts at propose/confirm time).
+ */
+export const chatToolCallSchema = z.object({
+  toolCallId: z.string().min(1),
+  name: chatToolNameSchema,
+  args: z.record(z.string(), z.unknown()),
+  estimatedCredits: z.number().int().nonnegative(),
+});
+export type ChatToolCall = z.infer<typeof chatToolCallSchema>;
+
+export const chatThreadSchema = z.object({
+  id: chatThreadIdSchema,
+  workspaceId: workspaceIdSchema,
+  /** null = workspace-level coach thread (not tied to one project). */
+  projectId: projectIdSchema.nullable(),
+  title: z.string().min(1).max(200),
+  ...timestamps,
+});
+export type ChatThread = z.infer<typeof chatThreadSchema>;
+
+export const chatMessageSchema = z.object({
+  id: chatMessageIdSchema,
+  threadId: chatThreadIdSchema,
+  /** Denormalized for row-level authz (same pattern as every tenant row). */
+  workspaceId: workspaceIdSchema,
+  role: chatRoleSchema,
+  content: z.string(),
+  /** Tool calls proposed by an assistant message; null otherwise. */
+  toolCalls: z.array(chatToolCallSchema).nullable().default(null),
+  /** Links a `tool` result message to the proposing call; null otherwise. */
+  toolCallId: z.string().nullable().default(null),
+  /** Credits charged for this message's tool execution (0 for chat itself). */
+  creditsCharged: z.number().int().nonnegative().default(0),
+  /** Monotonic per-thread ordering key. */
+  seq: z.number().int().nonnegative(),
+  createdAt: z.date(),
+});
+export type ChatMessage = z.infer<typeof chatMessageSchema>;
+
+// ---------------------------------------------------------------------------
+// train_on_my_channel derivation contract (Wave D — WAVE-D-PLAN §2c).
+// Signature + IO types frozen in D0; the real derivation (transcripts →
+// LLM → structured StyleCard) ships in D2. `voice.trainFromChannel` returns
+// a `source="trained"` VoiceProfile carrying the derived card.
+// ---------------------------------------------------------------------------
+
+/**
+ * Input to `trainStyleCardFromChannel` (D2). `channelId` is the workspace's
+ * own channel the trained card attaches to. `sampleVideoIds` optionally
+ * narrows which uploads seed the derivation (else a representative sample is
+ * chosen). `remixFrom` derives an ORIGINAL card capturing the STRUCTURAL
+ * patterns of competitor channel(s) — run through the same seed-lint /
+ * no-named-creator guard as archetypes; the output card carries no real
+ * person's name. Distinct from the licensed-voice path (signed license +
+ * similarity guard).
+ */
+export const trainStyleCardInputSchema = z.object({
+  channelId: channelIdSchema,
+  sampleVideoIds: z.array(z.string().min(1)).max(50).nullable().default(null),
+  /** Competitor channel ids to derive an original remix from; null = own channel. */
+  remixFrom: z.array(z.string().min(1)).max(10).nullable().default(null),
+  /** Human-readable name for the resulting voice profile. */
+  name: z.string().min(1).max(120).nullable().default(null),
+});
+export type TrainStyleCardInput = z.infer<typeof trainStyleCardInputSchema>;
+
+/** Output of a training run: the persisted trained voice profile. */
+export const trainStyleCardResultSchema = z.object({
+  voiceProfile: voiceProfileSchema,
+  /** Whether the card was derived as a competitor remix vs. the own channel. */
+  remix: z.boolean(),
+  /** Ids of the transcripts/uploads the derivation actually sampled. */
+  sampledVideoIds: z.array(z.string()),
+});
+export type TrainStyleCardResult = z.infer<typeof trainStyleCardResultSchema>;

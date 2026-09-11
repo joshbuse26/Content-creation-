@@ -32,10 +32,50 @@ export type Sophistication = z.infer<typeof sophisticationSchema>;
  * "archetype" added in wave C (C0, approved): style cards derived from a
  * seeded archetype share one StyleCard shape with channel-learned cards —
  * `source` is what distinguishes them (PRODUCT-CONTRACTS §1).
+ *
+ * "trained" added in wave D (D0, WAVE-D-PLAN §2c): a first-class StyleCard
+ * DERIVED from the user's own channel (or a competitor-remix) via
+ * `trainStyleCardFromChannel`. Distinguished from archetype/channel cards by
+ * this source and the voice_profiles.trained_from_channel_id column. The
+ * real derivation ships in D2; D0 freezes the enum value + shape only.
  */
-export const VOICE_SOURCES = ["own_channel", "samples", "licensed", "archetype"] as const;
+export const VOICE_SOURCES = [
+  "own_channel",
+  "samples",
+  "licensed",
+  "archetype",
+  "trained",
+] as const;
 export const voiceSourceSchema = z.enum(VOICE_SOURCES);
 export type VoiceSource = z.infer<typeof voiceSourceSchema>;
+
+/**
+ * Chat message roles (WAVE-D-PLAN §2a) — a chat_messages row is authored by
+ * the user, the assistant (Coach persona), or is a tool result (`tool`,
+ * linked to the proposing assistant message via tool_call_id).
+ */
+export const CHAT_ROLES = ["user", "assistant", "tool"] as const;
+export const chatRoleSchema = z.enum(CHAT_ROLES);
+export type ChatRole = z.infer<typeof chatRoleSchema>;
+
+/**
+ * The chat tool-calling registry names (WAVE-D-PLAN §2b) — each maps to an
+ * EXISTING staged pipeline handler (lib/chat/tools.ts). Frozen in D0; D1
+ * wires execution. Kept as a frozen tuple so the registry, arg schemas, and
+ * the SSE `tool_proposed` name field all draw from one source of truth.
+ */
+export const CHAT_TOOL_NAMES = [
+  "list_topics",
+  "make_outline",
+  "make_hooks",
+  "draft_script",
+  "revise_section",
+  "make_titles",
+  "thumbnail_brief",
+  "fetch_research",
+] as const;
+export const chatToolNameSchema = z.enum(CHAT_TOOL_NAMES);
+export type ChatToolName = z.infer<typeof chatToolNameSchema>;
 
 /** Script generation modes (PRODUCT-CONTRACTS §3). Feature-gating:
  *  partnered_named is rejected server-side unless FEATURE_PARTNERED_NAMED is

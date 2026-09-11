@@ -36,6 +36,9 @@ export const partnerIdSchema = uuid().brand<"PartnerId">();
 export const pipelineRunIdSchema = uuid().brand<"PipelineRunId">();
 export const creditLedgerEntryIdSchema = uuid().brand<"CreditLedgerEntryId">();
 export const apiKeyIdSchema = uuid().brand<"ApiKeyId">();
+// Wave D (D0, WAVE-D-PLAN §2a) — chat-first surface.
+export const chatThreadIdSchema = uuid().brand<"ChatThreadId">();
+export const chatMessageIdSchema = uuid().brand<"ChatMessageId">();
 
 export type WorkspaceId = z.infer<typeof workspaceIdSchema>;
 export type UserId = z.infer<typeof userIdSchema>;
@@ -62,6 +65,8 @@ export type PartnerId = z.infer<typeof partnerIdSchema>;
 export type PipelineRunId = z.infer<typeof pipelineRunIdSchema>;
 export type CreditLedgerEntryId = z.infer<typeof creditLedgerEntryIdSchema>;
 export type ApiKeyId = z.infer<typeof apiKeyIdSchema>;
+export type ChatThreadId = z.infer<typeof chatThreadIdSchema>;
+export type ChatMessageId = z.infer<typeof chatMessageIdSchema>;
 
 export const asWorkspaceId = (v: string): WorkspaceId => workspaceIdSchema.parse(v);
 export const asUserId = (v: string): UserId => userIdSchema.parse(v);
@@ -69,3 +74,5 @@ export const asChannelId = (v: string): ChannelId => channelIdSchema.parse(v);
 export const asProjectId = (v: string): ProjectId => projectIdSchema.parse(v);
 export const asScriptId = (v: string): ScriptId => scriptIdSchema.parse(v);
 export const asPipelineRunId = (v: string): PipelineRunId => pipelineRunIdSchema.parse(v);
+export const asChatThreadId = (v: string): ChatThreadId => chatThreadIdSchema.parse(v);
+export const asChatMessageId = (v: string): ChatMessageId => chatMessageIdSchema.parse(v);

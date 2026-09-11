@@ -18,6 +18,7 @@ import { sql } from "drizzle-orm";
 import type { CrossoverBlend, StyleCard, ThumbnailPreset } from "@/lib/types/entities";
 import {
   CHANNEL_MODES,
+  CHAT_ROLES,
   CREDIT_REASONS,
   DESCRIPTION_MODES,
   GENERATION_MODES,
@@ -73,6 +74,7 @@ export const pipelineKindEnum = pgEnum("pipeline_kind", PIPELINE_KINDS);
 export const pipelineRunStatusEnum = pgEnum("pipeline_run_status", PIPELINE_RUN_STATUSES);
 export const creditReasonEnum = pgEnum("credit_reason", CREDIT_REASONS);
 export const generationModeEnum = pgEnum("generation_mode", GENERATION_MODES);
+export const chatRoleEnum = pgEnum("chat_role", CHAT_ROLES);
 
 // ---------------------------------------------------------------------------
 // Column helpers
@@ -300,6 +302,13 @@ export const voiceProfiles = pgTable(
     styleCard: jsonb("style_card").$type<StyleCard>().notNull(),
     licenseDocUrl: text("license_doc_url"),
     licenseSignedAt: timestamp("license_signed_at", { withTimezone: true }),
+    // -- wave-D train_on_my_channel derivation (WAVE-D-PLAN §2c) ------------
+    /** Channel a source="trained" card was derived from; null otherwise.
+     *  No FK: the derivation may remix from competitor channel ytids not
+     *  present as owned channels. Consent-gated derivation ships in D2. */
+    trainedFromChannelId: uuid("trained_from_channel_id"),
+    /** When the trained card was derived; null for non-trained sources. */
+    trainedAt: timestamp("trained_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -310,6 +319,16 @@ export const voiceProfiles = pgTable(
     check(
       "voice_profiles_license_required",
       sql`${t.source} <> 'licensed' OR (${t.licenseDocUrl} IS NOT NULL AND ${t.licenseSignedAt} IS NOT NULL)`,
+    ),
+    // Trained voices must record the channel they were derived from
+    // (consent + provenance). Mirrors the licensed-voice CHECK pattern.
+    // The source is cast to text so the CHECK does not "use" the freshly
+    // added 'trained' enum value inside the same migration transaction that
+    // ALTER TYPE ... ADD VALUE it (Postgres rejects that); text comparison
+    // is equivalent and transaction-safe.
+    check(
+      "voice_profiles_trained_provenance",
+      sql`${t.source}::text <> 'trained' OR ${t.trainedFromChannelId} IS NOT NULL`,
     ),
   ],
 );
@@ -874,4 +893,66 @@ export const apiKeys = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [index("api_keys_workspace_idx").on(t.workspaceId)],
+);
+
+// ---------------------------------------------------------------------------
+// Chat (Wave D — WAVE-D-PLAN §2a). Chat-first surface. A thread is either
+// project-scoped (project_id set) or a workspace-level coach (project_id
+// null). Messages are ordered by (thread_id, seq); workspace_id is
+// denormalized onto messages for row-level authz, same as every tenant row.
+// ---------------------------------------------------------------------------
+
+export const chatThreads = pgTable(
+  "chat_threads",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    /** null = workspace-level "coach" thread (not scoped to one project). */
+    projectId: uuid("project_id").references(() => projects.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("chat_threads_workspace_project_idx").on(t.workspaceId, t.projectId),
+    index("chat_threads_project_idx").on(t.projectId),
+  ],
+);
+
+export const chatMessages = pgTable(
+  "chat_messages",
+  {
+    id: id(),
+    threadId: uuid("thread_id")
+      .notNull()
+      .references(() => chatThreads.id, { onDelete: "cascade" }),
+    /** Denormalized for row-level authz checks. */
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    role: chatRoleEnum("role").notNull(),
+    content: text("content").notNull(),
+    /** Tool calls proposed by an assistant message; null otherwise. */
+    toolCalls: jsonb("tool_calls").$type<
+      {
+        toolCallId: string;
+        name: string;
+        args: Record<string, unknown>;
+        estimatedCredits: number;
+      }[]
+    >(),
+    /** Links a `tool` result message back to the proposing call; null otherwise. */
+    toolCallId: text("tool_call_id"),
+    /** Credits charged for this message's tool execution (chat itself is free). */
+    creditsCharged: integer("credits_charged").notNull().default(0),
+    /** Monotonic per-thread ordering key. */
+    seq: integer("seq").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("chat_messages_workspace_idx").on(t.workspaceId),
+    uniqueIndex("chat_messages_thread_seq_uq").on(t.threadId, t.seq),
+  ],
 );
