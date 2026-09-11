@@ -68,7 +68,7 @@ describe("script.topics", () => {
     expect(deps.engine.store.creditEntries).toHaveLength(1);
     expect(deps.engine.store.creditEntries[0]).toMatchObject({
       delta: -CREDIT_COSTS.scriptTopics,
-      reason: "script_generation",
+      reason: "script_topics",
       actorUserId: FIXTURE_IDS.user,
     });
     expect(deps.engine.store.creditEntries[0]?.idempotencyKey).toMatch(/^topics:/);

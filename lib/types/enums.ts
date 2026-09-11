@@ -181,6 +181,14 @@ export type PipelineRunStatus = z.infer<typeof pipelineRunStatusSchema>;
 
 export const CREDIT_REASONS = [
   "script_generation",
+  // Per-stage staged-pipeline reasons (PRODUCT-CONTRACTS §4). The composite
+  // (legacy single-charge) path keeps `script_generation`; each staged
+  // procedure and each itemized orchestrator entry uses its own reason so the
+  // billing screen labels a staged flow's rows distinctly.
+  "script_topics",
+  "script_outline",
+  "script_hooks",
+  "script_draft",
   "revision_pass",
   "idea_batch",
   "titles",

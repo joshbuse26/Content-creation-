@@ -316,7 +316,9 @@ describe("tools/call", () => {
     // (C1): `script.generate` is the staged ORCHESTRATOR, so MCP rides the
     // same itemized per-stage metering (outline 1 + hooks 1 + draft 4 = 6,
     // each idempotency-keyed) — no MCP bypass of stage metering.
-    const charges = deps.store.creditEntries.filter((e) => e.reason === "script_generation");
+    const charges = deps.store.creditEntries.filter((e) =>
+      ["script_outline", "script_hooks", "script_draft"].includes(e.reason),
+    );
     expect(charges.map((e) => e.delta)).toEqual([-1, -1, -4]);
     expect(charges.reduce((sum, e) => sum + e.delta, 0)).toBe(-6);
     for (const charge of charges) {

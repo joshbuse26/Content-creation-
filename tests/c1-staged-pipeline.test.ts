@@ -244,8 +244,14 @@ describe("script.generate orchestrator", () => {
       -CREDIT_COSTS.scriptDraft,
     ]);
     expect(entries.reduce((sum, e) => sum + e.delta, 0)).toBe(-CREDIT_COSTS.scriptGeneration);
+    // Per-stage reasons (wave-C OPEN-ITEM): each itemized entry is labeled
+    // distinctly so the billing screen no longer shows three identical rows.
+    expect(entries.map((e) => e.reason)).toEqual([
+      "script_outline",
+      "script_hooks",
+      "script_draft",
+    ]);
     for (const entry of entries) {
-      expect(entry.reason).toBe("script_generation");
       expect(entry.projectId).toBe(fixtureProject.id);
     }
     expect(entries[0]?.idempotencyKey).toMatch(/^outline:/);

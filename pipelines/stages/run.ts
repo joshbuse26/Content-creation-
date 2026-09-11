@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import type { CreditReason } from "@/lib/types/enums";
 import type { ProjectId, WorkspaceId } from "@/lib/types/ids";
 import type { EngineDeps } from "@/pipelines/script/deps";
 import { stageInputHash } from "@/pipelines/script/hash";
@@ -27,6 +28,13 @@ import { PipelineRunner, RUN_ALREADY_IN_PROGRESS } from "@/queue/pipeline-runner
  * shortfall as overage (paid plans) or fails cleanly with the typed
  * PRECONDITION_FAILED while the persisted output keeps the retry free.
  */
+/** Per-stage credit reason — one distinct ledger label per staged procedure. */
+const STAGE_CREDIT_REASON: Record<"topics" | "outline" | "hooks", CreditReason> = {
+  topics: "script_topics",
+  outline: "script_outline",
+  hooks: "script_hooks",
+};
+
 export async function runMeteredSyncStage<T>(params: {
   deps: EngineDeps;
   stage: "topics" | "outline" | "hooks";
@@ -40,6 +48,7 @@ export async function runMeteredSyncStage<T>(params: {
 }): Promise<T> {
   const { deps, stage } = params;
   const inputHash = stageInputHash({ stage, input: params.input });
+  const stageReason: CreditReason = STAGE_CREDIT_REASON[stage];
   let value: { result: T } | undefined;
 
   const runner = new PipelineRunner(deps.runs);
@@ -101,10 +110,9 @@ export async function runMeteredSyncStage<T>(params: {
   await settleCharge(deps.store, {
     workspaceId: params.workspaceId,
     delta: -params.cost,
-    // The frozen credit_reason enum has no per-stage members; each stage
-    // writes its OWN entry so the ledger stays itemized (§4), and the
-    // stage-scoped key makes the completion charge idempotent.
-    reason: "script_generation",
+    // Per-stage reason (§4): each staged procedure writes its OWN itemized,
+    // distinctly-labeled entry; the stage-scoped key makes it idempotent.
+    reason: stageReason,
     actorUserId: params.actorUserId,
     projectId: params.projectId,
     idempotencyKey: `${stage}:${inputHash}`,

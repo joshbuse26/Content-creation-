@@ -2,7 +2,7 @@ import { z } from "zod";
 import { getConfig, LLM_MODELS } from "@/lib/config";
 import { licensedGuardProfile } from "@/lib/multi-voice";
 import type { FactRef, StyleCard, VoiceProfile } from "@/lib/types/entities";
-import type { HookStyle } from "@/lib/types/enums";
+import type { CreditReason, HookStyle } from "@/lib/types/enums";
 import {
   SCRIPT_STAGES,
   type ScriptStage,
@@ -99,6 +99,13 @@ interface ScriptRunState {
 
 /** How this run is metered (see module docs). */
 export type ScriptRunMetering = "composite" | "draft" | "itemized";
+
+/** One credit charge: cost, idempotency key, and its distinct ledger reason. */
+interface StageCharge {
+  cost: number;
+  key: string;
+  reason: CreditReason;
+}
 
 export interface ScriptPipelineParams {
   input: ScriptJobInput;
@@ -561,22 +568,34 @@ export async function runScriptPipeline(
   // Every entry is keyed `<stage>:<input hash>`, so retries/resumes charge
   // exactly once per stage.
   const metering: ScriptRunMetering = params.metering ?? "composite";
-  const stageCharges: Partial<Record<ScriptStage, { cost: number; key: string }>> =
+  const stageCharges: Partial<Record<ScriptStage, StageCharge>> =
     metering === "itemized"
       ? {
-          outline: { cost: CREDIT_COSTS.scriptOutline, key: `outline:${inputHash}` },
-          draft_sections: { cost: CREDIT_COSTS.scriptHooks, key: `hooks:${inputHash}` },
+          outline: {
+            cost: CREDIT_COSTS.scriptOutline,
+            key: `outline:${inputHash}`,
+            reason: "script_outline",
+          },
+          draft_sections: {
+            cost: CREDIT_COSTS.scriptHooks,
+            key: `hooks:${inputHash}`,
+            reason: "script_hooks",
+          },
         }
       : {};
-  const completionCharge =
+  const completionCharge: StageCharge =
     metering === "composite"
-      ? { cost: CREDIT_COSTS.scriptGeneration, key: `script_generation:${inputHash}` }
-      : { cost: CREDIT_COSTS.scriptDraft, key: `draft:${inputHash}` };
-  const chargeStage = async (charge: { cost: number; key: string }) => {
+      ? {
+          cost: CREDIT_COSTS.scriptGeneration,
+          key: `script_generation:${inputHash}`,
+          reason: "script_generation",
+        }
+      : { cost: CREDIT_COSTS.scriptDraft, key: `draft:${inputHash}`, reason: "script_draft" };
+  const chargeStage = async (charge: StageCharge) => {
     await settleCharge(deps.store, {
       workspaceId: input.workspaceId,
       delta: -charge.cost,
-      reason: "script_generation",
+      reason: charge.reason,
       actorUserId: params.actorUserId,
       projectId: input.projectId,
       idempotencyKey: charge.key,

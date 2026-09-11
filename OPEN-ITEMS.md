@@ -32,9 +32,19 @@ gone from this list; what follows is deferred, cut, or knowingly imperfect.
   deterministic trigram Jaccard on normalized titles (>= 0.6 = dup,
   `pipelines/ideation/similarity.ts`). Swap-in point: `isDuplicateTitle`
   inside the `dedup_ideas` stage; `VOYAGE_API_KEY` slot already exists.
-- **Multi-voice + licensed-voice similarity guard** — still pending from the
-  v1 backlog. The DB CHECK (licensed voices require license fields) ships;
-  the similarity guard and multi-voice profile UI do not.
+- **Multi-voice + licensed-voice similarity guard** — DONE. Per-section voice
+  overrides ride the existing `script_sections.voice_profile_id` column
+  (`script.setSectionVoice` + editor picker + `voiceProfile.list`;
+  `lib/multi-voice.ts` resolves each section's effective voice). The similarity
+  guard is `lib/similarity-guard.ts` (pure, unit-tested: 5-gram overlap over a
+  sliding 200-word window, auto-rewrite once then HARD-FAIL), wired into the
+  draft pipeline's voice pass and `regenerateSection` for both single- and
+  multi-voice licensed voices, logged on the voice_pass `pipeline_run`
+  (`LICENSED_SIMILARITY_MAX_OVERLAP`, default 0.08). REMAINING (deferred, not
+  mechanical): per-section ARCHETYPE overrides — the section column is a
+  voice-profile FK only, so archetype-per-section would need a new nullable
+  column + resolution plumbing; the section picker lists workspace voice
+  profiles today.
 - **Dashboard `tracking.actualViews` stays null** until the §5.12 read path
   (niche_videos ↔ projects.published_video_id join) is wired into
   `dashboardHandlers.tracking`; the nightly tracking sweep itself runs.
@@ -42,8 +52,9 @@ gone from this list; what follows is deferred, cut, or knowingly imperfect.
   capture (client-side gate in `components/tools/gate.ts`) is stored
   locally and not sent anywhere — wire to PostHog/Resend audience when
   analytics lands.
-- **`app/sitemap.ts`** — not built; when added, include `/tools` and the
-  four generator pages (each already exports canonical + OG metadata).
+- **`app/sitemap.ts`** — DONE. Emits the marketing home, `/tools` + the four
+  generator pages, and the legal pages, based at `APP_URL`; authenticated app
+  and API routes are excluded.
 
 ## Frozen-layer requests not (yet) made
 
@@ -135,11 +146,12 @@ panel + marketing; preset thumbnails + golden loop v2 + seed lint), plus the
 two approved additive contract changes (`project.setGenerationTarget`,
 `thumbnails.generate.overlayText`). What remains:
 
-- **Per-stage ledger reason enum** — every staged run ledgers under reason
-  `script_generation` (itemized: one keyed entry per stage, −1/−1/−4), so
-  the billing screen shows identical "script_generation" labels for a full
-  staged flow. Labeled rows need an `ALTER TYPE credit_reason ADD VALUE`
-  class change (frozen enum); the itemization already exists.
+- **Per-stage ledger reason enum** — DONE (migration `0007_ordinary_prism`
+  adds `script_topics` / `script_outline` / `script_hooks` / `script_draft`).
+  Each staged procedure and each itemized orchestrator entry now ledgers under
+  its own reason; the composite (legacy single-charge) path keeps
+  `script_generation`. Tests updated: `c0-script-stages` (topics reason),
+  `c1-staged-pipeline` (itemized reasons), `b2-mcp` (orchestrator filter).
 - **Staged-output persistence — server side DONE (adversarial wave-C pass)**
   — `pipeline_runs.output` (migration 0006) now persists
   `script.topics/outline/hooks` payloads and identical re-submits re-serve
@@ -157,9 +169,10 @@ two approved additive contract changes (`project.setGenerationTarget`,
   but not `script.topics/outline/hooks/draft` individually; add per-stage
   tools when an agent workflow needs stage-level control.
 - **`NEXT_PUBLIC_FEATURE_PARTNERED_NAMED` (build-time)** — the picker's
-  partnered tab is compiled behind this flag and renders nothing today.
-  When the partnered launch is scheduled, set it on the web BUILD env
-  alongside the server's `FEATURE_PARTNERED_NAMED` (both rows are in
+  partnered tab is compiled behind this flag and renders nothing today. Now
+  documented in `.env.example` (build-time twin of the server flag). When the
+  partnered launch is scheduled, set it on the web BUILD env alongside the
+  server's `FEATURE_PARTNERED_NAMED` (both rows are in
   docs/LAUNCH-CHECKLIST.md; ops flow in `runbooks/partnered-mode-enable.md`).
 - **Partner list procedure** — none exists, deliberately; the partners
   table has no routers and creating partner rows is out of scope until the
