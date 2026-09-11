@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { Wordmark } from "@/components/marketing/site-chrome";
-import { IconChannel, IconFolder, IconGear, IconSparkle } from "@/components/ui/icons";
+import { IconChannel, IconFolder, IconGear, IconSearch, IconSparkle } from "@/components/ui/icons";
 import { useWorkspace } from "@/components/providers/workspace-context";
 import { fmtNumber } from "@/components/lib/format";
 import { isUiCreditExempt } from "@/components/lib/credits-ui";
@@ -13,6 +13,7 @@ import { ChannelSwitcher } from "./channel-switcher";
 
 const navItems = [
   { href: "/coach", label: "Coach", icon: IconSparkle },
+  { href: "/discover", label: "Discovery", icon: IconSearch },
   { href: "/projects", label: "Projects", icon: IconFolder },
   { href: "/ideas", label: "Ideas", icon: IconSparkle },
   { href: "/channels", label: "Channels", icon: IconChannel },

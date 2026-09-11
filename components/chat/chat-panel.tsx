@@ -9,10 +9,18 @@ import { COACH_NAME } from "@/lib/branding";
 import { trpc } from "@/components/providers/trpc";
 import { useWorkspace } from "@/components/providers/workspace-context";
 import { Button, IconButton } from "@/components/ui/button";
-import { IconArrowUp, IconPlus, IconSparkle, IconTrash, IconPencil } from "@/components/ui/icons";
+import {
+  IconArrowUp,
+  IconPlus,
+  IconSearch,
+  IconSparkle,
+  IconTrash,
+  IconPencil,
+} from "@/components/ui/icons";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
 import { useToast } from "@/components/ui/toast";
 import { isUiCreditExempt } from "@/components/lib/credits-ui";
+import { coachSeedPrompt, takeCoachSeed } from "./coach-seed";
 import { useChatStream } from "./use-chat-stream";
 import { toolLabel } from "./tool-labels";
 
@@ -32,6 +40,14 @@ export function ChatPanel({ projectId }: { projectId: ProjectId | null }) {
   const utils = trpc.useUtils();
 
   const [selectedId, setSelectedId] = useState<ChatThreadId | null>(null);
+  // A concept handed over from the discovery surface ("Ask Coach"): read once,
+  // used to prefill the composer so the Coach can go straight to a hook/outline.
+  const [seedPrompt, setSeedPrompt] = useState<string | null>(null);
+  useEffect(() => {
+    if (projectId === null) return;
+    const seed = takeCoachSeed(projectId);
+    if (seed !== null) setSeedPrompt(coachSeedPrompt(seed));
+  }, [projectId]);
 
   const threadsQuery = trpc.chat.listThreads.useQuery(
     workspaceId !== null ? { workspaceId, projectId, limit: 50 } : skipToken,
@@ -62,6 +78,27 @@ export function ChatPanel({ projectId }: { projectId: ProjectId | null }) {
       title: projectId === null ? "New coach chat" : "New conversation",
     });
   }, [workspaceId, projectId, createMutation]);
+
+  // A discovery hand-off with no thread yet: open one so the seeded concept
+  // lands in a fresh conversation.
+  useEffect(() => {
+    if (
+      seedPrompt !== null &&
+      selectedId === null &&
+      !threadsQuery.isLoading &&
+      threads.length === 0 &&
+      !createMutation.isPending
+    ) {
+      startThread();
+    }
+  }, [
+    seedPrompt,
+    selectedId,
+    threadsQuery.isLoading,
+    threads.length,
+    createMutation.isPending,
+    startThread,
+  ]);
 
   if (workspaceId === null) return <LoadingState label="Loading workspace…" />;
   if (threadsQuery.isError) {
@@ -95,9 +132,17 @@ export function ChatPanel({ projectId }: { projectId: ProjectId | null }) {
                 : "Plan this video conversationally — ask for hooks, an outline, a full draft, titles, or research."
             }
             action={
-              <Button variant="primary" onClick={startThread} busy={createMutation.isPending}>
-                <IconPlus size={14} /> Start a conversation
-              </Button>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Button variant="primary" onClick={startThread} busy={createMutation.isPending}>
+                  <IconPlus size={14} /> Start a conversation
+                </Button>
+                <Link
+                  href="/discover"
+                  className="inline-flex items-center gap-1 text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+                >
+                  <IconSearch size={13} /> Browse trending ideas
+                </Link>
+              </div>
             }
           />
         ) : (
@@ -106,6 +151,10 @@ export function ChatPanel({ projectId }: { projectId: ProjectId | null }) {
             workspaceId={workspaceId}
             threadId={selectedId}
             projectId={projectId}
+            initialComposer={seedPrompt}
+            onSeedConsumed={() => {
+              setSeedPrompt(null);
+            }}
           />
         )}
       </div>
@@ -143,6 +192,12 @@ function ThreadSidebar({
       >
         <IconPlus size={13} /> New chat
       </Button>
+      <Link
+        href="/discover"
+        className="inline-flex w-full items-center gap-1.5 rounded-md px-2.5 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
+      >
+        <IconSearch size={13} /> Trending ideas
+      </Link>
       <ul className="flex flex-col gap-0.5" aria-label="Conversations">
         {loading ? (
           <li className="px-2 py-2 text-xs text-zinc-400">Loading…</li>
@@ -190,17 +245,30 @@ function ChatThreadView({
   workspaceId,
   threadId,
   projectId,
+  initialComposer = null,
+  onSeedConsumed,
 }: {
   workspaceId: WorkspaceId;
   threadId: ChatThreadId;
   projectId: ProjectId | null;
+  /** Prefill for the composer, handed over from the discovery surface. */
+  initialComposer?: string | null;
+  onSeedConsumed?: () => void;
 }) {
   const { toast } = useToast();
   const { workspace } = useWorkspace();
   const creditExempt = isUiCreditExempt(workspace?.role);
   const utils = trpc.useUtils();
   const stream = useChatStream();
-  const [composer, setComposer] = useState("");
+  const [composer, setComposer] = useState(initialComposer ?? "");
+  // The seed is consumed at mount (used as the composer's initial value).
+  const seedConsumed = useRef(false);
+  useEffect(() => {
+    if (!seedConsumed.current && initialComposer !== null) {
+      seedConsumed.current = true;
+      onSeedConsumed?.();
+    }
+  }, [initialComposer, onSeedConsumed]);
   const [live, setLive] = useState<LiveTurn | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
