@@ -25,9 +25,7 @@ describe("LandingPage", () => {
     );
     const cta = screen
       .getAllByRole("link")
-      .find((el) =>
-        /Enter the app|Write your first script free|Start free/i.test(el.textContent),
-      );
+      .find((el) => /Enter the app|Write your first script free|Start free/i.test(el.textContent));
     expect(cta).toBeTruthy();
     expect(cta?.getAttribute("href")).toMatch(/^\/(projects|login)$/);
   });

@@ -1,6 +1,7 @@
 import { fixtureAvatar, fixtureChannel, FIXTURE_IDS } from "@/lib/fixtures";
 import { createFixtureProviders } from "@/lib/providers/fixture";
 import type {
+  SearchProvider,
   YoutubeProvider,
   YtChannel,
   YtSearchResult,
@@ -29,6 +30,7 @@ export interface B1Deps extends IdeationDeps {
 export function makeIdeationDeps(
   overrides: {
     youtube?: YoutubeProvider;
+    search?: SearchProvider;
     quota?: QuotaTracker;
     seedNicheVideos?: boolean;
     now?: () => Date;
@@ -42,6 +44,7 @@ export function makeIdeationDeps(
     mode: "fixture",
     llm: providers.llm,
     youtube: overrides.youtube ?? providers.youtube,
+    search: overrides.search ?? providers.search,
     quota: overrides.quota ?? new QuotaTracker(new InMemoryQuotaCounter()),
     cache: new InMemoryJsonCache(),
     store: new InMemoryIdeationStore({ seedFixtures: overrides.seedNicheVideos ?? true }),
