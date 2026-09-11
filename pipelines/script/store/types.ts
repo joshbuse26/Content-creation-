@@ -7,6 +7,7 @@ import type {
   Script,
   ScriptSection,
   ScriptStats,
+  StyleCard,
   TitleSet,
   VoiceProfile,
 } from "@/lib/types/entities";
@@ -110,6 +111,24 @@ export interface ApplyRevisionParams {
   newStats: ScriptStats;
 }
 
+/**
+ * A trained voice profile to persist (WAVE-D-PLAN §2c). `source` is always
+ * "trained"; `trainedFromChannelId` records provenance and distinguishes
+ * own-channel (=== channelId) from a competitor remix (!== channelId, a
+ * deterministic marker derived from the competitor set — no owned channel
+ * row, so no FK). Re-training the same (workspace, channel, provenance)
+ * OVERWRITES the existing row (idempotent, one card per source).
+ */
+export interface NewTrainedVoiceProfile {
+  workspaceId: WorkspaceId;
+  channelId: ChannelId;
+  name: string;
+  styleCard: StyleCard;
+  /** === channelId for an own-channel card; a remix marker otherwise. */
+  trainedFromChannelId: ChannelId;
+  trainedAt: Date;
+}
+
 export interface CreditRecord {
   workspaceId: WorkspaceId;
   delta: number;
@@ -188,6 +207,21 @@ export interface EngineStore {
   ): Promise<VoiceProfile | null>;
   /** All voice profiles in the workspace (for the editor's section-voice picker). */
   listVoiceProfiles(workspaceId: WorkspaceId): Promise<VoiceProfile[]>;
+  /**
+   * Persist a source="trained" voice profile (WAVE-D-PLAN §2c). Idempotent
+   * on (workspaceId, channelId, trainedFromChannelId): re-training the same
+   * channel/provenance OVERWRITES the styleCard, name and trainedAt of the
+   * existing row instead of appending a duplicate. Returns the stored row.
+   */
+  upsertTrainedVoiceProfile(profile: NewTrainedVoiceProfile): Promise<VoiceProfile>;
+  /** Rename a voice profile the workspace owns. Null when no row matched ws+id. */
+  renameVoiceProfile(
+    workspaceId: WorkspaceId,
+    voiceProfileId: VoiceProfileId,
+    name: string,
+  ): Promise<VoiceProfile | null>;
+  /** Delete a voice profile the workspace owns. False when no row matched ws+id. */
+  deleteVoiceProfile(workspaceId: WorkspaceId, voiceProfileId: VoiceProfileId): Promise<boolean>;
 
   // Research docs
   listResearchDocs(workspaceId: WorkspaceId, projectId: ProjectId): Promise<ResearchDoc[]>;

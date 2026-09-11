@@ -43,6 +43,7 @@ import type {
   NewRevision,
   NewScriptModeFields,
   NewSection,
+  NewTrainedVoiceProfile,
   ProjectListFilter,
   ProjectPatch,
   SectionPatch,
@@ -193,6 +194,88 @@ export class DrizzleEngineStore implements EngineStore {
       .where(eq(schema.voiceProfiles.workspaceId, workspaceId))
       .orderBy(schema.voiceProfiles.name);
     return rows.map((r) => voiceProfileSchema.parse(r));
+  }
+
+  async upsertTrainedVoiceProfile(profile: NewTrainedVoiceProfile): Promise<VoiceProfile> {
+    // Idempotent on (workspace, channel, provenance): re-training overwrites
+    // the existing trained row rather than appending a duplicate.
+    const existing = await getDb()
+      .select({ id: schema.voiceProfiles.id })
+      .from(schema.voiceProfiles)
+      .where(
+        and(
+          eq(schema.voiceProfiles.workspaceId, profile.workspaceId),
+          eq(schema.voiceProfiles.channelId, profile.channelId),
+          eq(schema.voiceProfiles.source, "trained"),
+          eq(schema.voiceProfiles.trainedFromChannelId, profile.trainedFromChannelId),
+        ),
+      )
+      .limit(1);
+    const existingId = existing[0]?.id;
+    const rows =
+      existingId === undefined
+        ? await getDb()
+            .insert(schema.voiceProfiles)
+            .values({
+              workspaceId: profile.workspaceId,
+              channelId: profile.channelId,
+              name: profile.name,
+              source: "trained",
+              styleCard: profile.styleCard,
+              licenseDocUrl: null,
+              licenseSignedAt: null,
+              trainedFromChannelId: profile.trainedFromChannelId,
+              trainedAt: profile.trainedAt,
+            })
+            .returning()
+        : await getDb()
+            .update(schema.voiceProfiles)
+            .set({
+              name: profile.name,
+              styleCard: profile.styleCard,
+              trainedAt: profile.trainedAt,
+              updatedAt: new Date(),
+            })
+            .where(eq(schema.voiceProfiles.id, existingId))
+            .returning();
+    const row = rows[0];
+    if (row === undefined) throw new Error("upsertTrainedVoiceProfile: write returned no row");
+    return voiceProfileSchema.parse(row);
+  }
+
+  async renameVoiceProfile(
+    workspaceId: WorkspaceId,
+    voiceProfileId: VoiceProfileId,
+    name: string,
+  ): Promise<VoiceProfile | null> {
+    const rows = await getDb()
+      .update(schema.voiceProfiles)
+      .set({ name, updatedAt: new Date() })
+      .where(
+        and(
+          eq(schema.voiceProfiles.id, voiceProfileId),
+          eq(schema.voiceProfiles.workspaceId, workspaceId),
+        ),
+      )
+      .returning();
+    const row = rows[0];
+    return row === undefined ? null : voiceProfileSchema.parse(row);
+  }
+
+  async deleteVoiceProfile(
+    workspaceId: WorkspaceId,
+    voiceProfileId: VoiceProfileId,
+  ): Promise<boolean> {
+    const rows = await getDb()
+      .delete(schema.voiceProfiles)
+      .where(
+        and(
+          eq(schema.voiceProfiles.id, voiceProfileId),
+          eq(schema.voiceProfiles.workspaceId, workspaceId),
+        ),
+      )
+      .returning({ id: schema.voiceProfiles.id });
+    return rows.length > 0;
   }
 
   // -- research -------------------------------------------------------------

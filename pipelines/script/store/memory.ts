@@ -29,6 +29,7 @@ import {
   scriptIdSchema,
   scriptSectionIdSchema,
   titleSetIdSchema,
+  voiceProfileIdSchema,
   type ChannelId,
   type FrameId,
   type ProjectId,
@@ -51,6 +52,7 @@ import type {
   NewRevision,
   NewScriptModeFields,
   NewSection,
+  NewTrainedVoiceProfile,
   ProjectListFilter,
   ProjectPatch,
   SectionPatch,
@@ -229,6 +231,65 @@ export class InMemoryEngineStore implements EngineStore {
           .sort((a, b) => a.name.localeCompare(b.name)),
       ),
     );
+  }
+
+  upsertTrainedVoiceProfile(profile: NewTrainedVoiceProfile): Promise<VoiceProfile> {
+    const now = new Date();
+    // Idempotent on (workspace, channel, provenance): overwrite the existing
+    // trained row instead of appending a duplicate (re-train semantics).
+    const existing = this.voiceProfiles.find(
+      (v) =>
+        v.workspaceId === profile.workspaceId &&
+        v.channelId === profile.channelId &&
+        v.source === "trained" &&
+        v.trainedFromChannelId === profile.trainedFromChannelId,
+    );
+    if (existing !== undefined) {
+      existing.name = profile.name;
+      existing.styleCard = clone(profile.styleCard);
+      existing.trainedAt = profile.trainedAt;
+      existing.updatedAt = now;
+      return Promise.resolve(clone(existing));
+    }
+    const row: VoiceProfile = {
+      id: voiceProfileIdSchema.parse(randomUUID()),
+      workspaceId: profile.workspaceId,
+      channelId: profile.channelId,
+      name: profile.name,
+      source: "trained",
+      styleCard: clone(profile.styleCard),
+      licenseDocUrl: null,
+      licenseSignedAt: null,
+      trainedFromChannelId: profile.trainedFromChannelId,
+      trainedAt: profile.trainedAt,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.voiceProfiles.push(row);
+    return Promise.resolve(clone(row));
+  }
+
+  renameVoiceProfile(
+    workspaceId: WorkspaceId,
+    voiceProfileId: VoiceProfileId,
+    name: string,
+  ): Promise<VoiceProfile | null> {
+    const row = this.voiceProfiles.find(
+      (v) => v.id === voiceProfileId && v.workspaceId === workspaceId,
+    );
+    if (row === undefined) return Promise.resolve(null);
+    row.name = name;
+    row.updatedAt = new Date();
+    return Promise.resolve(clone(row));
+  }
+
+  deleteVoiceProfile(workspaceId: WorkspaceId, voiceProfileId: VoiceProfileId): Promise<boolean> {
+    const index = this.voiceProfiles.findIndex(
+      (v) => v.id === voiceProfileId && v.workspaceId === workspaceId,
+    );
+    if (index === -1) return Promise.resolve(false);
+    this.voiceProfiles.splice(index, 1);
+    return Promise.resolve(true);
   }
 
   // -- research -------------------------------------------------------------
