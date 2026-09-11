@@ -11,6 +11,7 @@ import { WorkspaceSwitcher } from "./workspace-switcher";
 import { ChannelSwitcher } from "./channel-switcher";
 
 const navItems = [
+  { href: "/coach", label: "Coach", icon: IconSparkle },
   { href: "/projects", label: "Projects", icon: IconFolder },
   { href: "/ideas", label: "Ideas", icon: IconSparkle },
   { href: "/channels", label: "Channels", icon: IconChannel },

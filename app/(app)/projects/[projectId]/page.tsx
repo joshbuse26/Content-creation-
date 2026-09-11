@@ -6,5 +6,7 @@ export default async function ProjectIndexPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  redirect(`/projects/${projectId}/research`);
+  // Chat is the primary project surface (Wave D); the staged wizard tabs
+  // (research → packaging) remain one click away in the project nav.
+  redirect(`/projects/${projectId}/chat`);
 }

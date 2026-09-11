@@ -12,6 +12,9 @@ import { ProjectStatusBadge } from "./status-badge";
 import { ProjectStyleRow } from "./project-style";
 
 const stageTabs = [
+  // Chat is the primary surface (Wave D); the staged wizard stays reachable
+  // for power users via the remaining tabs.
+  { slug: "chat", label: "Chat" },
   { slug: "research", label: "Research" },
   { slug: "framing", label: "Framing" },
   { slug: "generate", label: "Generate" },
