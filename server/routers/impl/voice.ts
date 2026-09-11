@@ -7,15 +7,16 @@ type TrainInput = z.output<typeof voiceContracts.trainFromChannel.input>;
 
 /**
  * voice router (Wave D) — train_on_my_channel derivation entrypoint
- * (WAVE-D-PLAN §2c). D0 STUB: delegates to the frozen
- * `trainStyleCardFromChannel` contract, which returns a plausible trained
- * voice profile. Tenancy is enforced by workspaceProcedure upstream; the
- * real consent-gated derivation + persistence ships in D2.
+ * (WAVE-D-PLAN §2c). D2: delegates to the real consent-gated derivation
+ * (`trainStyleCardFromChannel`): transcripts (Supadata) → LLM StyleCard →
+ * a persisted source="trained" voice profile, charged trainVoice credits.
+ * Tenancy is enforced by workspaceProcedure upstream AND re-checked
+ * workspace-scoped inside the derivation (a foreign channel is NOT_FOUND).
  */
 export const voiceImpl = {
   trainFromChannel({ ctx, input }: HandlerOpts<TrainInput>) {
     return trainStyleCardFromChannel(
-      { workspaceId: ctx.workspaceId },
+      { workspaceId: ctx.workspaceId, actorUserId: ctx.userId },
       {
         channelId: input.channelId,
         sampleVideoIds: input.sampleVideoIds,

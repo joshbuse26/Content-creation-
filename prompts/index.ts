@@ -10,6 +10,7 @@ export type { PlanQueriesInput, CompileBriefInput } from "./research";
 export { proposeFramesPrompt, type ProposeFramesInput } from "./frames";
 export { outlinePrompt, type OutlinePromptInput } from "./outline";
 export { topicsPrompt, type TopicsPromptInput } from "./topics";
+export { trainVoicePrompt, type TrainVoicePromptInput } from "./train-voice";
 export {
   hookPrompt,
   sectionPrompt,

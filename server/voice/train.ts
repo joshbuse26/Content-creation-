@@ -1,49 +1,221 @@
-import { fixtureTrainedVoiceProfile } from "@/lib/fixtures";
-import { voiceProfileSchema } from "@/lib/types/entities";
+import { createHash } from "node:crypto";
+import { TRPCError } from "@trpc/server";
+import { getConfig } from "@/lib/config";
+import { getProviders } from "@/lib/providers";
+import type { LlmProvider, TranscriptProvider, YoutubeProvider } from "@/lib/providers/types";
+import { containsRealCreatorName } from "@/lib/seed-lint";
 import type { TrainStyleCardInput, TrainStyleCardResult } from "@/lib/types/entities";
-import type { ChannelId, WorkspaceId } from "@/lib/types/ids";
-import { channelIdSchema, workspaceIdSchema } from "@/lib/types/ids";
+import type { ChannelId, UserId, WorkspaceId } from "@/lib/types/ids";
+import { channelIdSchema } from "@/lib/types/ids";
+import type { BillingStore } from "@/server/billing";
+import { requireCreditsWithOverage } from "@/server/billing";
+import { CREDIT_COSTS } from "@/server/credits";
+import type { ChannelRepo } from "@/server/channel/repo";
+import type { EngineMode } from "@/pipelines/script/llm-json";
+import { settleCharge } from "@/pipelines/script/settle-charge";
+import type { EngineStore } from "@/pipelines/script/store";
+import { getStageDeps } from "@/pipelines/stages/deps";
+import { deriveStyleCard, sanitizeRemixCard } from "./derive";
 
 /**
- * train_on_my_channel derivation (WAVE-D-PLAN §2c) — the frozen signature +
- * IO contract, with a D0 STUB body. The real derivation ships in D2:
+ * train_on_my_channel derivation (WAVE-D-PLAN §2c) — the real implementation
+ * of the D0-frozen contract. Signature (ctx, input) is unchanged; an optional
+ * third `deps` argument makes it fully injectable for tests (defaults resolve
+ * the live/fixture providers + stores).
  *
- *   TODO(D2): pull transcripts via TranscriptProvider (Supadata; NEVER
- *   caption scraping) for the channel's uploads (or `remixFrom` competitor
- *   channels) → LLM derives a structured StyleCard (same frozen shape) →
- *   persist a source="trained" voice_profiles row (trained_from_channel_id +
- *   trained_at recorded; consent-gated, explicit user action). A `remixFrom`
- *   derivation must run through the same seed-lint / no-named-creator guard
- *   as archetypes so the output card carries no real person's name — this is
- *   distinct from the licensed-voice path (signed license + similarity guard).
- *
- * D0 returns a plausible, deterministic trained card so a chat screen and the
- * voice picker can be built against the stub keylessly. It does NOT touch
- * providers, the LLM, or persistence.
+ * Flow:
+ *  1. Resolve the OWN channel workspace-scoped (cross-workspace → NOT_FOUND).
+ *  2. Sample transcripts via the TranscriptProvider ONLY (Supadata; NEVER
+ *     page/caption scraping): the given sampleVideoIds, else the channel's
+ *     recent uploads (own) or the competitor channels' recent uploads (remix),
+ *     capped at TRANSCRIPT_CAP.
+ *  3. Derive a structured StyleCard via the LlmProvider seam (fixture-twin is
+ *     deterministic + keyless).
+ *  4. REMIX: sanitize the card so no exampleSnippet reproduces competitor
+ *     wording (similarity guard) and no real-person name lands (seed-lint);
+ *     the derived name falls back to a generic default if it names a person.
+ *  5. Charge trainVoice credits — requireCreditsWithOverage at dispatch +
+ *     idempotent completion charge keyed `trainVoice:<channel+sample hash>`
+ *     (a re-train of the same sample is free and overwrites the same row).
+ *  6. Persist a source="trained" voice_profiles row (workspace-scoped,
+ *     trained_from_channel_id + trained_at recorded; consent = this call).
  */
 
-export interface TrainStyleCardCtx {
+const TRANSCRIPT_CAP = 8;
+
+export interface TrainVoiceDeps {
+  mode: EngineMode;
+  llm: LlmProvider;
+  youtube: YoutubeProvider;
+  transcript: TranscriptProvider;
+  store: EngineStore;
+  channels: ChannelRepo;
+  /** Billing store for the dispatch credit gate; defaults to the shared store. */
+  billingStore?: BillingStore;
+}
+
+export interface TrainCtx {
   workspaceId: WorkspaceId;
-  channelId: ChannelId;
+  /** Ledger actor for the training charge; null for a system/unauthenticated caller. */
+  actorUserId?: UserId | null;
+}
+
+async function resolveDeps(deps?: TrainVoiceDeps): Promise<TrainVoiceDeps> {
+  if (deps !== undefined) return deps;
+  const [stage, providers] = await Promise.all([getStageDeps(), getProviders()]);
+  return {
+    mode: stage.engine.mode,
+    llm: stage.engine.llm,
+    youtube: providers.youtube,
+    transcript: stage.engine.transcript,
+    store: stage.engine.store,
+    channels: stage.channels,
+  };
+}
+
+/** A stable, valid UUID marking a remix's competitor provenance (no owned row). */
+function remixProvenanceId(remixFrom: readonly string[]): ChannelId {
+  const digest = createHash("sha1")
+    .update(
+      `remix:${[...remixFrom]
+        .map((s) => s.trim().toLowerCase())
+        .sort()
+        .join("|")}`,
+    )
+    .digest("hex");
+  // Format the SHA-1 hex as a v5-shaped UUID (version/variant bits set).
+  const uuid = [
+    digest.slice(0, 8),
+    digest.slice(8, 12),
+    `5${digest.slice(13, 16)}`,
+    ((parseInt(digest.slice(16, 17), 16) & 0x3) | 0x8).toString(16) + digest.slice(17, 20),
+    digest.slice(20, 32),
+  ].join("-");
+  return channelIdSchema.parse(uuid);
+}
+
+async function sampleTranscripts(
+  deps: TrainVoiceDeps,
+  sourceIdsOrHandles: readonly string[],
+  explicitVideoIds: readonly string[] | null,
+): Promise<{ videoIds: string[]; texts: string[] }> {
+  let videoIds: string[];
+  if (explicitVideoIds !== null && explicitVideoIds.length > 0) {
+    videoIds = explicitVideoIds.slice(0, TRANSCRIPT_CAP);
+  } else {
+    const collected: string[] = [];
+    const perSource = Math.max(1, Math.ceil(TRANSCRIPT_CAP / sourceIdsOrHandles.length));
+    for (const source of sourceIdsOrHandles) {
+      if (collected.length >= TRANSCRIPT_CAP) break;
+      const channel = await deps.youtube.getChannel(source);
+      const ids = await deps.youtube.listRecentVideoIds(channel.uploadsPlaylistId, perSource);
+      collected.push(...ids);
+    }
+    videoIds = collected.slice(0, TRANSCRIPT_CAP);
+  }
+  const texts: string[] = [];
+  for (const id of videoIds) {
+    const transcript = await deps.transcript.getTranscript(id);
+    if (transcript.fullText.trim().length > 0) texts.push(transcript.fullText);
+  }
+  return { videoIds, texts };
 }
 
 export async function trainStyleCardFromChannel(
-  ctx: { workspaceId: WorkspaceId },
+  ctx: TrainCtx,
   input: TrainStyleCardInput,
+  injectedDeps?: TrainVoiceDeps,
 ): Promise<TrainStyleCardResult> {
-  // D0 stub: return the fixture trained profile bound to the caller's
-  // workspace + requested channel. Async to match the D2 signature (which
-  // awaits transcripts + the LLM); no work is done here.
-  const voiceProfile = voiceProfileSchema.parse({
-    ...fixtureTrainedVoiceProfile,
-    workspaceId: workspaceIdSchema.parse(ctx.workspaceId),
-    channelId: channelIdSchema.parse(input.channelId),
-    trainedFromChannelId: channelIdSchema.parse(input.channelId),
-    name: input.name ?? fixtureTrainedVoiceProfile.name,
+  const deps = await resolveDeps(injectedDeps);
+  const workspaceId = ctx.workspaceId;
+
+  // 1. Own channel, workspace-scoped — a foreign channel is NOT_FOUND.
+  const channel = await deps.channels.get(workspaceId, input.channelId);
+  if (channel === null) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "channel not found" });
+  }
+
+  const remix = input.remixFrom !== null && input.remixFrom.length > 0;
+  const remixFrom = remix ? (input.remixFrom as string[]) : [];
+
+  // 2. Sample transcripts (TranscriptProvider only).
+  const { videoIds, texts } = remix
+    ? await sampleTranscripts(deps, remixFrom, null)
+    : await sampleTranscripts(deps, [channel.youtubeChannelId], input.sampleVideoIds);
+
+  if (texts.length === 0) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: remix
+        ? "No transcripts were available for the competitor channel(s) to remix from."
+        : "No transcripts were available for this channel yet — sync it or pick specific videos, then try again.",
+    });
+  }
+
+  // 5a. Dispatch credit gate BEFORE the LLM derivation (never work you can't pay for).
+  await requireCreditsWithOverage(workspaceId, CREDIT_COSTS.trainVoice, {
+    store: deps.billingStore,
+    actorUserId: ctx.actorUserId ?? null,
   });
-  return Promise.resolve({
-    voiceProfile,
-    remix: input.remixFrom !== null && input.remixFrom.length > 0,
-    sampledVideoIds: input.sampleVideoIds ?? ["dQfixture001", "dQfixture002", "dQfixture003"],
+
+  // 3. Derive the structured StyleCard (LLM seam / deterministic fixture twin).
+  let styleCard = await deriveStyleCard({
+    mode: deps.mode,
+    llm: deps.llm,
+    channelTitle: remix ? "the remixed source" : channel.title,
+    transcripts: texts,
+    remix,
   });
+
+  // 4. Remix guard: original snippets only (no verbatim competitor reuse),
+  //    no real-person names anywhere on the card.
+  if (remix) {
+    styleCard = sanitizeRemixCard(
+      styleCard,
+      texts,
+      getConfig().LICENSED_SIMILARITY_MAX_OVERLAP,
+    ).card;
+  }
+
+  // Name: user-supplied, else a generic default. A remix name that names a
+  // real person is rejected and replaced with the generic default (seed-lint).
+  const fallbackName = remix ? "Remixed voice" : `${channel.title} voice`;
+  let name = (input.name ?? fallbackName).trim();
+  if (name.length === 0 || (remix && containsRealCreatorName(name))) name = "Remixed voice";
+  if (!remix && containsRealCreatorName(name) && input.name === null) {
+    // Own-channel default derived from a name-shaped channel title — keep the
+    // creator's own title (their own channel), never blocked; guard only the
+    // remix path against naming a real creator.
+    name = `${channel.title} voice`;
+  }
+
+  const trainedFromChannelId = remix ? remixProvenanceId(remixFrom) : input.channelId;
+  const trainedAt = new Date();
+
+  // 6. Persist (idempotent upsert on workspace+channel+provenance).
+  const voiceProfile = await deps.store.upsertTrainedVoiceProfile({
+    workspaceId,
+    channelId: input.channelId,
+    name,
+    styleCard,
+    trainedFromChannelId,
+    trainedAt,
+  });
+
+  // 5b. Completion charge — idempotent on the channel + sampled-video hash so a
+  //     re-train of the same sample is free (and overwrote the same row).
+  const sampleHash = createHash("sha1")
+    .update(`${input.channelId}|${remix ? "remix" : "own"}|${[...videoIds].sort().join(",")}`)
+    .digest("hex")
+    .slice(0, 32);
+  await settleCharge(deps.store, {
+    workspaceId,
+    delta: -CREDIT_COSTS.trainVoice,
+    reason: "train_voice",
+    actorUserId: ctx.actorUserId ?? null,
+    projectId: null,
+    idempotencyKey: `trainVoice:${sampleHash}`,
+  });
+
+  return { voiceProfile, remix, sampledVideoIds: videoIds };
 }
