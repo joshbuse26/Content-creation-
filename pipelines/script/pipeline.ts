@@ -199,40 +199,58 @@ export async function runScriptPipeline(
   };
 
   /**
-   * Licensed-voice similarity guard over the just-persisted sections. Loads
-   * the script-level voice profile and any per-section voice overrides,
-   * resolves the licensed profile each section is checked against, runs the
-   * guard, applies its single auto-rewrites in place (via updateSection, so
-   * voice overrides and any other columns survive), and records the check
-   * result in state.guardLog for the pipeline_run. Hard-fails (throws) when a
-   * section is still over the line after its rewrite.
+   * Resolve the licensed voice profile each in-memory section is checked
+   * against: the section's own voice override when set (read by position from
+   * the persisted rows), else the script-level voice. A non-licensed effective
+   * voice yields null (that section is not guarded).
    */
-  const runVoicePassGuard = async (): Promise<void> => {
+  const resolveGuardProfiles = async (
+    sections: WorkingSection[],
+  ): Promise<(VoiceProfile | null)[]> => {
     const scriptProfile: VoiceProfile | null =
       input.voiceProfileId === null
         ? null
         : await deps.store.getVoiceProfile(input.workspaceId, input.voiceProfileId);
     const persisted = await deps.store.listSections(input.workspaceId, scriptId);
+    const overrideByPosition = new Map<number, VoiceProfile | null>();
     const overrideCache = new Map<string, VoiceProfile | null>();
-    const guardSections: GuardInputSection[] = [];
     for (const row of persisted) {
-      let override: VoiceProfile | null = null;
-      if (row.voiceProfileId !== null) {
-        const key = row.voiceProfileId as string;
-        if (!overrideCache.has(key)) {
-          overrideCache.set(
-            key,
-            await deps.store.getVoiceProfile(input.workspaceId, row.voiceProfileId),
-          );
-        }
-        override = overrideCache.get(key) ?? null;
+      if (row.voiceProfileId === null) {
+        overrideByPosition.set(row.position, null);
+        continue;
       }
-      guardSections.push({
-        position: row.position,
-        body: row.body,
-        licensedProfile: licensedGuardProfile(override, scriptProfile),
-      });
+      const key = row.voiceProfileId as string;
+      if (!overrideCache.has(key)) {
+        overrideCache.set(
+          key,
+          await deps.store.getVoiceProfile(input.workspaceId, row.voiceProfileId),
+        );
+      }
+      overrideByPosition.set(row.position, overrideCache.get(key) ?? null);
     }
+    return sections.map((_s, position) =>
+      licensedGuardProfile(overrideByPosition.get(position) ?? null, scriptProfile),
+    );
+  };
+
+  /**
+   * Licensed-voice similarity guard over the just-voiced IN-MEMORY candidate
+   * (P1-3: guard BEFORE persisting, so over-similar text never touches the DB).
+   * Resolves the licensed profile each section is checked against, runs the
+   * guard, applies its single auto-rewrites onto the in-memory working sections,
+   * and records the check result in state.guardLog for the pipeline_run.
+   * Hard-fails (throws) — before any persist — when a section is still over the
+   * line after its rewrite, so a guard-blocked run writes nothing for it.
+   */
+  const runVoicePassGuard = async (): Promise<void> => {
+    const working = state.sections;
+    if (working === undefined || working.length === 0) return;
+    const profiles = await resolveGuardProfiles(working);
+    const guardSections: GuardInputSection[] = working.map((s, position) => ({
+      position,
+      body: s.body,
+      licensedProfile: profiles[position] ?? null,
+    }));
 
     let result;
     try {
@@ -254,18 +272,13 @@ export async function runScriptPipeline(
     state.guardLog = result.log;
     if (result.rewrites.size === 0) return;
 
-    // Apply de-dup rewrites in place: targeted updates preserve each section's
-    // voice override and everything else the batch re-persist would reset.
-    const byPosition = new Map(persisted.map((row) => [row.position, row]));
+    // Apply de-dup rewrites onto the in-memory candidate; persistSections then
+    // writes only this guard-approved text.
     for (const [position, body] of result.rewrites) {
-      const row = byPosition.get(position);
-      if (row === undefined) continue;
-      const estSeconds = estimateSecondsForText(body);
-      await deps.store.updateSection(input.workspaceId, row.id, { body, estSeconds });
-      const working = state.sections?.[position];
-      if (working !== undefined) {
-        working.body = body;
-        working.estSeconds = estSeconds;
+      const target = state.sections?.[position];
+      if (target !== undefined) {
+        target.body = body;
+        target.estSeconds = estimateSecondsForText(body);
       }
     }
   };
@@ -328,6 +341,34 @@ export async function runScriptPipeline(
       const outline = state.outline ?? params.presetOutline ?? synthOutline(context);
       state.outline = outline;
 
+      // Licensed-voice guard on the STREAM (P1-3): for a licensed script-level
+      // voice, each section is checked BEFORE its `section` event is published
+      // and before the batch persist below, so pre-guard verbatim text is never
+      // streamed to the editor nor written. Non-licensed voices resolve to null
+      // here and stream exactly as before (no guard, no perf cost). Section
+      // overrides do not exist yet at draft time (sections are created here), so
+      // the script-level voice is the effective voice for every section.
+      const scriptProfile: VoiceProfile | null =
+        input.voiceProfileId === null
+          ? null
+          : await deps.store.getVoiceProfile(input.workspaceId, input.voiceProfileId);
+      const streamLicensedProfile = licensedGuardProfile(null, scriptProfile);
+      const guardStreamedBody = async (body: string): Promise<string> => {
+        if (streamLicensedProfile === null) return body;
+        try {
+          const guard = await runLicensedGuard({
+            mode: deps.mode,
+            llm: deps.llm,
+            threshold: getConfig().LICENSED_SIMILARITY_MAX_OVERLAP,
+            sections: [{ position: 0, body, licensedProfile: streamLicensedProfile }],
+          });
+          return guard?.rewrites.get(0) ?? body;
+        } catch (err) {
+          if (err instanceof LicensedGuardBlockedError) throw new Error(err.message);
+          throw err;
+        }
+      };
+
       // Hook first. Staged `draft` with a chosen hook uses it verbatim;
       // otherwise three tagged candidates, CONSTRAINED to the style card's
       // hookPatterns when a card is in play, auto-picked by the card's
@@ -378,6 +419,8 @@ export async function runScriptPipeline(
           });
           body = result.body;
         }
+        // Guard before the section is streamed or persisted (P1-3).
+        body = await guardStreamedBody(body);
         const section: WorkingSection = {
           kind: planned.kind,
           heading: planned.heading,
@@ -442,7 +485,6 @@ export async function runScriptPipeline(
         }),
       });
       state.sections = acceptRewrite(sections, rewritten.sections, "voice_pass");
-      await persistSections(state.sections);
 
       // Licensed-voice similarity guard (PRODUCT-CONTRACTS §7): after voicing,
       // any section whose EFFECTIVE voice is licensed is checked against the
@@ -451,7 +493,13 @@ export async function runScriptPipeline(
       // (never emitted). A script-level licensed voice guards every section; a
       // per-section voice override guards (or lifts) that one section. Scripts
       // with no licensed voice are untouched and unlogged.
+      //
+      // P1-3: the guard runs on the IN-MEMORY candidate BEFORE persistSections,
+      // so a hard-fail is atomic — over-similar voiced text is never written to
+      // the DB (and so is never returned by script.get) and rewrites are
+      // applied in place, so persistSections stores only guard-approved text.
       await runVoicePassGuard();
+      await persistSections(state.sections);
 
       await deps.store.updateScript(input.workspaceId, scriptId, {
         stats: scriptStats(state.sections ?? []),
