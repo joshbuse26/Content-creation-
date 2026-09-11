@@ -83,7 +83,7 @@ With `PROVIDERS=live`:
 pnpm exec tsx scripts/golden-run.ts
 ```
 
-Replace the 3 sample briefs in `scripts/golden-briefs.json` with your real 10 (write them — 1 hour, do it before touching anything else). Score each script 1–5 in the sheet it emits. Below 4.0 average → prompt iteration in `prompts/` before any user sees output. `docs/golden-baseline.md` holds the fixture-mode baseline for pipeline comparison.
+`scripts/golden-briefs.json` ships ~10 **sample** briefs spanning niches/archetypes — swap for your real topics before treating scores as ship/no-ship. Full checklist (env, smoke, scoring, what to paste to Claude): **`docs/PLAYTEST-GOLDEN.md`**. Score each script 1–5 in the sheet it emits. Below 4.0 average → prompt iteration in `prompts/` before any user sees output. `docs/golden-baseline.md` holds the fixture-mode baseline for pipeline comparison.
 
 ## 9. Dogfood
 
