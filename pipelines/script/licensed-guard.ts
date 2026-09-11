@@ -106,10 +106,33 @@ export interface RunLicensedGuardParams {
 export async function runLicensedGuard(
   params: RunLicensedGuardParams,
 ): Promise<LicensedGuardResult | null> {
-  const guarded = params.sections.filter(
-    (s) => s.licensedProfile !== null && licensedSourceCorpus(s.licensedProfile).length > 0,
-  );
-  if (guarded.length === 0) return null;
+  const licensedSections = params.sections.filter((s) => s.licensedProfile !== null);
+  if (licensedSections.length === 0) return null;
+
+  // Fail CLOSED (P1-1): a licensed voice whose normalized corpus is empty
+  // cannot be guarded — there is nothing to compare the output against — so it
+  // must not silently pass as "clean" (ratio 0). Refuse to generate instead.
+  // The dispatch-time gate (assertLicensedVoiceUsable) already rejects such a
+  // voice; this is defense in depth on the pipeline seam.
+  for (const section of licensedSections) {
+    const profile = section.licensedProfile;
+    if (profile !== null && licensedSourceCorpus(profile).length === 0) {
+      const blocked: GuardCheckLog = {
+        position: section.position,
+        status: "blocked",
+        maxOverlapBefore: 1,
+        maxOverlapAfter: 1,
+      };
+      throw new LicensedGuardBlockedError(
+        "Licensed-voice similarity guard: this licensed voice has no source material to " +
+          "check its output against, so the output cannot be verified as original. Nothing " +
+          "was published — add example source passages to the licensed voice, or choose a " +
+          "different voice.",
+        { guard: "licensed_similarity", threshold: params.threshold, checked: [blocked] },
+      );
+    }
+  }
+  const guarded = licensedSections;
 
   const rewrite = makeRewrite(params.mode, params.llm);
   const rewrites = new Map<number, string>();

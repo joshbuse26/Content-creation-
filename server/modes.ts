@@ -1,7 +1,26 @@
 import { TRPCError } from "@trpc/server";
 import { getConfig } from "@/lib/config";
+import { licensedSourceCorpus } from "@/lib/multi-voice";
+import { tokenizeWords } from "@/lib/similarity-guard";
 import type { GenerationTarget, VoiceProfile } from "@/lib/types/entities";
 import type { GenerationMode } from "@/lib/types/enums";
+
+/**
+ * A usable licensed voice must carry enough source material for the similarity
+ * guard to have something to check against — at least one snippet of this many
+ * normalized tokens. Combined with the guard's fail-closed on an empty corpus,
+ * this guarantees a licensed voice can NEVER generate ungated (PRODUCT-CONTRACTS
+ * §7). Five tokens is the guard's upper n-gram size, so a snippet at this length
+ * populates every check (containment, verbatim run, and the windowed ratio).
+ */
+export const MIN_LICENSED_SNIPPET_TOKENS = 5;
+
+/** True iff the profile's snippet corpus carries at least one non-trivial span. */
+function hasSubstantialLicensedCorpus(profile: VoiceProfile): boolean {
+  return licensedSourceCorpus(profile).some(
+    (snippet) => tokenizeWords(snippet).length >= MIN_LICENSED_SNIPPET_TOKENS,
+  );
+}
 
 /**
  * Generation-mode guards (PRODUCT-CONTRACTS §3) — the SHARED server module
@@ -62,6 +81,22 @@ export function assertLicensedVoiceUsable(profile: VoiceProfile | null): void {
       message:
         "This licensed voice can't be used until its signed license is on file. " +
         "Add the license document and consent, then try again.",
+    });
+  }
+  // A licensed voice with no/short source material would leave the similarity
+  // guard with nothing to check against — verbatim reproduction could then slip
+  // through ungated (P2-7). Require real material at the app boundary; combined
+  // with the guard's fail-closed on an empty corpus, a licensed voice can never
+  // generate ungated. (Enforced here rather than in voiceProfileSchema so the
+  // DB CHECK on license columns stays the schema's concern; a schema/migration
+  // corpus check would be an equivalent but heavier alternative.)
+  if (!hasSubstantialLicensedCorpus(profile)) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message:
+        "This licensed voice has no usable source material on file. Add at least one " +
+        `example passage of ${String(MIN_LICENSED_SNIPPET_TOKENS)} words or more so its output ` +
+        "can be checked for verbatim reproduction, then try again.",
     });
   }
 }
