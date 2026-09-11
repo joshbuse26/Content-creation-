@@ -64,6 +64,13 @@
       "when": 1789139835522,
       "tag": "0008_wave_d_chat_and_trained_voice",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789151491466,
+      "tag": "0009_wave_d2_train_voice_credit_reason",
+      "breakpoints": true
     }
   ]
 }

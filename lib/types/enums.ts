@@ -235,6 +235,10 @@ export const CREDIT_REASONS = [
   "thumbnail",
   "research_run",
   "avatar_regen",
+  // Wave D2 (WAVE-D-PLAN §2c): deriving a source="trained" StyleCard from the
+  // creator's own channel (or a competitor remix) is a metered generation-class
+  // action — its own itemized ledger label, distinct from script stages.
+  "train_voice",
   "purchase",
   "overage",
   "plan_grant",

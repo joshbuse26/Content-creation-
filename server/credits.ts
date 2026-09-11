@@ -36,6 +36,14 @@ export const CREDIT_COSTS = {
   avatarRegen: 1,
   /** Extra user-requested idea batch (spec §7; daily scheduled runs are free). */
   ideaBatch: 1,
+  /**
+   * Train a voice from a channel (WAVE-D-PLAN §2c) — pulls transcripts and
+   * derives a structured StyleCard via the LLM. Charged once per training run
+   * (idempotent on the channel + sampled-video hash); a re-train of the same
+   * sample is free (re-serves the derived card). Covers both the own-channel
+   * derivation and the competitor remix.
+   */
+  trainVoice: 5,
 } as const;
 
 /** Current balance, or null when the workspace does not exist. */

@@ -1,0 +1,1 @@
+ALTER TYPE "public"."credit_reason" ADD VALUE 'train_voice' BEFORE 'purchase';
