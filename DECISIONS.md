@@ -375,3 +375,61 @@ about which archetype won.
 
 **`docs/golden-baseline.md` regenerated on the final tree** (real staged path, style-gate
 columns filled, CTA canary green); `--compare` runs against it in CI-adjacent smoke.
+
+## Wave D2 — train-on-my-channel voice training (WAVE-D-PLAN §2c)
+
+**Derivation.** `trainStyleCardFromChannel(ctx, input, deps?)` keeps the D0-frozen
+`(ctx, input)` contract and adds an OPTIONAL third `deps` arg for injection (tests pass
+in-memory stores + fixture providers; production/fixture resolve via `getStageDeps()` +
+`getProviders()`). Flow: resolve the own channel workspace-scoped (cross-workspace →
+NOT_FOUND) → sample transcripts via the **TranscriptProvider only** (Supadata; never
+YouTube page/caption scraping; own = channel uploads or explicit `sampleVideoIds`, remix =
+competitor uploads, capped at 8) → `deriveStyleCard` turns them into a `styleCardSchema`
+card (LLM behind `LlmProvider`/Grok tier in live mode via `generateJson`; a deterministic,
+keyless synthesizer twin in fixture mode) → persist a `source="trained"` voice_profiles row.
+
+**Own-vs-remix distinction (no new column).** Reused `trained_from_channel_id`:
+own-channel cards set it `=== channelId`; a remix sets it to a deterministic v5-shaped UUID
+derived from the sorted competitor set (`remixProvenanceId`) — always `!== channelId`. So
+`remix ⇔ trainedFromChannelId !== channelId`, and the same competitor set overwrites the
+same row. No competitor identity is stored as a real channel (we don't own it, and never
+claim to clone it). The `TrainStyleCardResult.remix` boolean carries this to callers.
+
+**Remix guard.** A remix must be an ORIGINAL card. `sanitizeRemixCard` (server/voice/derive.ts)
+runs every derived `exampleSnippet` through the existing `lib/similarity-guard` against the
+competitor transcripts (same `LICENSED_SIMILARITY_MAX_OVERLAP` threshold + exact-containment
+
+- verbatim-run checks) and through `lib/seed-lint`; a snippet that reproduces competitor
+  wording or names a real person is dropped, and a fresh original craft line backfills. The
+  derived NAME is seed-lint-checked too — a remix name that names a real creator falls back to
+  the generic "Remixed voice". This is DISTINCT from the licensed-voice path (which needs a
+  signed license); remix produces an original card, needs no license, and never reproduces
+  competitor wording or claims to sound like a named creator.
+
+**Re-train / idempotency.** Chosen the clean option: **overwrite**, not version. The store
+gained `upsertTrainedVoiceProfile` (idempotent on workspace+channel+provenance) so a re-train
+updates the same row's styleCard/name/trainedAt. The credit charge is idempotent on
+`trainVoice:<channel + sorted sampled-video hash>`, so re-training the same sample is free.
+
+**Credits.** Added `CREDIT_COSTS.trainVoice = 5` and a first-class `train_voice` credit reason
+(migration `0009` = `ALTER TYPE credit_reason ADD VALUE 'train_voice' BEFORE 'purchase'`,
+generated via drizzle-kit — the ONE migration this wave, an enum value, no new column/table).
+Charged with the SAME pattern as generation stages: `requireCreditsWithOverage` at dispatch
+(before the LLM) + `settleCharge` idempotent completion write.
+
+**Mode wiring.** `assertGenerationModeAllowed` no longer rejects `train_on_my_channel`
+(NOT_IMPLEMENTED is gone); availability of an actual trained card is enforced at resolution.
+`resolveStyleCard`'s train branch returns the trained profile's card, or throws a clear
+PRECONDITION_FAILED "train a voice first" when the target's `voiceProfileId` doesn't resolve
+to a `source="trained"` card. A shared `resolveTrainedVoiceProfile` helper loads that profile
+workspace-scoped (the injectable store lookup — the one place tenancy applies) at every
+dispatch site (script.topics/outline/hooks/draft, script.generate, the worker pipeline, and
+buildCoachContext), so a trained card resolves first-class alongside archetypes and surfaces
+in Coach context.
+
+**Management + UI.** Added `voiceProfile.rename` / `voiceProfile.remove` (writer-scoped, no
+credits) and a `TrainVoicePanel` surfaced as an optional "Trained voices" tab in the archetype
+picker (project style row): lists trained cards (select for generation, rename, delete), a
+"Train from your channel" form (optional sample video IDs), and a competitor-remix input with
+copy stating it is an ORIGINAL card inspired by structure, never a clone. Both actions show the
+credit cost and confirm before charging. No "Grok"/"xAI" anywhere (copy-lint green).

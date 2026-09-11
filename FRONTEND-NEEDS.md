@@ -37,3 +37,26 @@ browser's localStorage bridge is empty, the hook switcher shows a "hook
 candidates unavailable" note. Persisting stage-3 hook candidates
 server-side (already requested in REQUESTS-A3 #4 / OPEN-ITEMS) would close
 that gap for good.
+
+## 4. Trained voices (Wave D2 — WAVE-D-PLAN §2c)
+
+Trained StyleCards are first-class alongside archetypes. The archetype picker
+gained an optional `trainedSlot` prop; the project style row passes a
+`<TrainVoicePanel>` into it, rendered under a "Trained voices" tab. The panel:
+
+- lists the workspace's `source="trained"` voice profiles (from
+  `voiceProfile.list`), each selectable as a generation target
+  (`mode: "train_on_my_channel"`, `voiceProfileId` set), renamable
+  (`voiceProfile.rename`) and deletable (`voiceProfile.remove`);
+- trains from the active channel via `voice.trainFromChannel` (optional sample
+  video IDs), and remixes a competitor via `remixFrom` — both show the 5-credit
+  cost and a confirm dialog before charging;
+- a "Remixed" vs "From channel" badge is derived client-side from
+  `trainedFromChannelId !== channelId`.
+
+Selecting a trained voice flows through the same `applyChange` path as
+archetypes (localStorage stash + `project.setGenerationTarget` + the staged-flow
+invalidation event), so a trained card behaves exactly like any other style for
+downstream generation and Coach context. `targetLabel` shows "Trained voice"
+for the mode; if a richer label (the profile's name) is wanted, thread the
+voice-profile list into `targetLabel`.

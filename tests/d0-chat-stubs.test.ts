@@ -153,15 +153,11 @@ describe("voice.trainFromChannel stub + mode seam", () => {
     expect(out.remix).toBe(true);
   });
 
-  it("train_on_my_channel generation mode still rejects until D2", () => {
-    const err = (() => {
-      try {
-        assertGenerationModeAllowed("train_on_my_channel");
-        return null;
-      } catch (e) {
-        return e;
-      }
-    })();
-    expect((err as TRPCError).code).toBe("NOT_IMPLEMENTED");
+  it("train_on_my_channel generation mode is allowed at the mode gate (D2)", () => {
+    // D2: the mode is available; whether a trained card actually exists is
+    // enforced at resolution time (style-resolver), not by this coarse gate.
+    expect(() => {
+      assertGenerationModeAllowed("train_on_my_channel");
+    }).not.toThrow();
   });
 });

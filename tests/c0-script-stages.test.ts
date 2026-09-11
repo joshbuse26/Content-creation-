@@ -255,12 +255,18 @@ describe("mode guards", () => {
     expect(deps.engine.store.creditEntries).toHaveLength(0);
   });
 
-  it("rejects train_on_my_channel (enum-only this wave)", async () => {
+  it("rejects train_on_my_channel with a clear 'train a voice first' error when the id is not a trained card (D2)", async () => {
+    // FIXTURE_IDS.voiceProfile is a non-trained (own_channel) profile, so the
+    // resolver refuses it — a clear PRECONDITION_FAILED, never NOT_IMPLEMENTED,
+    // and no charge lands (resolution runs before the credit gate).
     const input = topicsInput({
       generation: { mode: "train_on_my_channel", voiceProfileId: FIXTURE_IDS.voiceProfile },
     });
     const err = await scriptStagesImpl.topics({ ctx: fixtureCtx, input }).catch((e: unknown) => e);
-    expect((err as TRPCError).code).toBe("NOT_IMPLEMENTED");
+    expect(err).toBeInstanceOf(TRPCError);
+    expect((err as TRPCError).code).toBe("PRECONDITION_FAILED");
+    expect((err as TRPCError).message).toMatch(/train a voice/i);
+    expect(deps.engine.store.creditEntries).toHaveLength(0);
   });
 
   it("with the flag on, an unknown partner is NOT_FOUND (registry empty)", async () => {
