@@ -52,7 +52,7 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   const status = await getBillingStatus(parsed.data.workspaceId, {
-    creditExempt: isCreditExempt(session?.user?.email, role),
+    creditExempt: isCreditExempt(session.user.email, role),
   });
   if (status === null) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
