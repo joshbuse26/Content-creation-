@@ -4,6 +4,9 @@ import { getConfig } from "@/lib/config";
 
 export const metadata: Metadata = { title: "Sign in" };
 
+// Runtime env (PLAYTEST_AUTH_BYPASS) must not be frozen into a static shell.
+export const dynamic = "force-dynamic";
+
 export default function LoginPage() {
   const config = getConfig();
   const fixtureMode = config.PROVIDERS === "fixture";
