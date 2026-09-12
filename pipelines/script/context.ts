@@ -1,6 +1,6 @@
 import type { AudienceAvatar, Frame, ResearchDoc, VoiceProfile } from "@/lib/types/entities";
 import { scriptContextSchema, type ScriptContext } from "@/lib/types/pipeline";
-import { estimateTokens } from "@/prompts/shared";
+import { estimateTokens, renderAudienceAvatar } from "@/prompts/shared";
 
 /**
  * §5.7 stage 1 — context assembly (pure code, no LLM).
@@ -51,24 +51,15 @@ export function trimResearch(docs: ResearchDoc[], frame: Frame): ScriptContext["
   return out;
 }
 
+/**
+ * A structured, first-class audience block used across the generation prompts
+ * (outline, sections, hooks, voice, frames) via `ScriptContext.avatarSummary`.
+ * Delegates to the shared `renderAudienceAvatar` renderer so the avatar —
+ * demographics, pains WITH evidence, motivations WITH evidence, vocabulary —
+ * reaches every prompt as a prominent block rather than a flattened one-liner.
+ */
 export function summarizeAvatar(avatar: AudienceAvatar | null): string {
-  if (avatar === null) {
-    return "No audience avatar on file. Assume a curious general audience new to the topic.";
-  }
-  const parts: string[] = [];
-  if (avatar.ageRange !== null) parts.push(`Age ${avatar.ageRange}`);
-  if (avatar.genderSplit !== null) parts.push(avatar.genderSplit);
-  if (avatar.geo.length > 0) parts.push(`mostly ${avatar.geo.join("/")}`);
-  if (avatar.sophistication !== null) parts.push(`${avatar.sophistication} sophistication`);
-  const header = parts.length > 0 ? `${parts.join(", ")}.` : "";
-  const pains =
-    avatar.pains.length > 0 ? `Pains: ${avatar.pains.map((p) => p.pain).join("; ")}.` : "";
-  const motivations =
-    avatar.motivations.length > 0
-      ? `Motivations: ${avatar.motivations.map((m) => m.motivation).join("; ")}.`
-      : "";
-  const vocab = avatar.vocabularyNotes !== null ? `Vocabulary: ${avatar.vocabularyNotes}` : "";
-  return [header, pains, motivations, vocab].filter((s) => s !== "").join(" ");
+  return renderAudienceAvatar(avatar);
 }
 
 export function assembleContext(params: {

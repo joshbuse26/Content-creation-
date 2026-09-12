@@ -1,4 +1,4 @@
-import type { StyleCard } from "@/lib/types/entities";
+import type { AudienceAvatar, StyleCard } from "@/lib/types/entities";
 import type { ScriptContext } from "@/lib/types/pipeline";
 
 /**
@@ -19,6 +19,72 @@ export function renderFrame(frame: ScriptContext["frame"]): string {
   ]
     .filter((l) => l !== "")
     .join("\n");
+}
+
+/**
+ * The unique angle as a REQUIRED perspective, not a label. Returns a prompt
+ * block (or "" when blank) that forces generation to commit to the angle's
+ * specific lens instead of defaulting to a generic structure ("5 tips", "a
+ * beginner's guide"). Used prominently by the outline and section prompts;
+ * the deterministic uniqueAngleApplied gate (lib/style-gates.ts) then checks
+ * the output actually did.
+ */
+export function renderUniqueAngleDirective(angle: string): string {
+  const trimmed = angle.trim();
+  if (trimmed === "") return "";
+  return [
+    `UNIQUE ANGLE (non-negotiable): "${trimmed}"`,
+    "This angle is the video's whole reason to exist. Commit to it:",
+    "- Every section must advance THIS angle's specific lens, not the topic in general.",
+    "- Headings and intents must be recognizably about this angle — if a heading",
+    "  would fit any generic video on the topic, rewrite it to the angle.",
+    "- Do NOT fall back to a generic skeleton (a numbered tips list, a neutral",
+    "  overview) that ignores the angle. The angle's framing, stakes and specifics",
+    "  drive the structure.",
+  ].join("\n");
+}
+
+/**
+ * Audience avatar as a first-class, structured prompt block (demographics,
+ * psychographics, pains WITH evidence, motivations WITH evidence, vocabulary).
+ * Deliberately NOT flattened to a one-liner — the avatar steers who the script
+ * speaks to. Graceful when no avatar exists.
+ */
+export function renderAudienceAvatar(avatar: AudienceAvatar | null): string {
+  if (avatar === null) {
+    return "No audience avatar on file. Assume a curious general audience new to the topic; keep language concrete and welcoming.";
+  }
+  const demographics: string[] = [];
+  if (avatar.ageRange !== null) demographics.push(`age ${avatar.ageRange}`);
+  if (avatar.genderSplit !== null) demographics.push(avatar.genderSplit);
+  if (avatar.geo.length > 0) demographics.push(`mostly ${avatar.geo.join("/")}`);
+  if (avatar.sophistication !== null)
+    demographics.push(`${avatar.sophistication} topic sophistication`);
+  const lines: string[] = [];
+  if (demographics.length > 0) lines.push(`Who they are: ${demographics.join(", ")}.`);
+  if (avatar.pains.length > 0) {
+    lines.push("Pains to speak to (most acute first):");
+    lines.push(
+      ...avatar.pains.map((p) =>
+        p.evidence.trim() === "" ? `  - ${p.pain}` : `  - ${p.pain} (evidence: ${p.evidence})`,
+      ),
+    );
+  }
+  if (avatar.motivations.length > 0) {
+    lines.push("What they want (tie payoffs to these):");
+    lines.push(
+      ...avatar.motivations.map((m) =>
+        m.evidence.trim() === ""
+          ? `  - ${m.motivation}`
+          : `  - ${m.motivation} (evidence: ${m.evidence})`,
+      ),
+    );
+  }
+  if (avatar.vocabularyNotes !== null && avatar.vocabularyNotes.trim() !== "")
+    lines.push(`Vocabulary / register: ${avatar.vocabularyNotes}`);
+  return lines.length > 0
+    ? lines.join("\n")
+    : "An audience avatar exists but carries no detail yet; assume a curious audience close to the topic.";
 }
 
 /** Snippets pending seed copy are placeholders, never shown to the LLM. */

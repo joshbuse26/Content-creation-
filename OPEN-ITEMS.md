@@ -15,10 +15,18 @@ gone from this list; what follows is deferred, cut, or knowingly imperfect.
 - **`@dnd-kit/core` + `@dnd-kit/sortable`** — drag-handle section reorder in
   the editor. Button/keyboard reorder ships and persists via
   `script.reorderSections`; dnd is polish.
-- **`pdf-parse` (or `unpdf`)** — PDF research uploads. `research.upload`
-  takes parsed text, so PDF needs a server-side multipart upload route +
-  extraction. `.txt`/`.md` work end-to-end today; the research screen
-  explains the limitation.
+- **`pdf-parse`** — DONE (Wave D4). Added as a dependency and used as the
+  live extractor (lazy dynamic import of its `PDFParse` API, pdfjs-dist under
+  the hood) behind the `lib/research/pdf.ts` seam. A dependency-free naive
+  extractor (Node `zlib` + text-operator parsing) is the fixture/no-dep
+  fallback, so tests and fixture mode run WITHOUT the binary; the live path
+  falls back to it if the dependency can't load. Binary PDFs upload via
+  `POST /api/research-upload` (multipart, outside tRPC — auth mirrors the
+  thumbnail-image route), are validated (magic number, 20 MB byte cap, parse
+  timeout), extracted to text, and stored as a `kind:"upload"` research_doc
+  attributed to the filename — same per-plan word caps, no credit, and same
+  citation path as paste/url. `.txt`/`.md` still flow through tRPC
+  `research.upload` unchanged.
 
 ## Deferred features / follow-up slices
 

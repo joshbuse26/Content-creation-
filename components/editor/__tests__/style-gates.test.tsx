@@ -14,6 +14,7 @@ const baseReport: StyleGateReport = {
   readingLevelOk: null,
   bannedClaimHits: [],
   bannedClaimsOk: true,
+  uniqueAngleApplied: null,
   notes: [],
 };
 

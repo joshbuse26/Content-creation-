@@ -332,6 +332,14 @@ export const styleGateReportSchema = z.object({
   /** Hard fail when non-empty. */
   bannedClaimHits: z.array(bannedClaimHitSchema),
   bannedClaimsOk: z.boolean(),
+  /**
+   * Unique-angle driver (Wave-D D4): does the output commit to the frame's
+   * stated angle (its distinctive vocabulary recurs across sections) rather
+   * than a generic structure? true = committed, false = generic/under-applied
+   * (surfaced as a note + warning), null = no angle set or not evaluated.
+   * Additive-with-default so pre-D4 persisted/fixture reports stay parseable.
+   */
+  uniqueAngleApplied: z.boolean().nullable().default(null),
   notes: z.array(z.string()),
 });
 export type StyleGateReport = z.infer<typeof styleGateReportSchema>;

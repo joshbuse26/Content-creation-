@@ -91,6 +91,198 @@ export function scanBannedClaims(
 }
 
 // ---------------------------------------------------------------------------
+// Unique-angle application check (WAVE-D-PLAN §3 D4)
+// ---------------------------------------------------------------------------
+
+/**
+ * The unique angle is a steerable, required PERSPECTIVE — not decoration. The
+ * prompts are instructed to commit to it; this deterministic check verifies
+ * the output actually did, so "uniqueAngleApplied" can be surfaced on the
+ * gate report and nudged in the UI. It is intentionally cheap and keyless (no
+ * LLM): it measures whether the angle's distinctive vocabulary actually shows
+ * up across the sections, which a generic "here are 5 tips" structure will
+ * not satisfy.
+ *
+ * A blank/absent angle returns `applied: null` ("not applied / not
+ * evaluated") so existing angle-less projects are never penalized.
+ */
+
+const ANGLE_STOPWORDS = new Set([
+  "the",
+  "and",
+  "for",
+  "with",
+  "that",
+  "this",
+  "from",
+  "your",
+  "you",
+  "are",
+  "was",
+  "what",
+  "when",
+  "where",
+  "which",
+  "while",
+  "into",
+  "onto",
+  "about",
+  "against",
+  "than",
+  "then",
+  "they",
+  "them",
+  "their",
+  "there",
+  "here",
+  "have",
+  "has",
+  "had",
+  "will",
+  "would",
+  "can",
+  "could",
+  "should",
+  "does",
+  "did",
+  "done",
+  "but",
+  "not",
+  "out",
+  "off",
+  "how",
+  "why",
+  "who",
+  "whom",
+  "its",
+  "it's",
+  "a",
+  "an",
+  "of",
+  "to",
+  "in",
+  "on",
+  "at",
+  "by",
+  "is",
+  "be",
+  "or",
+  "as",
+  "my",
+  "me",
+  "we",
+  "us",
+  "our",
+  "do",
+  "go",
+  "so",
+  "up",
+  "if",
+  "all",
+  "any",
+  "more",
+  "most",
+  "some",
+  "one",
+  "two",
+  "get",
+  "got",
+  "make",
+  "made",
+  "like",
+  "just",
+]);
+
+/**
+ * The unique angle is REQUIRED to get the non-generic benefit, but the gate
+ * degrades gracefully: a blank angle simply isn't evaluated (uniqueAngleApplied
+ * stays null) so angle-less projects keep working. Callers (the outline entry
+ * point, the chat Coach, the framing UI) use `isBlankAngle` to decide whether
+ * to nudge the user with `SET_UNIQUE_ANGLE_NUDGE` before generating.
+ */
+export function isBlankAngle(angle: string | null | undefined): boolean {
+  return (angle ?? "").trim() === "";
+}
+
+export const SET_UNIQUE_ANGLE_NUDGE =
+  "Set a unique angle first — a specific perspective or promise, not just the topic — so the outline and draft commit to it instead of a generic structure.";
+
+/** Distinctive keyword tokens from an angle (dedup, length ≥ 4, non-stopword).
+ *  Hyphens/slashes split words ("blind-test" → "blind", "test") so the
+ *  coverage check matches the unhyphenated forms that show up in sections. */
+export function angleKeywords(angle: string): string[] {
+  const raw = angle.toLowerCase().match(/[a-z0-9][a-z0-9']{2,}/g) ?? [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const token of raw) {
+    const word = token.replace(/^'+|'+$/g, "");
+    if (word.length < 4) continue;
+    if (ANGLE_STOPWORDS.has(word)) continue;
+    if (seen.has(word)) continue;
+    seen.add(word);
+    out.push(word);
+  }
+  return out.slice(0, 16);
+}
+
+/** Minimum fraction of sections that must reflect the angle's vocabulary. */
+export const ANGLE_COVERAGE_MIN = 0.34;
+
+export interface UniqueAngleResult {
+  /** true = the output commits to the angle; false = generic; null = no angle set. */
+  applied: boolean | null;
+  /** Fraction of segments (0–1) that reference at least one angle keyword. */
+  coverage: number;
+  /** Distinct angle keywords that appeared anywhere across the segments. */
+  matchedKeywords: string[];
+  /** A human-readable note when the angle is set but under-applied; else null. */
+  note: string | null;
+}
+
+/**
+ * Check whether a set of text segments (outline section headings+intents, or
+ * drafted section headings+bodies) commit to the stated angle. Pure + keyless.
+ */
+export function checkUniqueAngle(
+  angle: string | null | undefined,
+  segments: readonly { heading: string; text: string }[],
+): UniqueAngleResult {
+  const trimmed = (angle ?? "").trim();
+  const keywords = trimmed === "" ? [] : angleKeywords(trimmed);
+  if (keywords.length === 0 || segments.length === 0) {
+    return { applied: null, coverage: 0, matchedKeywords: [], note: null };
+  }
+  const matched = new Set<string>();
+  let hitSegments = 0;
+  for (const seg of segments) {
+    const hay = `${seg.heading} ${seg.text}`.toLowerCase();
+    let segHit = false;
+    for (const kw of keywords) {
+      if (hay.includes(kw)) {
+        matched.add(kw);
+        segHit = true;
+      }
+    }
+    if (segHit) hitSegments += 1;
+  }
+  const coverage = hitSegments / segments.length;
+  // Committed iff the angle's vocabulary recurs (≥2 distinct terms, or every
+  // term of a one/two-word angle) AND it spans a real share of the sections.
+  const distinctNeeded = Math.min(2, keywords.length);
+  const applied = matched.size >= distinctNeeded && coverage >= ANGLE_COVERAGE_MIN;
+  return {
+    applied,
+    coverage,
+    matchedKeywords: [...matched],
+    note: applied
+      ? null
+      : `Sections do not commit to the unique angle ("${trimmed.slice(0, 120)}"): only ${Math.round(
+          coverage * 100,
+        )}% reference it. Re-frame headings and intents around the angle's specific lens instead of a generic structure.`,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // CTA placement check
 // ---------------------------------------------------------------------------
 
@@ -170,13 +362,25 @@ export function checkCtaPlacement(
  * Build the style-gate portion of the quality report from what pure code
  * can determine today. hookPatternOk / readingLevel* stay null until C1
  * threads the chosen hook technique + per-card readability through.
+ *
+ * When the frame's `angle` is provided, the deterministic unique-angle check
+ * runs over the section headings+bodies and its result is surfaced as
+ * `uniqueAngleApplied` (+ a note when under-applied). A blank/absent angle
+ * leaves it null — existing angle-less projects are never penalized.
  */
 export function computeStyleGates(
   sections: readonly ScannableSection[],
   card: StyleCard,
+  angle?: string | null,
 ): StyleGateReport {
   const bannedClaimHits = scanBannedClaims(sections, card.bannedClaims);
   const cta = checkCtaPlacement(sections, card.ctaHabits);
+  const angleResult = checkUniqueAngle(
+    angle,
+    sections.map((s) => ({ heading: s.heading, text: s.body })),
+  );
+  const notes = [...cta.violations];
+  if (angleResult.note !== null) notes.push(angleResult.note);
   return {
     hookPatternOk: null,
     ctaPlacementOk: cta.ok,
@@ -185,6 +389,7 @@ export function computeStyleGates(
     readingLevelOk: null,
     bannedClaimHits,
     bannedClaimsOk: bannedClaimHits.length === 0,
-    notes: cta.violations,
+    uniqueAngleApplied: angleResult.applied,
+    notes,
   };
 }

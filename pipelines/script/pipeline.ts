@@ -574,6 +574,8 @@ export async function runScriptPipeline(
         // the global Flesch gate whenever a card is present).
         styleCard: context.styleCard,
         chosenHookStyle,
+        // Wave D: the unique-angle driver — surfaces uniqueAngleApplied.
+        angle: context.frame.angle,
       });
       let report = computeQualityReport(gateInput());
       const violations = gateViolations(report);

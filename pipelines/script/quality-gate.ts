@@ -49,6 +49,9 @@ export interface GateInput {
   /** Technique tag of the hook actually used; omit/null when unknown
    *  (hookPatternOk then stays null = "not evaluated", never a pass). */
   chosenHookStyle?: HookStyle | null;
+  /** The frame's unique angle — drives the uniqueAngleApplied signal in the
+   *  style gates. Omit/blank ⇒ the signal stays null (no angle to enforce). */
+  angle?: string | null;
 }
 
 export function isAcademicTone(tone: string): boolean {
@@ -126,7 +129,8 @@ export function computeQualityReport(
   }
 
   // -- style-card gates (wave C, completed by C1) ---------------------------
-  const baseStyleGates = card === null ? null : computeStyleGates(input.sections, card);
+  const baseStyleGates =
+    card === null ? null : computeStyleGates(input.sections, card, input.angle ?? null);
   const chosenHookStyle = input.chosenHookStyle ?? null;
   const hookPatternOk =
     card === null || chosenHookStyle === null

@@ -1,6 +1,12 @@
 import type { ScriptContext } from "@/lib/types/pipeline";
 import type { PromptTemplate } from "./version";
-import { jsonOnly, renderFrame, renderResearch, renderStyleCard } from "./shared";
+import {
+  jsonOnly,
+  renderFrame,
+  renderResearch,
+  renderStyleCard,
+  renderUniqueAngleDirective,
+} from "./shared";
 
 /**
  * §5.7 stage 2 — the outline.
@@ -19,6 +25,7 @@ export function outlinePrompt(input: OutlinePromptInput): PromptTemplate {
   const { frame } = input.context;
   const card = input.context.styleCard;
   const totalSeconds = frame.targetMinutes * 60;
+  const angleDirective = renderUniqueAngleDirective(frame.angle);
   const pacingRule =
     card === null
       ? ""
@@ -41,8 +48,12 @@ export function outlinePrompt(input: OutlinePromptInput): PromptTemplate {
       "240 loses people, shorter than 60 feels like channel-surfing.",
       "(5) purpose says what the viewer GETS from the section, not what the",
       `section 'covers'.${pacingRule}`,
+      angleDirective === ""
+        ? ""
+        : " (7) The video has a UNIQUE ANGLE stated below. It is a hard requirement: the section headings and purposes must visibly commit to that angle's specific lens — a generic structure that ignores the angle is a failure.",
     ].join(" "),
     prompt: [
+      ...(angleDirective === "" ? [] : [angleDirective, ""]),
       "Frame:",
       renderFrame(frame),
       "",

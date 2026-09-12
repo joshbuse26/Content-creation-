@@ -1,7 +1,13 @@
 import type { HookStyle } from "@/lib/types/enums";
 import type { Outline, ScriptContext } from "@/lib/types/pipeline";
 import { bannedPhraseList } from "./banned-phrases";
-import { jsonOnly, renderFrame, renderResearch, renderStyleCard } from "./shared";
+import {
+  jsonOnly,
+  renderFrame,
+  renderResearch,
+  renderStyleCard,
+  renderUniqueAngleDirective,
+} from "./shared";
 import type { PromptTemplate } from "./version";
 
 /**
@@ -37,6 +43,7 @@ const HOOK_TECHNIQUE_GUIDE: Record<HookStyle, string> = {
 
 export function hookPrompt(input: HookPromptInput): PromptTemplate {
   const { frame } = input.context;
+  const angleDirective = renderUniqueAngleDirective(frame.angle);
   const allowed = input.allowedTechniques ?? null;
   const techniques: readonly HookStyle[] =
     allowed !== null && allowed.length > 0
@@ -62,6 +69,7 @@ export function hookPrompt(input: HookPromptInput): PromptTemplate {
       `banned:\n${bannedPhraseList()}`,
     ].join(" "),
     prompt: [
+      ...(angleDirective === "" ? [] : [angleDirective, ""]),
       "Frame:",
       renderFrame(frame),
       "",
@@ -98,6 +106,7 @@ export function sectionPrompt(input: SectionPromptInput): PromptTemplate {
     throw new Error(`sectionPrompt: no outline section at index ${input.sectionIndex}`);
   }
   const targetWords = Math.round(target.targetSeconds * 2.5);
+  const angleDirective = renderUniqueAngleDirective(input.context.frame.angle);
   const prior =
     input.priorSections.length > 0
       ? input.priorSections.map((s) => `## ${s.heading} [${s.kind}]\n${s.body}`).join("\n\n")
@@ -123,11 +132,15 @@ export function sectionPrompt(input: SectionPromptInput): PromptTemplate {
       `These phrases are banned:\n${bannedPhraseList()}`,
     ].join(" "),
     prompt: [
+      ...(angleDirective === "" ? [] : [angleDirective, ""]),
       "Frame:",
       renderFrame(input.context.frame),
       "",
       "Creator voice:",
       renderStyleCard(input.context.styleCard),
+      "",
+      "Audience:",
+      input.context.avatarSummary,
       "",
       "Research (use faithfully; do not invent facts beyond it):",
       renderResearch(input.context.research),

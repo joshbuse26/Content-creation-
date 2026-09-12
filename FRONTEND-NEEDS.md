@@ -60,3 +60,37 @@ invalidation event), so a trained card behaves exactly like any other style for
 downstream generation and Coach context. `targetLabel` shows "Trained voice"
 for the mode; if a richer label (the profile's name) is wanted, thread the
 voice-profile list into `targetLabel`.
+
+## 5. PDF research upload (Wave D4 — binary, outside tRPC)
+
+Binary PDFs upload via a dedicated route, not tRPC (tRPC carries JSON only;
+the text `research.upload` procedure still handles paste/MD/TXT):
+
+- `POST /api/research-upload`, `multipart/form-data` with fields
+  `workspaceId`, `projectId`, and a `file` (the PDF). On success returns the
+  created research doc as JSON (`201`; dates are ISO strings — this is a
+  direct fetch, not a superjson tRPC call, so parse dates yourself if needed).
+- Errors: `400` (not a PDF / no extractable text / over the per-plan word
+  cap — body `{ error, code }`), `413` (file over the 20 MB byte cap), `401`
+  unauthenticated, `403` no `research:create`, `404` missing/foreign project.
+- No credit is charged (identical to the text-upload path). The doc is stored
+  as `kind:"upload"` attributed to the filename, and cites into the script
+  exactly like paste/url research.
+- Client flow: a file picker that POSTs the PDF, then invalidate
+  `research.list` to show the new doc. A scanned/image-only PDF returns
+  `400 code:"empty"` — surface "couldn't read text from this PDF".
+
+## 6. Unique-angle surfacing (Wave D4)
+
+- The quality/style gate report now carries `styleGates.uniqueAngleApplied`
+  (`true` = the script commits to the frame's angle, `false` = generic /
+  under-applied with a `notes` entry, `null` = no angle set or not evaluated).
+  It is additive; the `StyleGatesPanel` does not render it yet — add a row
+  ("Unique angle") mapping `uniqueAngleApplied` through the existing
+  `GateRow` verdict (true/false/null → Pass/Fail/Not evaluated) when wanted.
+- Framing UI nudge: when the chosen frame's `angle` is blank, nudge the user
+  to set one before generating. `isBlankAngle(angle)` +
+  `SET_UNIQUE_ANGLE_NUDGE` (both exported from `lib/style-gates.ts`) give the
+  typed check + copy. The gate is intentionally NOT hard-blocking — angle-less
+  projects still generate; the nudge + the reported signal are the driver,
+  alongside the prompt-level directive.
