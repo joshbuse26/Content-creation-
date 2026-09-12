@@ -515,6 +515,39 @@ export const thumbnailsRouter = router({
     .input(thumbnailsContracts.choose.input)
     .output(thumbnailsContracts.choose.output)
     .mutation((opts) => thumbnailsImpl.choose(opts)),
+  // -- Thumbnail Whiteboard Studio (WAVE-D / E2) — additive ------------------
+  generateBoard: workspaceProcedure("thumbnail", "create")
+    .use(general)
+    .use(generation)
+    .input(thumbnailsContracts.generateBoard.input)
+    .output(thumbnailsContracts.generateBoard.output)
+    .mutation((opts) => thumbnailsImpl.generateBoard(opts)),
+  tweakConcept: workspaceProcedure("thumbnail", "update")
+    .use(general)
+    .use(generation)
+    .input(thumbnailsContracts.tweakConcept.input)
+    .output(thumbnailsContracts.tweakConcept.output)
+    .mutation((opts) => thumbnailsImpl.tweakConcept(opts)),
+  favorite: workspaceProcedure("thumbnail", "update")
+    .use(general)
+    .input(thumbnailsContracts.favorite.input)
+    .output(thumbnailsContracts.favorite.output)
+    .mutation((opts) => thumbnailsImpl.favorite(opts)),
+  unfavorite: workspaceProcedure("thumbnail", "update")
+    .use(general)
+    .input(thumbnailsContracts.unfavorite.input)
+    .output(thumbnailsContracts.unfavorite.output)
+    .mutation((opts) => thumbnailsImpl.unfavorite(opts)),
+  chooseWinner: workspaceProcedure("thumbnail", "update")
+    .use(general)
+    .input(thumbnailsContracts.chooseWinner.input)
+    .output(thumbnailsContracts.chooseWinner.output)
+    .mutation((opts) => thumbnailsImpl.chooseWinner(opts)),
+  listBoard: workspaceProcedure("thumbnail", "read")
+    .use(general)
+    .input(thumbnailsContracts.listBoard.input)
+    .output(thumbnailsContracts.listBoard.output)
+    .query((opts) => thumbnailsImpl.listBoard(opts)),
 });
 
 export const descriptionRouter = router({
