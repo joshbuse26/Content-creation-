@@ -6,7 +6,7 @@ import { TitlesPanel } from "@/components/packaging/titles-panel";
 import { DescriptionsPanel } from "@/components/packaging/descriptions-panel";
 import { TagsPanel } from "@/components/packaging/tags-panel";
 import { ChaptersPanel } from "@/components/packaging/chapters-panel";
-import { ThumbsPanel } from "@/components/packaging/thumbs-panel";
+import { ThumbnailStudio } from "@/components/packaging/thumbnail-studio";
 
 type PackTab = "titles" | "description" | "tags" | "chapters" | "thumbnail";
 
@@ -29,7 +29,7 @@ export default function PackagingPage() {
       {tab === "description" ? <DescriptionsPanel /> : null}
       {tab === "tags" ? <TagsPanel /> : null}
       {tab === "chapters" ? <ChaptersPanel /> : null}
-      {tab === "thumbnail" ? <ThumbsPanel /> : null}
+      {tab === "thumbnail" ? <ThumbnailStudio /> : null}
     </div>
   );
 }
