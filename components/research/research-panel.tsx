@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { skipToken } from "@tanstack/react-query";
 import { trpc } from "@/components/providers/trpc";
 import { useWorkspace } from "@/components/providers/workspace-context";
@@ -10,12 +10,13 @@ import { Button, IconButton } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { TextInput, Label } from "@/components/ui/field";
-import { IconDoc, IconLink, IconSearch, IconTrash, IconUpload } from "@/components/ui/icons";
+import { IconDoc, IconLink, IconSearch, IconTrash } from "@/components/ui/icons";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
 import { PipelineStatusNote } from "@/components/ui/pipeline-note";
 import { useToast } from "@/components/ui/toast";
 import { fmtDateTime, fmtNumber } from "@/components/lib/format";
 import { usePipelinePoll } from "@/components/lib/use-pipeline-poll";
+import { UploadResearchCard } from "./upload-research-card";
 
 /**
  * Research screen: three source intakes (agent search, transcript import,
@@ -56,20 +57,12 @@ export function ResearchPanel() {
 
   const [query, setQuery] = useState("");
   const [transcriptUrl, setTranscriptUrl] = useState("");
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (workspaceId === null) return <LoadingState />;
 
-  const handleFile = (file: File) => {
-    setUploadError(null);
-    const name = file.name.toLowerCase();
-    if (!name.endsWith(".txt") && !name.endsWith(".md") && !name.endsWith(".markdown")) {
-      setUploadError(
-        "Only .txt and .md uploads are supported here for now (PDF lands with the server-side parser).",
-      );
-      return;
-    }
+  // Text files (.txt/.md) ride the existing tRPC upload procedure; PDFs go
+  // through the binary /api/research-upload route inside UploadResearchCard.
+  const handleTextFile = (file: File) => {
     file
       .text()
       .then((text) => {
@@ -82,7 +75,7 @@ export function ResearchPanel() {
         });
       })
       .catch(() => {
-        setUploadError("Could not read that file.");
+        toast("Could not read that file.");
       });
   };
 
@@ -172,42 +165,15 @@ export function ResearchPanel() {
           </CardBody>
         </Card>
 
-        {/* Upload */}
-        <Card>
-          <CardHeader title="Upload notes" subtitle="Bring your own research (.txt, .md)." />
-          <CardBody>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".txt,.md,.markdown,text/plain,text/markdown"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file !== undefined) handleFile(file);
-                e.target.value = "";
-              }}
-            />
-            <Button
-              size="sm"
-              variant="primary"
-              busy={uploadMutation.isPending}
-              onClick={() => {
-                fileInputRef.current?.click();
-              }}
-            >
-              <IconUpload size={13} /> Choose file
-            </Button>
-            <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-              5k words on Free, 25k on paid plans. Content is parsed and stored as text.
-            </p>
-            {uploadError !== null ? (
-              <p className="mt-2 text-xs text-red-600 dark:text-red-400">{uploadError}</p>
-            ) : null}
-            {uploadMutation.isError ? (
-              <p className="mt-2 text-xs text-red-600 dark:text-red-400">Upload failed.</p>
-            ) : null}
-          </CardBody>
-        </Card>
+        {/* Upload (PDF via the binary route, .txt/.md via tRPC) */}
+        <UploadResearchCard
+          workspaceId={workspaceId}
+          projectId={projectId}
+          onUploaded={invalidate}
+          onTextFile={handleTextFile}
+          textBusy={uploadMutation.isPending}
+          textError={uploadMutation.isError}
+        />
       </div>
 
       {/* Source list */}
