@@ -17,6 +17,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
 import { PipelineStatusNote } from "@/components/ui/pipeline-note";
 import { useToast } from "@/components/ui/toast";
 import { usePipelinePoll } from "@/components/lib/use-pipeline-poll";
+import { UniqueAngleNudge } from "./unique-angle-nudge";
 
 /** Framing: 4 proposals as cards, pick one, edit the frame fields as a form. */
 export function FramingPanel() {
@@ -220,6 +221,7 @@ function FrameForm({ frame, onSaved }: { frame: Frame; onSaved: () => void }) {
           }}
         />
       </Field>
+      <UniqueAngleNudge angle={angle} />
       <div className="grid grid-cols-2 gap-3">
         <Field label="Format" htmlFor={`ff-format-${frame.id}`}>
           <Select
