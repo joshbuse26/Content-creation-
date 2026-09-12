@@ -79,6 +79,18 @@ export class SsrfBlockedError extends Error {
 }
 
 /**
+ * Thrown when a fetch exceeds its deadline. Distinct from SsrfBlockedError so
+ * the research pipeline can log "slow source skipped" vs. "blocked source
+ * skipped"; both are non-fatal and the run continues.
+ */
+export class FetchTimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "FetchTimeoutError";
+  }
+}
+
+/**
  * Vets a URL (throws SsrfBlockedError unless it points at a public host)
  * and returns the validated address the connection must be pinned to.
  * The hostname is resolved EXACTLY ONCE — the returned address is what
@@ -207,70 +219,88 @@ const defaultFetchImpl: GuardedFetchImpl = (url, init) =>
  * hop, a hard timeout, and a byte cap enforced while streaming. Each hop
  * resolves DNS exactly once (vetUrl) and connects to that vetted address
  * via a pinned dispatcher, closing the DNS-rebinding TOCTOU window.
+ *
+ * The timeout is enforced two ways so a slow or hostile source can NEVER
+ * hang the research pipeline: the AbortSignal aborts a well-behaved fetch,
+ * AND the whole operation races a hard deadline that rejects with a
+ * {@link FetchTimeoutError} even if the underlying fetch ignores the signal
+ * (or a body read stalls). The pipeline treats that as a skipped source.
  */
 export async function guardedFetch(
   rawUrl: string,
   options: GuardedFetchOptions = {},
 ): Promise<FetchedPage> {
+  const timeoutMs = options.timeoutMs ?? FETCH_TIMEOUT_MS;
+  const controller = new AbortController();
+  let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    deadlineTimer = setTimeout(() => {
+      controller.abort();
+      reject(new FetchTimeoutError(`fetch exceeded ${timeoutMs}ms: ${rawUrl}`));
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([runGuardedFetch(rawUrl, controller, options), deadline]);
+  } finally {
+    if (deadlineTimer !== undefined) clearTimeout(deadlineTimer);
+  }
+}
+
+async function runGuardedFetch(
+  rawUrl: string,
+  controller: AbortController,
+  options: GuardedFetchOptions,
+): Promise<FetchedPage> {
   const lookup = options.lookup ?? defaultLookup;
   const fetchImpl = options.fetchImpl ?? defaultFetchImpl;
   const createDispatcher = options.createDispatcher ?? createPinnedDispatcher;
-  const timeoutMs = options.timeoutMs ?? FETCH_TIMEOUT_MS;
   const maxBytes = options.maxBytes ?? FETCH_MAX_BYTES;
-  const controller = new AbortController();
-  const timer = setTimeout(() => {
-    controller.abort();
-  }, timeoutMs);
-  try {
-    let current = rawUrl;
-    for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-      const { url, address } = await vetUrl(current, lookup);
-      const pinned = createDispatcher(url.hostname, address);
-      try {
-        const response = await fetchImpl(url.toString(), {
-          redirect: "manual",
-          signal: controller.signal,
-          dispatcher: pinned.dispatcher,
-          headers: {
-            "user-agent": "GinRummyResearch/1.0 (+research-agent)",
-            accept: "text/html,text/plain,*/*",
-          },
-        });
-        if (response.status >= 300 && response.status < 400) {
-          const location = response.headers.get("location");
-          if (location === null) throw new Error(`redirect without location from ${current}`);
-          current = new URL(location, url).toString();
-          // Body of a redirect response is irrelevant; loop re-vets and
-          // re-pins the next hop.
-          continue;
-        }
-        const reader = response.body?.getReader();
-        if (reader === undefined) {
-          return { finalUrl: url.toString(), status: response.status, body: "" };
-        }
-        const decoder = new TextDecoder("utf-8", { fatal: false });
-        let text = "";
-        let bytes = 0;
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          bytes += value.byteLength;
-          if (bytes > maxBytes) {
-            text += decoder.decode(value.subarray(0, value.byteLength - (bytes - maxBytes)));
-            await reader.cancel();
-            break;
-          }
-          text += decoder.decode(value, { stream: true });
-        }
-        return { finalUrl: url.toString(), status: response.status, body: text };
-      } finally {
-        await pinned.close();
+  let current = rawUrl;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    const { url, address } = await vetUrl(current, lookup);
+    const pinned = createDispatcher(url.hostname, address);
+    try {
+      const response = await fetchImpl(url.toString(), {
+        redirect: "manual",
+        signal: controller.signal,
+        dispatcher: pinned.dispatcher,
+        headers: {
+          "user-agent": "GinRummyResearch/1.0 (+research-agent)",
+          accept: "text/html,text/plain,*/*",
+        },
+      });
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get("location");
+        if (location === null) throw new Error(`redirect without location from ${current}`);
+        current = new URL(location, url).toString();
+        // Body of a redirect response is irrelevant; loop re-vets and
+        // re-pins the next hop.
+        continue;
       }
+      const reader = response.body?.getReader();
+      if (reader === undefined) {
+        return { finalUrl: url.toString(), status: response.status, body: "" };
+      }
+      const decoder = new TextDecoder("utf-8", { fatal: false });
+      let text = "";
+      let bytes = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        bytes += value.byteLength;
+        if (bytes > maxBytes) {
+          text += decoder.decode(value.subarray(0, value.byteLength - (bytes - maxBytes)));
+          await reader.cancel();
+          break;
+        }
+        text += decoder.decode(value, { stream: true });
+      }
+      return { finalUrl: url.toString(), status: response.status, body: text };
+    } finally {
+      await pinned.close();
     }
-    throw new Error(`too many redirects fetching ${rawUrl}`);
-  } finally {
-    clearTimeout(timer);
   }
+  throw new Error(`too many redirects fetching ${rawUrl}`);
 }
 
 /** Strip an HTML page to readable text; returns { title, text }. */

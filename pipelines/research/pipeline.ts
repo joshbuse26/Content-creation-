@@ -14,7 +14,7 @@ import { synthArticleText, synthBrief, synthQueries } from "@/pipelines/script/f
 import { stageInputHash } from "@/pipelines/script/hash";
 import { generateJson } from "@/pipelines/script/llm-json";
 import { countWords } from "@/pipelines/script/readability";
-import { guardedFetch, htmlToText, SsrfBlockedError } from "./ssrf";
+import { FetchTimeoutError, guardedFetch, htmlToText, SsrfBlockedError } from "./ssrf";
 
 /**
  * §5.5 Research agent: plan queries (Haiku) → search top-8 → guarded
@@ -97,13 +97,17 @@ export async function runResearchPipeline(
             text: text.slice(0, 60_000),
           });
         } catch (err) {
-          // Blocked or failed fetches are skipped, never fatal to the run.
+          // Blocked, slow, or failed fetches are SKIPPED, never fatal to the
+          // run — a single hostile/slow source can never stall the pipeline
+          // (the deadline in guardedFetch guarantees each fetch settles).
           if (err instanceof SsrfBlockedError) {
-            logger.warn({ url: candidate.url }, "research fetch blocked by SSRF guard");
+            logger.warn({ url: candidate.url }, "research fetch blocked by SSRF guard; skipping");
+          } else if (err instanceof FetchTimeoutError) {
+            logger.warn({ url: candidate.url }, "research fetch timed out; skipping source");
           } else {
             logger.warn(
               { url: candidate.url, err: err instanceof Error ? err.message : String(err) },
-              "research fetch failed",
+              "research fetch failed; skipping source",
             );
           }
         }
