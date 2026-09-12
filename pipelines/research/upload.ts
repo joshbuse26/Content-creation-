@@ -1,3 +1,4 @@
+import { extractPdfText, type ExtractPdfOptions } from "@/lib/research/pdf";
 import type { ResearchDoc } from "@/lib/types/entities";
 import type { Plan, ResearchKind } from "@/lib/types/enums";
 import type { ProjectId, WorkspaceId } from "@/lib/types/ids";
@@ -6,10 +7,13 @@ import { countWords } from "@/pipelines/script/readability";
 import { RESEARCH_DOC_CONTENT_CAP } from "./pipeline";
 
 /**
- * §5.5 uploads — the API accepts ALREADY-PARSED text (the frozen contract
- * carries `content: string`). Server-side PDF binary parsing needs a
- * pdf-parse dependency and an upload endpoint outside tRPC — noted in
- * REQUESTS-A2.md; MD/TXT flow through as-is today.
+ * §5.5 uploads — the tRPC `research.upload` procedure accepts ALREADY-PARSED
+ * text (the frozen contract carries `content: string`); MD/TXT flow through
+ * it. Binary PDF uploads come in over the dedicated multipart route
+ * (app/api/research-upload) which extracts text server-side via
+ * `lib/research/pdf.ts` and then persists through `savePdfUpload` below —
+ * same research_docs storage, same per-plan word caps, same citation path as
+ * paste/url (a PDF doc's per-fact source is its filename).
  *
  * Word caps by plan: 5k words on free, 25k on any paid tier (spec §5.5).
  */
@@ -56,5 +60,32 @@ export async function saveUpload(
     title: params.filename,
     content,
     wordCount,
+  });
+}
+
+/**
+ * Extract text from an uploaded PDF and persist it as a `kind: "upload"`
+ * research doc, attributed to the filename. Validation (magic number, size
+ * cap, parse timeout) happens inside `extractPdfText`; the per-plan word cap
+ * is enforced by `saveUpload`. No credit is charged — identical to the
+ * paste/url text-upload path.
+ */
+export async function savePdfUpload(
+  deps: EngineDeps,
+  params: {
+    workspaceId: WorkspaceId;
+    projectId: ProjectId;
+    filename: string;
+    bytes: Uint8Array;
+  },
+  pdfOptions: ExtractPdfOptions = {},
+): Promise<ResearchDoc> {
+  const { text } = await extractPdfText(params.bytes, { mode: deps.mode, ...pdfOptions });
+  return saveUpload(deps, {
+    workspaceId: params.workspaceId,
+    projectId: params.projectId,
+    filename: params.filename,
+    kind: "upload",
+    content: text,
   });
 }
