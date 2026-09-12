@@ -89,6 +89,11 @@ export function StyleGatesPanel({ report }: { report: StyleGateReport }) {
               : undefined
           }
         />
+        <GateRow
+          label="Unique angle"
+          verdict={report.uniqueAngleApplied}
+          detail={report.uniqueAngleApplied === false ? "generic — see notes" : undefined}
+        />
       </ul>
 
       {report.bannedClaimHits.length > 0 ? (
