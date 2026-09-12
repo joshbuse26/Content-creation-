@@ -17,6 +17,7 @@ import {
 } from "./ids";
 import {
   channelModeSchema,
+  colorMoodSchema,
   descriptionModeSchema,
   exportFormatSchema,
   ideaStatusSchema,
@@ -24,6 +25,7 @@ import {
   researchKindSchema,
   roleSchema,
   sophisticationSchema,
+  subjectModeSchema,
 } from "./enums";
 import {
   apiKeySchema,
@@ -658,6 +660,72 @@ export const thumbnailsContracts = {
   choose: {
     input: workspaceScopedSchema.extend({ thumbnailConceptId: thumbnailConceptSchema.shape.id }),
     output: thumbnailConceptSchema,
+  },
+  // -- Thumbnail Whiteboard Studio (WAVE-D / E2) — ADDITIVE. The one-shot
+  //    generate/list/choose above stay intact; these drive the board UI.
+  /**
+   * Generate a board of N (3-6) concepts sharing a new board_id. METERED per
+   * image at the existing per-image rate (N credits), idempotent per concept
+   * so a retry/re-run with the same base params never double-charges.
+   */
+  generateBoard: {
+    input: workspaceScopedSchema.extend({
+      projectId: projectIdSchema,
+      count: z.number().int().min(3).max(6),
+      overlayText: z.string().max(200).nullable().default(null),
+      preset: z.string().min(1).max(60).nullable().default(null),
+      subject: subjectModeSchema.nullable().default(null),
+      mood: colorMoodSchema.nullable().default(null),
+    }),
+    output: z.object({
+      boardId: z.uuid(),
+      concepts: z.array(thumbnailConceptSchema),
+    }),
+  },
+  /**
+   * Regenerate ONE concept's image with tweaked params and update its row.
+   * 1 credit, idempotent on the tweaked-input hash.
+   */
+  tweakConcept: {
+    input: workspaceScopedSchema.extend({
+      conceptId: thumbnailConceptSchema.shape.id,
+      compositionPattern: z.string().min(1).max(60).optional(),
+      overlayText: z.string().max(200).nullable().optional(),
+      preset: z.string().min(1).max(60).nullable().optional(),
+      subject: subjectModeSchema.nullable().optional(),
+      mood: colorMoodSchema.nullable().optional(),
+    }),
+    output: thumbnailConceptSchema,
+  },
+  /** Star a concept (no charge). */
+  favorite: {
+    input: workspaceScopedSchema.extend({ conceptId: thumbnailConceptSchema.shape.id }),
+    output: thumbnailConceptSchema,
+  },
+  /** Un-star a concept (no charge). */
+  unfavorite: {
+    input: workspaceScopedSchema.extend({ conceptId: thumbnailConceptSchema.shape.id }),
+    output: thumbnailConceptSchema,
+  },
+  /**
+   * Pick the winning concept: set status=chosen, demote the project's other
+   * concepts, attach it to the packaging surface. No charge. Reconciles with
+   * the existing `choose` (both set status=chosen via the same store call).
+   */
+  chooseWinner: {
+    input: workspaceScopedSchema.extend({ conceptId: thumbnailConceptSchema.shape.id }),
+    output: thumbnailConceptSchema,
+  },
+  /** A project's concepts grouped by board_id, newest board first. No charge. */
+  listBoard: {
+    input: workspaceScopedSchema.extend({ projectId: projectIdSchema }),
+    output: z.array(
+      z.object({
+        boardId: z.uuid().nullable(),
+        createdAt: z.date(),
+        concepts: z.array(thumbnailConceptSchema),
+      }),
+    ),
   },
 } as const;
 

@@ -71,6 +71,13 @@
       "when": 1789151491466,
       "tag": "0009_wave_d2_train_voice_credit_reason",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1789253368583,
+      "tag": "0010_wave_d_thumbnail_whiteboard",
+      "breakpoints": true
     }
   ]
 }

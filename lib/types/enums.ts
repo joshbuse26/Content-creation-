@@ -147,6 +147,18 @@ export const PALETTE_TEMPERATURES = ["warm", "cool", "neutral"] as const;
 export const paletteTemperatureSchema = z.enum(PALETTE_TEMPERATURES);
 export type PaletteTemperature = z.infer<typeof paletteTemperatureSchema>;
 
+// Thumbnail whiteboard board vocabulary (WAVE-D / E2). A concept's subject
+// slot and color mood are stored as nullable TEXT on thumbnail_concepts (so
+// legacy + one-shot rows stay untouched); these are Zod-only enums that the
+// board/tweak contracts validate against — no pgEnum, no migration churn.
+export const SUBJECT_MODES = ["face", "no_face", "object"] as const;
+export const subjectModeSchema = z.enum(SUBJECT_MODES);
+export type SubjectMode = z.infer<typeof subjectModeSchema>;
+
+export const COLOR_MOODS = ["warm", "cool", "neutral", "vibrant", "moody"] as const;
+export const colorMoodSchema = z.enum(COLOR_MOODS);
+export type ColorMood = z.infer<typeof colorMoodSchema>;
+
 export const IDEA_STATUSES = ["new", "saved", "dismissed", "promoted"] as const;
 export const ideaStatusSchema = z.enum(IDEA_STATUSES);
 export type IdeaStatus = z.infer<typeof ideaStatusSchema>;

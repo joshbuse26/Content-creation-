@@ -56,6 +56,7 @@ import {
   scriptStatusSchema,
   sectionKindSchema,
   sophisticationSchema,
+  subjectModeSchema,
   syncStatusSchema,
   thumbnailStatusSchema,
   voiceSourceSchema,
@@ -559,6 +560,25 @@ export const thumbnailConceptSchema = z.object({
   compositionPattern: z.string(),
   imageKey: z.string().nullable(),
   status: thumbnailStatusSchema,
+  // -- Thumbnail whiteboard board fields (WAVE-D / E2) — all nullable or
+  //    defaulted so existing rows and the one-shot generate path parse
+  //    unchanged. board_id groups a generated batch; the rest carry the
+  //    per-concept whiteboard params (overlay, preset, subject slot, mood),
+  //    a favorite flag, and an explicit sort order within the board.
+  /** Groups a batch of concepts generated together; null for one-shot rows. */
+  boardId: z.uuid().nullable().default(null),
+  /** User overlay text folded into this concept's image; null = model picks. */
+  overlayText: z.string().nullable().default(null),
+  /** Archetype/preset key this concept was generated under; null = generic. */
+  presetId: z.string().nullable().default(null),
+  /** Subject slot: face | no_face | object; null for legacy rows. */
+  subjectMode: subjectModeSchema.nullable().default(null),
+  /** Color mood label (see COLOR_MOODS); stored free-text, null for legacy. */
+  colorMood: z.string().nullable().default(null),
+  /** Starred by the user; never charged. */
+  favorited: z.boolean().default(false),
+  /** Explicit order within a board (ascending); 0 for legacy rows. */
+  sort: z.number().int().default(0),
   ...timestamps,
 });
 export type ThumbnailConcept = z.infer<typeof thumbnailConceptSchema>;

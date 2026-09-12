@@ -691,12 +691,30 @@ export const thumbnailConcepts = pgTable(
     /** Object-storage key — never a third-party URL. */
     imageKey: text("image_key"),
     status: thumbnailStatusEnum("status").notNull().default("candidate"),
+    // -- Thumbnail whiteboard board columns (WAVE-D / E2) — ADDITIVE. Every
+    //    column is nullable or defaulted, so existing rows and the one-shot
+    //    `generate` path are unaffected (all writes through the existing
+    //    insert leave these at their defaults). No FK on board_id: it only
+    //    groups a batch of sibling rows, not a tenant relation.
+    /** Groups a batch of concepts generated together; null for one-shot rows. */
+    boardId: uuid("board_id"),
+    /** User overlay text folded into the concept's image prompt. */
+    overlayText: text("overlay_text"),
+    /** Archetype/preset key this concept was generated under. */
+    presetId: text("preset_id"),
+    /** Subject slot: face | no_face | object (stored as text). */
+    subjectMode: text("subject_mode"),
+    /** Color mood label (see COLOR_MOODS; stored as text). */
+    colorMood: text("color_mood"),
+    favorited: boolean("favorited").notNull().default(false),
+    sort: integer("sort").notNull().default(0),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
     index("thumbnail_concepts_project_idx").on(t.projectId),
     index("thumbnail_concepts_workspace_idx").on(t.workspaceId),
+    index("thumbnail_concepts_board_idx").on(t.boardId),
   ],
 );
 
