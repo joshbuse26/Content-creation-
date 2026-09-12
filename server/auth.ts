@@ -1,7 +1,10 @@
 import NextAuth, { type NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
+import Credentials from "next-auth/providers/credentials";
 import type { EmailConfig } from "next-auth/providers";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
+import { eq } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import { getConfig } from "@/lib/config";
 import { logger } from "@/lib/logger";
 import { sendMagicLinkEmail } from "@/server/magic-link";
@@ -15,7 +18,13 @@ import { getDb, hasDb, schema } from "@/db";
  * - Google OAuth: configured from env, silently inactive without keys. The
  *   same Google account later powers the YouTube connect flow (spec §2).
  * - Database sessions via the Drizzle adapter when DATABASE_URL is set.
+ * - TEMPORARY: PLAYTEST_AUTH_BYPASS adds a Credentials "playtest" provider
+ *   and forces JWT sessions (Credentials cannot use database sessions).
+ *   Remove before public launch.
  */
+
+const PLAYTEST_FALLBACK_EMAIL = "joshbuse@hexbandit.io";
+const PLAYTEST_USER_NAME = "Josh Buse";
 
 function buildEmailProvider(): EmailConfig {
   const { EMAIL_FROM } = getConfig();
@@ -35,8 +44,47 @@ function buildEmailProvider(): EmailConfig {
   };
 }
 
+/** Resolve (or create) the playtest user row for the Credentials provider. */
+async function resolvePlaytestUser(): Promise<{ id: string; email: string; name: string }> {
+  const config = getConfig();
+  const email = (config.ADMIN_EMAILS[0] ?? PLAYTEST_FALLBACK_EMAIL).toLowerCase();
+  const name = PLAYTEST_USER_NAME;
+
+  if (!hasDb()) {
+    return { id: randomUUID(), email, name };
+  }
+
+  const db = getDb();
+  const found = await db.select().from(schema.users).where(eq(schema.users.email, email)).limit(1);
+  if (found[0] !== undefined) {
+    return { id: found[0].id, email: found[0].email, name: found[0].name ?? name };
+  }
+
+  const id = randomUUID();
+  await db.insert(schema.users).values({
+    id,
+    email,
+    name,
+    emailVerified: new Date(),
+  });
+  return { id, email, name };
+}
+
+function buildPlaytestCredentialsProvider() {
+  // TEMPORARY — remove PLAYTEST_AUTH_BYPASS / this provider before public launch.
+  return Credentials({
+    id: "playtest",
+    name: "Playtest",
+    credentials: {},
+    async authorize() {
+      return resolvePlaytestUser();
+    },
+  });
+}
+
 function buildAuthConfig(): NextAuthConfig {
   const config = getConfig();
+  const playtestBypass = config.PLAYTEST_AUTH_BYPASS;
   const providers: NextAuthConfig["providers"] = [];
 
   if (config.GOOGLE_CLIENT_ID !== undefined && config.GOOGLE_CLIENT_SECRET !== undefined) {
@@ -55,16 +103,41 @@ function buildAuthConfig(): NextAuthConfig {
     providers.push(buildEmailProvider());
   }
 
+  if (playtestBypass) {
+    providers.push(buildPlaytestCredentialsProvider());
+  }
+
+  // Credentials requires JWT; keep database sessions when bypass is off.
+  const sessionStrategy: "jwt" | "database" = playtestBypass
+    ? "jwt"
+    : hasDb()
+      ? "database"
+      : "jwt";
+
   const base: NextAuthConfig = {
     providers,
     secret: config.AUTH_SECRET ?? "dev-only-secret-change-me",
     trustHost: true,
-    session: { strategy: hasDb() ? "database" : "jwt" },
+    session: { strategy: sessionStrategy },
     pages: {},
     callbacks: {
-      session({ session, user }) {
-        // Database strategy: expose the stable user id on the session.
-        session.user.id = user.id;
+      jwt({ token, user }) {
+        if (user !== undefined) {
+          token.sub = user.id;
+          if (user.email !== undefined && user.email !== null) token.email = user.email;
+          if (user.name !== undefined && user.name !== null) token.name = user.name;
+        }
+        return token;
+      },
+      session({ session, user, token }) {
+        // Database strategy passes `user`; JWT (playtest bypass) passes `token`.
+        if (user !== undefined && typeof user.id === "string" && user.id !== "") {
+          session.user.id = user.id;
+        } else if (typeof token.sub === "string" && token.sub !== "") {
+          session.user.id = token.sub;
+          if (typeof token.email === "string") session.user.email = token.email;
+          if (typeof token.name === "string") session.user.name = token.name;
+        }
         return session;
       },
     },
@@ -84,12 +157,12 @@ function buildAuthConfig(): NextAuthConfig {
     });
   } else {
     logger.warn("DATABASE_URL not set — auth running without persistence (sign-in disabled)");
-    // Without an adapter the session callback receives a JWT token, not a user.
-    base.callbacks = {
-      session({ session }) {
-        return session;
-      },
-    };
+  }
+
+  if (playtestBypass) {
+    logger.warn(
+      "TEMPORARY PLAYTEST_AUTH_BYPASS is enabled — one-click playtest sign-in is active; remove before public launch",
+    );
   }
 
   return base;

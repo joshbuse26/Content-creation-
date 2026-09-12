@@ -75,6 +75,16 @@ const envSchema = z
       .transform((v) => v === "true" || v === "1"),
 
     /**
+     * TEMPORARY playtest-only auth bypass (remove before public launch).
+     * When true, login shows a one-click Credentials provider that signs in
+     * as the first ADMIN_EMAILS entry (or joshbuse@hexbandit.io) with no email.
+     * Accepts true/1/false/0; default false.
+     */
+    PLAYTEST_AUTH_BYPASS: z
+      .preprocess(emptyToUndefined, z.enum(["true", "false", "1", "0"]).default("false"))
+      .transform((v) => v === "true" || v === "1"),
+
+    /**
      * Licensed-voice similarity guard threshold (PRODUCT-CONTRACTS §7): the
      * maximum allowed adaptive-n-gram overlap ratio in any 200-word window
      * between a licensed-voice section and its source snippets. Above this, the

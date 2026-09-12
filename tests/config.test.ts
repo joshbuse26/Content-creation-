@@ -22,6 +22,14 @@ describe("config", () => {
     expect(parseEnv({ ADMIN_EMAILS: "  " }).ADMIN_EMAILS).toEqual([]);
   });
 
+  it("parses PLAYTEST_AUTH_BYPASS (TEMPORARY playtest flag)", () => {
+    expect(parseEnv({}).PLAYTEST_AUTH_BYPASS).toBe(false);
+    expect(parseEnv({ PLAYTEST_AUTH_BYPASS: "true" }).PLAYTEST_AUTH_BYPASS).toBe(true);
+    expect(parseEnv({ PLAYTEST_AUTH_BYPASS: "1" }).PLAYTEST_AUTH_BYPASS).toBe(true);
+    expect(parseEnv({ PLAYTEST_AUTH_BYPASS: "false" }).PLAYTEST_AUTH_BYPASS).toBe(false);
+    expect(parseEnv({ PLAYTEST_AUTH_BYPASS: "0" }).PLAYTEST_AUTH_BYPASS).toBe(false);
+  });
+
   it("treats empty strings as unset", () => {
     const config = parseEnv({ ANTHROPIC_API_KEY: "  ", DATABASE_URL: "" });
     expect(config.ANTHROPIC_API_KEY).toBeUndefined();
