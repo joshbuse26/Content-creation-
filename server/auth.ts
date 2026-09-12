@@ -108,11 +108,7 @@ function buildAuthConfig(): NextAuthConfig {
   }
 
   // Credentials requires JWT; keep database sessions when bypass is off.
-  const sessionStrategy: "jwt" | "database" = playtestBypass
-    ? "jwt"
-    : hasDb()
-      ? "database"
-      : "jwt";
+  const sessionStrategy: "jwt" | "database" = playtestBypass ? "jwt" : hasDb() ? "database" : "jwt";
 
   const base: NextAuthConfig = {
     providers,
@@ -122,21 +118,27 @@ function buildAuthConfig(): NextAuthConfig {
     pages: {},
     callbacks: {
       jwt({ token, user }) {
-        if (user !== undefined) {
+        // NextAuth types mark `user` as always present; at runtime it is only
+        // set on the initial sign-in callback, not on subsequent JWT refreshes.
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- dual-path runtime
+        if (user) {
           token.sub = user.id;
-          if (user.email !== undefined && user.email !== null) token.email = user.email;
-          if (user.name !== undefined && user.name !== null) token.name = user.name;
+          if (user.email) token.email = user.email;
+          if (user.name) token.name = user.name;
         }
         return token;
       },
       session({ session, user, token }) {
         // Database strategy passes `user`; JWT (playtest bypass) passes `token`.
-        if (user !== undefined && typeof user.id === "string" && user.id !== "") {
+        // Types always include `user`; under JWT it is an empty shell at runtime.
+        if (sessionStrategy === "jwt") {
+          if (typeof token.sub === "string" && token.sub !== "") {
+            session.user.id = token.sub;
+            if (typeof token.email === "string") session.user.email = token.email;
+            if (typeof token.name === "string") session.user.name = token.name;
+          }
+        } else if (typeof user.id === "string" && user.id !== "") {
           session.user.id = user.id;
-        } else if (typeof token.sub === "string" && token.sub !== "") {
-          session.user.id = token.sub;
-          if (typeof token.email === "string") session.user.email = token.email;
-          if (typeof token.name === "string") session.user.name = token.name;
         }
         return session;
       },

@@ -4,13 +4,13 @@
 
 ## Score rubric (sheet column `Score (1-5)`)
 
-| Score | Meaning |
-| ----- | ------- |
-| 1 | Unusable |
-| 2 | Heavy rewrite |
-| 3 | Usable with edits |
-| 4 | Light edits |
-| 5 | Shoot it as-is |
+| Score | Meaning           |
+| ----- | ----------------- |
+| 1     | Unusable          |
+| 2     | Heavy rewrite     |
+| 3     | Usable with edits |
+| 4     | Light edits       |
+| 5     | Shoot it as-is    |
 
 **Ship bar:** average ≥ **4.0**. Below 4.0 → prompt iteration in `prompts/` before users see output (PRODUCT-CONTRACTS §6).
 
@@ -73,7 +73,7 @@ Machine columns (`Gate`, `HookPat`, `CTA`, `ReadLvl`, `Claims`) are auto; they d
 Paste this package so prompts can be iterated without re-running discovery:
 
 1. **Average score** + per-brief scores (table excerpt is enough).
-2. For each brief **≤3**: the hook quote, top titles, style-gate fails, and your 1–3 sentence note on *what felt wrong* (generic, wrong register, weak open, CTA awkward, claims soft, etc.).
+2. For each brief **≤3**: the hook quote, top titles, style-gate fails, and your 1–3 sentence note on _what felt wrong_ (generic, wrong register, weak open, CTA awkward, claims soft, etc.).
 3. Prompt version line from the sheet header (`Prompt version: …`).
 4. `PROVIDERS` + whether `LLM_BACKEND=grok`.
 5. Any briefs you customized (id + title) so Claude does not assume the sample set.
@@ -82,18 +82,18 @@ Do **not** paste API keys. Do not ask Claude to change free-admin, train-on-chan
 
 ## Sample brief coverage (replace freely)
 
-| id | Niche flavor | Mode |
-| -- | ------------ | ---- |
-| budget-espresso | Consumer tech / gear | data-storyteller |
-| learn-piano-adult | Education / skills | friendly-coach |
-| meal-prep-myths | Food / habits | rapid-listicle |
-| shed-office-build | DIY / home | hands-on-builder×calm-explainer |
-| phone-battery-myths | Tech myths | contrarian-essayist |
-| vintage-camera-revival | Creative / gear | legacy (no archetype) |
-| cold-plunge-30d | Fitness / challenge | high-stakes-challenge |
-| olive-oil-supply-chain | Investigative consumer | investigative-narrator |
-| smart-home-chaos | Tech comedy | deadpan-comedian |
-| bronze-to-diamond | Gaming / ranked | hype-gamer |
+| id                     | Niche flavor           | Mode                            |
+| ---------------------- | ---------------------- | ------------------------------- |
+| budget-espresso        | Consumer tech / gear   | data-storyteller                |
+| learn-piano-adult      | Education / skills     | friendly-coach                  |
+| meal-prep-myths        | Food / habits          | rapid-listicle                  |
+| shed-office-build      | DIY / home             | hands-on-builder×calm-explainer |
+| phone-battery-myths    | Tech myths             | contrarian-essayist             |
+| vintage-camera-revival | Creative / gear        | legacy (no archetype)           |
+| cold-plunge-30d        | Fitness / challenge    | high-stakes-challenge           |
+| olive-oil-supply-chain | Investigative consumer | investigative-narrator          |
+| smart-home-chaos       | Tech comedy            | deadpan-comedian                |
+| bronze-to-diamond      | Gaming / ranked        | hype-gamer                      |
 
 Not in this sample set (easy swaps): `cozy-vlogger`, `story-time-confessional`, solo `calm-explainer`.
 
@@ -111,7 +111,7 @@ Not in this sample set (easy swaps): `cozy-vlogger`, `story-time-confessional`, 
 
 - Set **either** `archetypeId` **or** `crossover` (`{ "a", "b", "weightA" }`), not both.
 - Omit both mode fields → legacy 7-stage script path.
-- Archetype/crossover briefs skip topics (brief *is* the topic) and run staged outline → hooks → draft.
+- Archetype/crossover briefs skip topics (brief _is_ the topic) and run staged outline → hooks → draft.
 
 ## Guardrails for this playtest
 
