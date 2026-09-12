@@ -34,13 +34,37 @@ export {
   type ThumbnailPipelineParams,
 } from "./pipeline";
 export {
+  applyThumbnailConceptTweak,
   chooseThumbnailConcept,
   getThumbnailConcept,
   insertThumbnailConcepts,
+  listBoardConcepts,
+  listThumbnailBoards,
   listThumbnailConcepts,
   resetThumbnailMemoryForTests,
+  setThumbnailConceptFavorited,
   type NewThumbnailConcept,
+  type ThumbnailBoard,
+  type ThumbnailConceptTweak,
 } from "./persist";
+export {
+  BOARD_MAX_COUNT,
+  BOARD_MIN_COUNT,
+  BOARD_PER_IMAGE_CREDIT,
+  BOARD_PROMPT_VERSION,
+  boardCompositionPatterns,
+  buildBoardConceptPrompt,
+  conceptInputHash,
+  defaultColorMood,
+  defaultSubjectMode,
+  deterministicBoardId,
+  runConceptTweak,
+  runThumbnailBoard,
+  type BoardConceptParams,
+  type GenerateBoardParams,
+  type GeneratedBoard,
+  type TweakConceptParams,
+} from "./board";
 export {
   getThumbnailPipelineDeps,
   handleThumbnailsJob,
