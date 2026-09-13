@@ -421,6 +421,52 @@ export const demandSignalSchema = z.object({
 });
 export type DemandSignal = z.infer<typeof demandSignalSchema>;
 
+/**
+ * "Why it worked" blurb for an outlier (Wave-D E3). A short, cached,
+ * Coach-tier (LlmProvider) one-liner explaining the likely driver of an
+ * outlier's over-performance (title pattern, format, timing). Deterministic
+ * and keyless in fixture mode, and scrubbed of any real-person name
+ * (seed-lint) so the surface never names a creator. Read-only, zero-cost.
+ */
+export const whyItWorkedSchema = z.object({
+  youtubeVideoId: z.string().min(1),
+  blurb: z.string(),
+});
+export type WhyItWorked = z.infer<typeof whyItWorkedSchema>;
+
+/**
+ * One shared outlier THEME across the compared competitor channels (Wave-D
+ * E3 competitor compare) — a structural/format pattern (never a creator's
+ * voice). `sampleVideoIds` are REAL competitor video ids kept as evidence
+ * (they resolve to real watch URLs); the surfaced concepts derived from a
+ * theme are ORIGINAL and name no real person (seed-lint enforced).
+ */
+export const competitorThemeSchema = z.object({
+  /** Short original label for the pattern (e.g. "budget gear shoot-outs"). */
+  theme: z.string(),
+  /** The shared format tag the pattern centers on. */
+  formatTag: z.string(),
+  /** How many of the compared channels showed this pattern (>= 1). */
+  sharedByChannels: z.number().int().min(1),
+  /** Real competitor video ids that evidence the pattern. */
+  sampleVideoIds: z.array(z.string()),
+});
+export type CompetitorTheme = z.infer<typeof competitorThemeSchema>;
+
+/**
+ * Result of `ideas.competitorCompare` (Wave-D E3): the shared outlier themes
+ * across 1-3 competitor channels plus the ORIGINAL idea concepts derived from
+ * them (persisted as ideas rows so they flow into the feed + validated shelf).
+ * No concept or theme names a real creator (seed-lint); the derived ideas are
+ * original, never clones of a named creator's voice or script.
+ */
+export const competitorCompareResultSchema = z.object({
+  channelHandles: z.array(z.string()),
+  themes: z.array(competitorThemeSchema),
+  ideas: z.array(ideaSchema),
+});
+export type CompetitorCompareResult = z.infer<typeof competitorCompareResultSchema>;
+
 export const projectSchema = z.object({
   id: projectIdSchema,
   workspaceId: workspaceIdSchema,

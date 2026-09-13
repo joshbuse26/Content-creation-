@@ -40,6 +40,7 @@ import {
   channelSchema,
   channelStatsSnapshotSchema,
   chapterSetSchema,
+  competitorCompareResultSchema,
   creditLedgerEntrySchema,
   demandSignalSchema,
   descriptionSchema,
@@ -61,6 +62,7 @@ import {
   trainStyleCardResultSchema,
   userSchema,
   voiceProfileSchema,
+  whyItWorkedSchema,
   workspaceSchema,
 } from "./entities";
 import {
@@ -242,8 +244,48 @@ export const ideasContracts = {
       channelId: channelIdSchema,
       nicheKeyword: z.string().min(1).max(60).nullable().default(null),
       limit: z.number().int().min(1).max(100).default(40),
+      /**
+       * E3 filters (additive, defaulted so the existing shape still parses and
+       * behaves identically). `minOutlierRatio` keeps only concepts at/above a
+       * view-multiple floor; `recency` narrows to videos published within the
+       * band (computed from publishedAt). Duration/language bands are omitted
+       * gracefully — niche_videos carries neither column.
+       */
+      minOutlierRatio: z.number().min(0).max(1000).nullable().default(null),
+      recency: z.enum(["all", "month", "week"]).default("all"),
     }),
     output: z.array(nicheVideoSchema),
+  },
+  /**
+   * E3 "why it worked": a short, cached, Coach-tier blurb per outlier video
+   * explaining the likely driver of its over-performance (title pattern,
+   * format, timing). Deterministic + keyless in fixture mode, scrubbed of any
+   * real-person name. Scoped to the channel's niche exactly like `outliers`.
+   * Additive, read-only, zero-cost.
+   */
+  whyItWorked: {
+    input: workspaceScopedSchema.extend({
+      channelId: channelIdSchema,
+      nicheKeyword: z.string().min(1).max(60).nullable().default(null),
+      limit: z.number().int().min(1).max(40).default(12),
+    }),
+    output: z.array(whyItWorkedSchema),
+  },
+  /**
+   * E3 competitor compare: 1-3 competitor channel handles/URLs → their top
+   * outliers (via the YouTube Data API seam) → SHARED outlier THEMES (format/
+   * topic patterns) surfaced as ORIGINAL idea concepts. Workspace-scoped
+   * (the `channelId` anchors tenancy + niche; a foreign channel is NOT_FOUND).
+   * Metered once (idempotent on the compare inputs) — reuses the requestBatch
+   * 1-credit pattern. Never clones a named creator's voice/script; every
+   * derived theme/concept is run through seed-lint so no real name lands.
+   */
+  competitorCompare: {
+    input: workspaceScopedSchema.extend({
+      channelId: channelIdSchema,
+      channelHandles: z.array(z.string().min(2).max(200)).min(1).max(3),
+    }),
+    output: competitorCompareResultSchema,
   },
   /**
    * D3 search-demand signal: a lightweight demand proxy per topic, read
