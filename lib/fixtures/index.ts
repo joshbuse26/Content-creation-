@@ -20,6 +20,7 @@ import {
   revisionSchema,
   scriptSchema,
   scriptSectionSchema,
+  sectionCommentSchema,
   tagSetSchema,
   thumbnailConceptSchema,
   titleSetSchema,
@@ -32,7 +33,7 @@ import {
 } from "@/lib/types/entities";
 import { coachContextSchema } from "@/lib/types/chat";
 import { CHAT_TOOL_NAMES } from "@/lib/types/enums";
-import { qualityGateReportSchema } from "@/lib/types/pipeline";
+import { contentTemplateSchema, qualityGateReportSchema } from "@/lib/types/pipeline";
 
 /**
  * Deterministic fixtures — the data every stub router and fixture provider
@@ -85,6 +86,10 @@ export const FIXTURE_IDS = {
   chatMessageUser: "00000000-0000-4000-8000-0000000000b2",
   chatMessageAssistant: "00000000-0000-4000-8000-0000000000b3",
   chatMessageTool: "00000000-0000-4000-8000-0000000000b4",
+  // Wave E (E4): section comments + reusable content packs.
+  sectionComment: "00000000-0000-4000-8000-0000000000c0",
+  contentPackOutline: "00000000-0000-4000-8000-0000000000c1",
+  contentPackHook: "00000000-0000-4000-8000-0000000000c2",
 } as const;
 
 const T0 = new Date("2026-09-01T12:00:00.000Z");
@@ -488,6 +493,96 @@ export const fixtureDescriptionTemplate = descriptionTemplateSchema.parse({
   workspaceId: FIXTURE_IDS.workspace,
   name: "Gear video default",
   body: "{{summary}}\n\n🛠 Gear in this video:\n{{gear_list}}\n\n⏱ Chapters:\n{{chapters}}\n\n{{cta}}",
+  ...stamps,
+});
+
+/**
+ * A seeded section comment (E4) so the editor's comment thread and the
+ * comments router render keyless. Authored by the fixture user on the hook
+ * section, unresolved.
+ */
+export const fixtureSectionComment = sectionCommentSchema.parse({
+  id: FIXTURE_IDS.sectionComment,
+  workspaceId: FIXTURE_IDS.workspace,
+  projectId: FIXTURE_IDS.project,
+  scriptId: FIXTURE_IDS.script,
+  sectionId: FIXTURE_IDS.sectionHook,
+  authorUserId: FIXTURE_IDS.user,
+  body: "Can we lead with the price reveal here? The hook buries it.",
+  resolved: false,
+  ...stamps,
+});
+
+/**
+ * Seeded reusable content packs (E4): one outline pack + one hook pack, both
+ * tagged to the fixture channel, so the "apply a pack" flow works keyless.
+ */
+export const fixtureContentPackOutline = contentTemplateSchema.parse({
+  id: FIXTURE_IDS.contentPackOutline,
+  workspaceId: FIXTURE_IDS.workspace,
+  channelId: FIXTURE_IDS.channel,
+  kind: "outline",
+  name: "Gear review — proven shape",
+  payload: {
+    kind: "outline",
+    outline: {
+      sections: [
+        {
+          kind: "hook",
+          heading: "The claim",
+          purpose: "Open a loop on the core comparison",
+          retentionNote: "Promise a surprising verdict",
+          targetSeconds: 20,
+        },
+        {
+          kind: "intro",
+          heading: "What we're testing",
+          purpose: "Set the stakes and the method",
+          retentionNote: "Name the two contenders",
+          targetSeconds: 40,
+        },
+        {
+          kind: "chapter",
+          heading: "Round one",
+          purpose: "First head-to-head test",
+          retentionNote: "Tease the gap widening",
+          targetSeconds: 120,
+        },
+        {
+          kind: "outro",
+          heading: "The verdict",
+          purpose: "Deliver the payoff and the takeaway",
+          retentionNote: "Bridge to the next video",
+          targetSeconds: 30,
+        },
+      ],
+    },
+  },
+  ...stamps,
+});
+
+export const fixtureContentPackHook = contentTemplateSchema.parse({
+  id: FIXTURE_IDS.contentPackHook,
+  workspaceId: FIXTURE_IDS.workspace,
+  channelId: FIXTURE_IDS.channel,
+  kind: "hook_pack",
+  name: "Comparison hooks that land",
+  payload: {
+    kind: "hook_pack",
+    hooks: [
+      { style: "bold_claim", body: "The cheap one won. I did not expect that.", autoPicked: true },
+      {
+        style: "open_loop",
+        body: "One of these costs ten times more. You can't tell which from the cup.",
+        autoPicked: false,
+      },
+      {
+        style: "stakes",
+        body: "I spent two grand so you don't have to. Here's where it actually matters.",
+        autoPicked: false,
+      },
+    ],
+  },
   ...stamps,
 });
 

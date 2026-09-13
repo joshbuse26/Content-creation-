@@ -40,6 +40,9 @@ export const RESOURCES = [
   "archetype",
   // Wave D: chat threads/messages — content a writer creates and manages.
   "chat",
+  // Wave E (E4): per-section comment threads. Any member reads; writer+ adds
+  // and resolves; the author-or-admin remove rule is enforced in the handler.
+  "comment",
 ] as const;
 export type Resource = (typeof RESOURCES)[number];
 
@@ -62,6 +65,7 @@ const WRITER_RESOURCES: readonly Resource[] = [
   "avatar",
   "voiceProfile",
   "chat",
+  "comment",
 ];
 
 /** Admin adds channel management, members, templates, workspace settings. */

@@ -4,6 +4,7 @@ import {
   channelIdSchema,
   chatMessageIdSchema,
   chatThreadIdSchema,
+  contentTemplateIdSchema,
   descriptionTemplateIdSchema,
   frameIdSchema,
   ideaIdSchema,
@@ -12,12 +13,14 @@ import {
   revisionIdSchema,
   scriptIdSchema,
   scriptSectionIdSchema,
+  sectionCommentIdSchema,
   voiceProfileIdSchema,
   workspaceIdSchema,
 } from "./ids";
 import {
   channelModeSchema,
   colorMoodSchema,
+  contentPackKindSchema,
   descriptionModeSchema,
   exportFormatSchema,
   ideaStatusSchema,
@@ -55,6 +58,7 @@ import {
   revisionSchema,
   scriptSchema,
   scriptSectionSchema,
+  sectionCommentSchema,
   tagSetSchema,
   thumbnailConceptSchema,
   titleSetSchema,
@@ -66,6 +70,8 @@ import {
   workspaceSchema,
 } from "./entities";
 import {
+  contentPackPayloadSchema,
+  contentTemplateSchema,
   hookCandidateSchema,
   outlineSchema,
   qualityGateReportSchema,
@@ -558,6 +564,14 @@ export const scriptContracts = {
     input: workspaceScopedSchema.extend({
       sectionId: scriptSectionIdSchema,
       guidance: z.string().max(2000).optional(),
+      /**
+       * Surgical edit (E4): the highlighted sentence/sub-section the creator
+       * wants the rewrite to focus on. Additive + optional — omitted, the
+       * behavior is exactly the whole-section regenerate it was before. When
+       * present, the selection + steer note scope the regeneration prompt to
+       * that part while the section is still rewritten as a coherent whole.
+       */
+      selectionText: z.string().max(5000).optional(),
     }),
     output: jobAcceptedSchema,
   },
@@ -852,6 +866,98 @@ export const templatesContracts = {
   },
   remove: {
     input: workspaceScopedSchema.extend({ templateId: descriptionTemplateIdSchema }),
+    output: z.object({ removed: z.boolean() }),
+  },
+  // -- Reusable content packs (E4) — outline / hook_pack, scoped per workspace,
+  //    taggable per channel. Mirrors the description-template role model:
+  //    admin+ manage (save/remove), any member lists, writer applies. Kept on
+  //    the templates router alongside the existing description-template CRUD,
+  //    which is left untouched.
+  /**
+   * Save a proven outline or hook set as a reusable pack. channelId null =
+   * workspace-wide. Admin+ only (template resource). No LLM, no charge.
+   */
+  saveContentPack: {
+    input: workspaceScopedSchema.extend({
+      channelId: channelIdSchema.nullable().default(null),
+      name: z.string().min(1).max(120),
+      payload: contentPackPayloadSchema,
+    }),
+    output: contentTemplateSchema,
+  },
+  /**
+   * List content packs, filtered by channel + kind. channelId null ⇒ only
+   * workspace-wide packs; a channel id ⇒ that channel's packs plus the
+   * workspace-wide ones (a pack tagged to a DIFFERENT channel is never
+   * returned — channel isolation). kind null ⇒ both kinds. Any member.
+   */
+  listContentPacks: {
+    input: workspaceScopedSchema.extend({
+      channelId: channelIdSchema.nullable().default(null),
+      kind: contentPackKindSchema.nullable().default(null),
+    }),
+    output: z.array(contentTemplateSchema),
+  },
+  /**
+   * Apply a pack to seed a project — returns the pack payload so the caller
+   * seeds the outline/hooks stage with it. No LLM, no charge (pure reuse).
+   * Writer+ (gated on project.update). A pack tagged to a channel other than
+   * the project's channel is refused (channel isolation).
+   */
+  applyContentPack: {
+    input: workspaceScopedSchema.extend({
+      contentTemplateId: contentTemplateIdSchema,
+      projectId: projectIdSchema,
+    }),
+    output: z.object({
+      contentTemplate: contentTemplateSchema,
+      payload: contentPackPayloadSchema,
+    }),
+  },
+  /** Remove a content pack. Admin+ only. */
+  removeContentPack: {
+    input: workspaceScopedSchema.extend({ contentTemplateId: contentTemplateIdSchema }),
+    output: z.object({ removed: z.boolean() }),
+  },
+} as const;
+
+// --------------------------------------------------------------------------
+// comments (E4) — per-section comment threads for team collaboration. Zero
+// credits (no LLM); role-gated per the authz matrix (viewer read-only, writer+
+// add/resolve, author-or-admin remove); tenancy-scoped (cross-workspace →
+// NOT_FOUND). Light: clients poll/invalidate on mutation, not realtime.
+// --------------------------------------------------------------------------
+
+export const commentsContracts = {
+  /** All comments on a script (optionally one section), oldest first. */
+  list: {
+    input: workspaceScopedSchema.extend({
+      scriptId: scriptIdSchema,
+      sectionId: scriptSectionIdSchema.nullable().default(null),
+    }),
+    output: z.array(sectionCommentSchema),
+  },
+  /** Add a comment to a section. Writer+. */
+  add: {
+    input: workspaceScopedSchema.extend({
+      sectionId: scriptSectionIdSchema,
+      body: z.string().min(1).max(4000),
+    }),
+    output: sectionCommentSchema,
+  },
+  /** Mark a comment resolved. Writer+. */
+  resolve: {
+    input: workspaceScopedSchema.extend({ commentId: sectionCommentIdSchema }),
+    output: sectionCommentSchema,
+  },
+  /** Reopen a resolved comment. Writer+. */
+  unresolve: {
+    input: workspaceScopedSchema.extend({ commentId: sectionCommentIdSchema }),
+    output: sectionCommentSchema,
+  },
+  /** Remove a comment. The author may remove their own; admin+ may remove any. */
+  remove: {
+    input: workspaceScopedSchema.extend({ commentId: sectionCommentIdSchema }),
     output: z.object({ removed: z.boolean() }),
   },
 } as const;

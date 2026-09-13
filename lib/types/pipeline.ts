@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   channelIdSchema,
+  contentTemplateIdSchema,
   frameIdSchema,
   projectIdSchema,
   researchDocIdSchema,
@@ -9,7 +10,13 @@ import {
   voiceProfileIdSchema,
   workspaceIdSchema,
 } from "./ids";
-import { frameFormatSchema, frameOutcomeSchema, hookStyleSchema, sectionKindSchema } from "./enums";
+import {
+  contentPackKindSchema,
+  frameFormatSchema,
+  frameOutcomeSchema,
+  hookStyleSchema,
+  sectionKindSchema,
+} from "./enums";
 import {
   audienceAvatarSchema,
   avatarMotivationSchema,
@@ -271,6 +278,37 @@ export const hookCandidateSchema = z.object({
   autoPicked: z.boolean(),
 });
 export type HookCandidate = z.infer<typeof hookCandidateSchema>;
+
+/**
+ * Reusable content-pack payload (E4): EITHER a saved outline structure OR a
+ * set of hooks. A discriminated union on `kind` keeps the shapes exact —
+ * an outline pack always carries `outline`, a hook pack always carries
+ * `hooks`. This is pure reuse material (no LLM), applied to seed a project.
+ */
+export const contentPackPayloadSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("outline"), outline: outlineSchema }),
+  z.object({ kind: z.literal("hook_pack"), hooks: z.array(hookCandidateSchema).min(1).max(6) }),
+]);
+export type ContentPackPayload = z.infer<typeof contentPackPayloadSchema>;
+
+/**
+ * A saved content pack (E4). Scoped per WORKSPACE and taggable per CHANNEL
+ * (channelId null = workspace-wide, offered for every channel). `kind` labels
+ * it; `payload` holds the outline or hook set. Mirrors the description-template
+ * pattern: admin+ manage, any member reads, writer applies. Channel isolation:
+ * listContentPacks for channel B never returns a pack tagged to channel A.
+ */
+export const contentTemplateSchema = z.object({
+  id: contentTemplateIdSchema,
+  workspaceId: workspaceIdSchema,
+  channelId: channelIdSchema.nullable(),
+  kind: contentPackKindSchema,
+  name: z.string().min(1).max(120),
+  payload: contentPackPayloadSchema,
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+export type ContentTemplate = z.infer<typeof contentTemplateSchema>;
 
 export const draftedSectionSchema = z.object({
   kind: sectionKindSchema,

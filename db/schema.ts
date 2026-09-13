@@ -16,9 +16,11 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import type { CrossoverBlend, StyleCard, ThumbnailPreset } from "@/lib/types/entities";
+import type { ContentPackPayload } from "@/lib/types/pipeline";
 import {
   CHANNEL_MODES,
   CHAT_ROLES,
+  CONTENT_PACK_KINDS,
   CREDIT_REASONS,
   DESCRIPTION_MODES,
   GENERATION_MODES,
@@ -75,6 +77,7 @@ export const pipelineRunStatusEnum = pgEnum("pipeline_run_status", PIPELINE_RUN_
 export const creditReasonEnum = pgEnum("credit_reason", CREDIT_REASONS);
 export const generationModeEnum = pgEnum("generation_mode", GENERATION_MODES);
 export const chatRoleEnum = pgEnum("chat_role", CHAT_ROLES);
+export const contentPackKindEnum = pgEnum("content_pack_kind", CONTENT_PACK_KINDS);
 
 // ---------------------------------------------------------------------------
 // Column helpers
@@ -972,5 +975,73 @@ export const chatMessages = pgTable(
   (t) => [
     index("chat_messages_workspace_idx").on(t.workspaceId),
     uniqueIndex("chat_messages_thread_seq_uq").on(t.threadId, t.seq),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Team collaboration (Wave E — E4). Section comments are a light,
+// poll/invalidate comment thread per script section (not realtime); reusable
+// content packs capture a proven outline or hook set for reuse within a
+// channel. Both are tenant rows: workspace_id denormalized for row-level
+// authz, every read/write filtered on it.
+// ---------------------------------------------------------------------------
+
+export const sectionComments = pgTable(
+  "section_comments",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    scriptId: uuid("script_id")
+      .notNull()
+      .references(() => scripts.id, { onDelete: "cascade" }),
+    sectionId: uuid("section_id")
+      .notNull()
+      .references(() => scriptSections.id, { onDelete: "cascade" }),
+    /** The member who wrote the comment; kept for the author-or-admin remove rule. */
+    authorUserId: uuid("author_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    resolved: boolean("resolved").notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("section_comments_section_idx").on(t.sectionId),
+    index("section_comments_script_idx").on(t.scriptId),
+    index("section_comments_workspace_idx").on(t.workspaceId),
+  ],
+);
+
+/**
+ * Reusable content packs (outline / hook_pack). Scoped per workspace,
+ * taggable per channel (channel_id null = workspace-wide). payload jsonb holds
+ * the saved outline structure or hook set (lib/types/pipeline.ts
+ * contentPackPayloadSchema). Admin+ manage; any member reads; writer applies.
+ */
+export const contentTemplates = pgTable(
+  "content_templates",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    /** null = workspace-wide pack (offered for every channel). */
+    channelId: uuid("channel_id").references(() => channels.id, { onDelete: "cascade" }),
+    kind: contentPackKindEnum("kind").notNull(),
+    name: text("name").notNull(),
+    payload: jsonb("payload").$type<ContentPackPayload>().notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("content_templates_workspace_idx").on(t.workspaceId),
+    index("content_templates_channel_idx").on(t.channelId),
+    index("content_templates_kind_idx").on(t.kind),
   ],
 );

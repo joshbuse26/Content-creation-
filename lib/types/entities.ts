@@ -21,6 +21,7 @@ import {
   revisionIdSchema,
   scriptIdSchema,
   scriptSectionIdSchema,
+  sectionCommentIdSchema,
   tagSetIdSchema,
   thumbnailConceptIdSchema,
   titleSetIdSchema,
@@ -648,6 +649,26 @@ export const descriptionTemplateSchema = z.object({
   ...timestamps,
 });
 export type DescriptionTemplate = z.infer<typeof descriptionTemplateSchema>;
+
+/**
+ * A comment thread entry on one script section (E4 — team collaboration).
+ * Tenancy: workspace_id is denormalized for row-level authz; project_id and
+ * script_id anchor it to the surrounding objects. `resolved` flips the thread
+ * styling without deleting history. Authored by a member; author + admin may
+ * remove. Cross-workspace reads are NOT_FOUND (tenancy-scoped).
+ */
+export const sectionCommentSchema = z.object({
+  id: sectionCommentIdSchema,
+  workspaceId: workspaceIdSchema,
+  projectId: projectIdSchema,
+  scriptId: scriptIdSchema,
+  sectionId: scriptSectionIdSchema,
+  authorUserId: userIdSchema,
+  body: z.string().min(1).max(4000),
+  resolved: z.boolean(),
+  ...timestamps,
+});
+export type SectionComment = z.infer<typeof sectionCommentSchema>;
 
 export const tagSetSchema = z.object({
   id: tagSetIdSchema,

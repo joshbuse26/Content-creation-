@@ -268,3 +268,12 @@ export type HookStyle = z.infer<typeof hookStyleSchema>;
 export const EXPORT_FORMATS = ["txt", "md", "docx", "teleprompter"] as const;
 export const exportFormatSchema = z.enum(EXPORT_FORMATS);
 export type ExportFormat = z.infer<typeof exportFormatSchema>;
+
+/**
+ * Reusable content-pack kinds (E4). A pack captures either a saved OUTLINE
+ * structure or a HOOK set so a team can reuse a proven shape across projects
+ * within a channel. Stored as nullable TEXT-free pgEnum on content_templates.
+ */
+export const CONTENT_PACK_KINDS = ["outline", "hook_pack"] as const;
+export const contentPackKindSchema = z.enum(CONTENT_PACK_KINDS);
+export type ContentPackKind = z.infer<typeof contentPackKindSchema>;
