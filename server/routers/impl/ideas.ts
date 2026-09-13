@@ -1,14 +1,31 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { z } from "zod";
 import type { ideasContracts } from "@/lib/types/api";
-import type { DemandSignal, Frame, Idea, NicheVideo, Project } from "@/lib/types/entities";
+import type {
+  CompetitorCompareResult,
+  DemandSignal,
+  Frame,
+  Idea,
+  NicheVideo,
+  Project,
+  WhyItWorked,
+} from "@/lib/types/entities";
+import { compareKeyInput, runCompetitorCompare } from "@/pipelines/ideation/compete";
 import { computeTopicDemand } from "@/pipelines/ideation/demand";
 import { getIdeationDeps } from "@/pipelines/ideation/deps";
 import { IDEA_BATCH_CREDIT_COST } from "@/pipelines/ideation/ideas";
 import { processIdeationJob } from "@/pipelines/ideation/jobs";
 import { normalizeKeyword } from "@/pipelines/ideation/similarity";
+import { computeWhyItWorked } from "@/pipelines/ideation/why";
 import { dispatchPipelineJob } from "@/pipelines/script/execute";
-import { exemptionFromCtx, isCtxCreditExempt, requireCredits } from "@/server/credits";
+import { settleCharge } from "@/pipelines/script/settle-charge";
+import { requireCreditsWithOverage } from "@/server/billing";
+import {
+  CREDIT_COSTS,
+  exemptionFromCtx,
+  isCtxCreditExempt,
+  requireCredits,
+} from "@/server/credits";
 import { JOB_NAMES, QUEUE_NAMES } from "@/queue/queues";
 import { badRequest, jobAccepted, notFound, preconditionFailed, type HandlerOpts } from "./_shared";
 
@@ -30,9 +47,23 @@ type RequestBatchInput = z.output<typeof ideasContracts.requestBatch.input>;
 type OutliersInput = z.output<typeof ideasContracts.outliers.input>;
 type SearchDemandInput = z.output<typeof ideasContracts.searchDemand.input>;
 type UseIdeaInput = z.output<typeof ideasContracts.useIdea.input>;
+type WhyItWorkedInput = z.output<typeof ideasContracts.whyItWorked.input>;
+type CompetitorCompareInput = z.output<typeof ideasContracts.competitorCompare.input>;
 
 /** Default seed-frame duration when the idea carries none (D3 use-this-idea). */
 const SEED_FRAME_MINUTES = 8;
+
+/** E3 dedup window for competitor-compare concept persistence. */
+const COMPARE_DEDUP_DAYS = 7;
+
+const MS_PER_DAY = 86_400_000;
+
+/** Map the E3 `recency` filter band to a publishedAfter instant (null = all). */
+function recencyPublishedAfter(recency: OutliersInput["recency"], now: Date): Date | undefined {
+  if (recency === "week") return new Date(now.getTime() - 7 * MS_PER_DAY);
+  if (recency === "month") return new Date(now.getTime() - 31 * MS_PER_DAY);
+  return undefined;
+}
 
 async function ownedIdea(
   ctx: HandlerOpts<SaveInput>["ctx"],
@@ -141,7 +172,13 @@ export const ideasHandlers = {
     const keywords =
       input.nicheKeyword !== null ? [normalizeKeyword(input.nicheKeyword)] : channel.nicheKeywords;
     if (keywords.length === 0) return [];
-    return deps.store.listOutliers({ nicheKeywords: keywords, limit: input.limit });
+    const publishedAfter = recencyPublishedAfter(input.recency, deps.now());
+    return deps.store.listOutliers({
+      nicheKeywords: keywords,
+      limit: input.limit,
+      ...(publishedAfter !== undefined ? { publishedAfter } : {}),
+      ...(input.minOutlierRatio !== null ? { minOutlierRatio: input.minOutlierRatio } : {}),
+    });
   },
 
   /**
@@ -196,12 +233,27 @@ export const ideasHandlers = {
     // and the outline path read uniqueAngle off the chosen frame's angle.
     const angle = (input.angle ?? idea.angle).trim() || idea.angle;
     const minutes = input.targetMinutes ?? SEED_FRAME_MINUTES;
+
+    // E3 deepen: prefill the audience-avatar hint so framing lands more
+    // complete. If the channel has a generated avatar, fold its sophistication
+    // + top pain into the frame's audience segment; else fall back to the
+    // first niche keyword (the prior behavior). Read-only + best-effort.
+    const avatar = await deps.engineStore.getAvatarForChannel(idea.channelId);
+    const audienceHint = avatarAudienceHint(avatar, channel.nicheKeywords[0] ?? "");
+
     const frames = await deps.engineStore.listFrames(ctx.workspaceId, project.id);
     const chosen = frames.find((f) => f.chosen) ?? null;
 
     let frame: Frame | null;
     if (chosen !== null) {
-      frame = await deps.engineStore.updateFrame(ctx.workspaceId, chosen.id, { angle });
+      // Re-steer the angle; fill the audience segment only when still empty
+      // (never clobber a segment the user already set — keeps re-use idempotent).
+      frame = await deps.engineStore.updateFrame(ctx.workspaceId, chosen.id, {
+        angle,
+        ...(chosen.audienceSegment.trim() === "" && audienceHint !== ""
+          ? { audienceSegment: audienceHint }
+          : {}),
+      });
     } else {
       const [seeded] = await deps.engineStore.insertFrames([
         {
@@ -211,7 +263,7 @@ export const ideasHandlers = {
           angle,
           format: "essay",
           outcome: "watch_time",
-          audienceSegment: channel.nicheKeywords[0] ?? "",
+          audienceSegment: audienceHint,
           tone: "conversational",
           targetMinutes: minutes,
           keywords: channel.nicheKeywords,
@@ -223,4 +275,95 @@ export const ideasHandlers = {
 
     return { idea, project, frame };
   },
+
+  /**
+   * E3 "why it worked": short cached Coach-tier blurbs per outlier for the
+   * channel's niche. Read-only, zero-cost, scoped exactly like `outliers`.
+   */
+  async whyItWorked({ ctx, input }: HandlerOpts<WhyItWorkedInput>): Promise<WhyItWorked[]> {
+    const deps = await getIdeationDeps();
+    const channel = await deps.channelRepo.get(ctx.workspaceId, input.channelId);
+    if (channel === null) notFound("channel");
+    const keywords =
+      input.nicheKeyword !== null ? [normalizeKeyword(input.nicheKeyword)] : channel.nicheKeywords;
+    if (keywords.length === 0) return [];
+    const videos = await deps.store.listOutliers({ nicheKeywords: keywords, limit: input.limit });
+    return computeWhyItWorked(deps, videos);
+  },
+
+  /**
+   * E3 competitor compare: 1-3 competitor channels → shared outlier THEMES →
+   * ORIGINAL concepts persisted as ideas rows. Tenancy-scoped (a foreign own
+   * channel is NOT_FOUND). Metered once via the requestBatch 1-credit pattern,
+   * idempotent on the (channel + sorted handles) hash — reads are free and a
+   * repeat compare of the same competitors neither double-charges nor
+   * duplicates concepts. Never clones a named creator (seed-lint inside).
+   */
+  async competitorCompare({
+    ctx,
+    input,
+  }: HandlerOpts<CompetitorCompareInput>): Promise<CompetitorCompareResult> {
+    const deps = await getIdeationDeps();
+    const channel = await deps.channelRepo.get(ctx.workspaceId, input.channelId);
+    if (channel === null) notFound("channel");
+
+    const chargeKey = `competitorCompare:${createHash("sha1")
+      .update(compareKeyInput(input.channelId, input.channelHandles))
+      .digest("hex")
+      .slice(0, 32)}`;
+
+    // Dispatch gate BEFORE the provider/LLM work (never work you can't pay for).
+    const exemption = exemptionFromCtx(ctx);
+    await requireCreditsWithOverage(ctx.workspaceId, CREDIT_COSTS.ideaBatch, {
+      ...exemption,
+      actorUserId: ctx.userId,
+      idempotencyKey: chargeKey,
+    });
+
+    const now = deps.now();
+    const since = new Date(now.getTime() - COMPARE_DEDUP_DAYS * MS_PER_DAY);
+    const recentTitles = await deps.store.recentIdeaTitles(ctx.workspaceId, input.channelId, since);
+
+    const { themes, ideas } = await runCompetitorCompare(deps, {
+      workspaceId: ctx.workspaceId,
+      channelId: input.channelId,
+      channelTitle: channel.title,
+      nicheKeywords: channel.nicheKeywords,
+      channelHandles: input.channelHandles,
+      recentTitles,
+      generatedOn: now.toISOString().slice(0, 10),
+    });
+
+    // Completion charge — idempotent on the compare hash (a re-compare of the
+    // same competitors is free). Exempt actors skip the debit entirely.
+    await settleCharge(deps.engineStore, {
+      workspaceId: ctx.workspaceId,
+      delta: -CREDIT_COSTS.ideaBatch,
+      reason: "idea_batch",
+      actorUserId: ctx.userId,
+      projectId: null,
+      idempotencyKey: chargeKey,
+      skipDebit: isCtxCreditExempt(ctx),
+    });
+
+    return { channelHandles: input.channelHandles, themes, ideas };
+  },
 } as const;
+
+/**
+ * A compact audience hint from a channel's avatar — "intermediate · over-spends
+ * on gear and still gets sour shots" style. Falls back to the provided default
+ * (the first niche keyword) when the channel has no avatar yet.
+ */
+function avatarAudienceHint(
+  avatar: { sophistication: string | null; pains: { pain: string }[] } | null,
+  fallback: string,
+): string {
+  if (avatar === null) return fallback;
+  const parts: string[] = [];
+  if (avatar.sophistication !== null) parts.push(avatar.sophistication);
+  const topPain = avatar.pains[0]?.pain.trim();
+  if (topPain !== undefined && topPain !== "") parts.push(topPain);
+  const hint = parts.join(" · ").slice(0, 200);
+  return hint !== "" ? hint : fallback;
+}

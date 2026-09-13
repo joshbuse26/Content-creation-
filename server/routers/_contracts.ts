@@ -283,6 +283,17 @@ export const ideasRouter = router({
     .input(ideasContracts.useIdea.input)
     .output(ideasContracts.useIdea.output)
     .mutation(({ ctx, input }) => ideasHandlers.useIdea({ ctx, input })),
+  whyItWorked: workspaceProcedure("idea", "read")
+    .use(general)
+    .input(ideasContracts.whyItWorked.input)
+    .output(ideasContracts.whyItWorked.output)
+    .query(({ ctx, input }) => ideasHandlers.whyItWorked({ ctx, input })),
+  competitorCompare: workspaceProcedure("idea", "create")
+    .use(general)
+    .use(generation)
+    .input(ideasContracts.competitorCompare.input)
+    .output(ideasContracts.competitorCompare.output)
+    .mutation(({ ctx, input }) => ideasHandlers.competitorCompare({ ctx, input })),
 });
 
 export const projectRouter = router({
