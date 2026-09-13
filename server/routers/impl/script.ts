@@ -249,6 +249,8 @@ export const scriptImpl = {
     const sections = await deps.store.listSections(ctx.workspaceId, section.scriptId);
     const index = sections.findIndex((s) => s.id === section.id);
     const guidance = input.guidance ?? null;
+    // Surgical edit (E4): an optional highlighted span scopes the rewrite.
+    const selection = input.selectionText ?? null;
     const result = await generateJson({
       mode: deps.mode,
       llm: deps.llm,
@@ -272,16 +274,25 @@ export const scriptImpl = {
           body: s.body,
         })),
         guidance,
+        selection,
       }),
       maxTokens: 3000,
       temperature: 0.8,
       schema: z.object({ body: z.string().min(1) }),
       fixture: () => ({
+        // Fold the steer note AND the surgical selection into the synthesized
+        // heading so keyless tests can assert both drove the rewrite.
         body: synthSectionBody(
           context,
           {
             kind: section.kind,
-            heading: `${section.heading} ${guidance ?? "regenerated"}`,
+            heading: [
+              section.heading,
+              guidance ?? "regenerated",
+              selection === null ? "" : `focus:${selection.slice(0, 40)}`,
+            ]
+              .filter((s) => s !== "")
+              .join(" "),
             purpose: "",
             retentionNote: section.retentionNote ?? "",
             targetSeconds: Math.max(20, section.estSeconds),

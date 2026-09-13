@@ -169,6 +169,13 @@ export interface RegenerateSectionPromptInput {
   priorSections: { kind: string; heading: string; body: string }[];
   followingSections: { kind: string; heading: string; body: string }[];
   guidance: string | null;
+  /**
+   * Surgical edit (E4): the highlighted part of the section the creator wants
+   * the rewrite to focus on. null = whole-section regenerate (unchanged
+   * behavior). When set, the model is told to concentrate its change on this
+   * span while still emitting the WHOLE section so it stays coherent.
+   */
+  selection?: string | null;
 }
 
 export function regenerateSectionPrompt(input: RegenerateSectionPromptInput): PromptTemplate {
@@ -198,6 +205,14 @@ export function regenerateSectionPrompt(input: RegenerateSectionPromptInput): Pr
       "Following sections (must still flow from your rewrite):",
       input.followingSections.map((s) => `## ${s.heading}\n${s.body}`).join("\n\n") || "(none)",
       "",
+      input.selection !== null && input.selection !== undefined && input.selection.trim() !== ""
+        ? [
+            "Focus your change on THIS highlighted part of the section (rewrite it,",
+            "but still return the WHOLE section so it reads as one coherent piece —",
+            "leave the rest essentially intact unless a small edit is needed to keep",
+            `the flow): "${input.selection.trim()}"`,
+          ].join(" ")
+        : "",
       input.guidance !== null
         ? `The creator's instruction for this rewrite: ${input.guidance}`
         : "",

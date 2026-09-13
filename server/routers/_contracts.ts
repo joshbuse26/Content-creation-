@@ -6,6 +6,7 @@ import {
   channelContracts,
   chaptersContracts,
   chatContracts,
+  commentsContracts,
   dashboardContracts,
   descriptionContracts,
   frameContracts,
@@ -30,6 +31,7 @@ import { billingHandlers } from "@/server/routers/impl/billing";
 import { channelHandlers } from "@/server/routers/impl/channel";
 import { chaptersHandlers } from "@/server/routers/impl/chapters";
 import { chatImpl } from "@/server/routers/impl/chat";
+import { commentsImpl } from "@/server/routers/impl/comments";
 import { dashboardHandlers } from "@/server/routers/impl/dashboard";
 import { descriptionHandlers } from "@/server/routers/impl/description";
 import { frameImpl } from "@/server/routers/impl/frame";
@@ -639,6 +641,60 @@ export const templatesRouter = router({
     .input(templatesContracts.remove.input)
     .output(templatesContracts.remove.output)
     .mutation((opts) => templatesImpl.remove(opts)),
+  // -- Reusable content packs (E4). Admin+ manage (save/remove via the
+  //    `template` resource); any member lists; writer applies (gated on
+  //    `project`/update, since applying seeds a project). -------------------
+  saveContentPack: workspaceProcedure("template", "create")
+    .use(general)
+    .input(templatesContracts.saveContentPack.input)
+    .output(templatesContracts.saveContentPack.output)
+    .mutation((opts) => templatesImpl.saveContentPack(opts)),
+  listContentPacks: workspaceProcedure("template", "read")
+    .use(general)
+    .input(templatesContracts.listContentPacks.input)
+    .output(templatesContracts.listContentPacks.output)
+    .query((opts) => templatesImpl.listContentPacks(opts)),
+  applyContentPack: workspaceProcedure("project", "update")
+    .use(general)
+    .input(templatesContracts.applyContentPack.input)
+    .output(templatesContracts.applyContentPack.output)
+    .mutation((opts) => templatesImpl.applyContentPack(opts)),
+  removeContentPack: workspaceProcedure("template", "delete")
+    .use(general)
+    .input(templatesContracts.removeContentPack.input)
+    .output(templatesContracts.removeContentPack.output)
+    .mutation((opts) => templatesImpl.removeContentPack(opts)),
+});
+
+// comments — E4 (server/routers/impl/comments.ts): per-section comment
+// threads. Read open to every member; add/resolve/unresolve writer+; remove
+// is author-or-admin (role gate writer+, ownership enforced in the handler).
+export const commentsRouter = router({
+  list: workspaceProcedure("comment", "read")
+    .use(general)
+    .input(commentsContracts.list.input)
+    .output(commentsContracts.list.output)
+    .query((opts) => commentsImpl.list(opts)),
+  add: workspaceProcedure("comment", "create")
+    .use(general)
+    .input(commentsContracts.add.input)
+    .output(commentsContracts.add.output)
+    .mutation((opts) => commentsImpl.add(opts)),
+  resolve: workspaceProcedure("comment", "update")
+    .use(general)
+    .input(commentsContracts.resolve.input)
+    .output(commentsContracts.resolve.output)
+    .mutation((opts) => commentsImpl.resolve(opts)),
+  unresolve: workspaceProcedure("comment", "update")
+    .use(general)
+    .input(commentsContracts.unresolve.input)
+    .output(commentsContracts.unresolve.output)
+    .mutation((opts) => commentsImpl.unresolve(opts)),
+  remove: workspaceProcedure("comment", "delete")
+    .use(general)
+    .input(commentsContracts.remove.input)
+    .output(commentsContracts.remove.output)
+    .mutation((opts) => commentsImpl.remove(opts)),
 });
 
 export const dashboardRouter = router({
