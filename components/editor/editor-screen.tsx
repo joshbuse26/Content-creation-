@@ -18,6 +18,8 @@ import { useToast } from "@/components/ui/toast";
 import { fmtDate, fmtDuration, fmtNumber } from "@/components/lib/format";
 import { usePipelinePoll } from "@/components/lib/use-pipeline-poll";
 import { loadHookCandidates } from "./hook-store";
+import { CommentThread } from "./comment-thread";
+import { ContentPacks } from "./content-packs";
 import { ExportMenu } from "./export-menu";
 import { HookSwitcher } from "./hook-switcher";
 import { RevisionCard } from "./revision-card";
@@ -38,11 +40,24 @@ import { totalsFor } from "./logic/stats";
 
 type Mode = "write" | "review";
 
+const ROLE_RANK = { viewer: 0, writer: 1, admin: 2, owner: 3 } as const;
+
 export function EditorScreen() {
-  const { workspaceId } = useWorkspace();
+  const { workspaceId, workspace } = useWorkspace();
   const projectId = useProjectId();
   const utils = trpc.useUtils();
   const { toast } = useToast();
+  // Role gate (E4): writer+ may edit/comment; a viewer is read-only. Reflected
+  // in the section cards' disabled states and the comment thread.
+  const role = workspace?.role ?? null;
+  const canWrite = role !== null && ROLE_RANK[role] >= ROLE_RANK.writer;
+  const canManage = role !== null && ROLE_RANK[role] >= ROLE_RANK.admin;
+  // Surgical edit (E4): the section under before→after review, with the body
+  // captured at launch so a "discard" restores it.
+  const [surgicalReview, setSurgicalReview] = useState<{
+    sectionId: string;
+    before: string;
+  } | null>(null);
 
   // ---- versions -----------------------------------------------------------
   const versionsQuery = trpc.script.listVersions.useQuery(
@@ -470,6 +485,14 @@ export function EditorScreen() {
       ) : (
         /* ---- Write mode ---- */
         <div className="space-y-3">
+          <ContentPacks
+            workspaceId={workspaceId}
+            projectId={projectId}
+            sections={sections}
+            hookCandidates={hookCandidates}
+            canWrite={canWrite}
+            canManage={canManage}
+          />
           <PipelineStatusNote
             poll={regenPoll}
             working="Section regeneration queued — it refreshes in place when the pipeline finishes."
@@ -512,6 +535,41 @@ export function EditorScreen() {
                   ...(guidance !== undefined ? { guidance } : {}),
                 });
               }}
+              onSurgicalRegenerate={({ guidance, selectionText }) => {
+                // Capture the pre-regen body so the review diff + discard work.
+                setSurgicalReview({ sectionId: section.id, before: section.body });
+                regenMutation.mutate({
+                  workspaceId,
+                  sectionId: section.id,
+                  selectionText,
+                  ...(guidance !== undefined ? { guidance } : {}),
+                });
+              }}
+              regenPreview={
+                surgicalReview !== null &&
+                surgicalReview.sectionId === section.id &&
+                !(regenMutation.isPending && regenMutation.variables.sectionId === section.id) &&
+                section.body !== surgicalReview.before
+                  ? { before: surgicalReview.before }
+                  : null
+              }
+              onAcceptRegen={() => {
+                setSurgicalReview(null);
+              }}
+              onRejectRegen={() => {
+                // Discard: restore the captured body (regen persisted already).
+                const before = surgicalReview?.before ?? section.body;
+                setSections((prev) =>
+                  prev.map((s) => (s.id === section.id ? { ...s, body: before } : s)),
+                );
+                updateSectionMutation.mutate({
+                  workspaceId,
+                  sectionId: section.id,
+                  body: before,
+                });
+                setSurgicalReview(null);
+              }}
+              canWrite={canWrite}
               voiceProfiles={voiceProfiles}
               onSetVoice={(voiceProfileId) => {
                 setSections((prev) =>
@@ -519,6 +577,14 @@ export function EditorScreen() {
                 );
                 setVoiceMutation.mutate({ workspaceId, sectionId: section.id, voiceProfileId });
               }}
+              commentSlot={
+                <CommentThread
+                  workspaceId={workspaceId}
+                  scriptId={scriptId}
+                  sectionId={section.id}
+                  canWrite={canWrite}
+                />
+              }
               hookSlot={
                 section.kind === "hook" ? (
                   hookCandidates.length > 0 ? (
