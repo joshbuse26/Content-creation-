@@ -39,6 +39,8 @@ export interface OutlierQuery {
   limit: number;
   /** Only videos published after this instant ("fresh" outliers). */
   publishedAfter?: Date;
+  /** E3 filter: keep only videos at/above this outlier ratio (view multiple). */
+  minOutlierRatio?: number;
 }
 
 export interface NewIdea {
@@ -134,9 +136,11 @@ export class InMemoryIdeationStore implements IdeationStore {
   listOutliers(query: OutlierQuery): Promise<NicheVideo[]> {
     const keywords = new Set(normalizeKeywordSet(query.nicheKeywords));
     const after = query.publishedAfter;
+    const minRatio = query.minOutlierRatio;
     const matches = this.nicheVideos
       .filter((v) => v.nicheKeywords.some((k) => keywords.has(k)))
       .filter((v) => after === undefined || v.publishedAt.getTime() >= after.getTime())
+      .filter((v) => minRatio === undefined || v.outlierRatio >= minRatio)
       .sort((a, b) => b.outlierRatio - a.outlierRatio)
       .slice(0, query.limit);
     return Promise.resolve(matches.map(clone));
@@ -258,6 +262,10 @@ export class DrizzleIdeationStore implements IdeationStore {
     const conditions = [arrayOverlaps(schema.nicheVideos.nicheKeywords, keywords)];
     if (query.publishedAfter !== undefined) {
       conditions.push(gte(schema.nicheVideos.publishedAt, query.publishedAfter));
+    }
+    if (query.minOutlierRatio !== undefined) {
+      // outlier_ratio is a numeric column (stored as a fixed-2 string).
+      conditions.push(gte(schema.nicheVideos.outlierRatio, query.minOutlierRatio.toFixed(2)));
     }
     const rows = await getDb()
       .select()

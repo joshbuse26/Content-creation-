@@ -34,6 +34,107 @@ export function synthFormatTags(title: string): string[] {
   return tags.slice(0, 4);
 }
 
+/** Driver phrase per format tag — the structural reason the format tends to win. */
+const DRIVER_BY_TAG: Record<string, string> = {
+  listicle: "a numbered promise sets a clear, skimmable payoff",
+  test: "a hands-on test promises proof, not opinion",
+  versus: "a head-to-head framing creates an instant curiosity gap",
+  tutorial: "a concrete how-to maps straight onto a searched problem",
+  challenge: "a constraint (budget or time) raises the stakes up front",
+  review: "a verdict promise answers a buying decision",
+  mistakes: "naming a costly mistake triggers loss-aversion",
+  essay: "a strong point of view rewards a committed watch",
+  "deep-dive": "depth signals authority the casual upload lacks",
+  experiment: "an open experiment keeps the outcome in suspense",
+  "tier-list": "ranking invites disagreement and re-watches",
+  reaction: "a reaction borrows the source clip's built-in pull",
+  budget: "a budget angle widens the addressable audience",
+  doc: "a documentary frame promises a story, not a clip",
+  story: "a narrative hook carries attention past the intro",
+};
+
+const RECENCY_TAIL: Record<string, string> = {
+  this_week: "and it is riding a fresh wave of interest this week",
+  this_month: "and the timing caught a rising topic this month",
+  older: "and it has compounded views steadily over time",
+};
+
+/**
+ * Deterministic "why it worked" blurb for an outlier (fixture mode) — built
+ * from the primary format tag (the structural driver) and the recency band
+ * (the timing). Names no real person by construction.
+ */
+export function synthWhyItWorked(input: {
+  outlierRatio: number;
+  formatTags: string[];
+  recency: string;
+}): string {
+  const tag = input.formatTags[0] ?? "essay";
+  const driver = DRIVER_BY_TAG[tag] ?? "its format matches what the niche rewards right now";
+  const tail = RECENCY_TAIL[input.recency] ?? "and it out-paced the channel's usual reach";
+  const multiple = `${input.outlierRatio.toFixed(1)}×`;
+  return `At ${multiple} its channel median, ${driver}, ${tail}.`;
+}
+
+/** Short, original concept templates per format pattern — name no real person. */
+const CONCEPT_BY_TAG: Record<string, { title: (topic: string) => string; angle: string }> = {
+  listicle: {
+    title: (t) => `The Only ${t} Ranking That Controls for Price`,
+    angle: "An original ranking that fixes the variable every other list ignores.",
+  },
+  test: {
+    title: (t) => `I Stress-Tested ${t} the Way the Reviews Don't`,
+    angle: "A hands-on test designed around the failure mode nobody films.",
+  },
+  versus: {
+    title: (t) => `${t}: The Comparison Everyone Gets Backwards`,
+    angle: "A head-to-head that reframes which trade-off actually matters.",
+  },
+  tutorial: {
+    title: (t) => `${t} in One Sitting — the No-Reset Method`,
+    angle: "A how-to built so a beginner never has to start over.",
+  },
+  challenge: {
+    title: (t) => `Rebuilding ${t} on a Hard Budget Cap`,
+    angle: "A self-imposed constraint that exposes what really earns the spend.",
+  },
+  mistakes: {
+    title: (t) => `The ${t} Mistake That Quietly Costs the Most`,
+    angle: "A loss-aversion teardown mapped to the audience's real regret.",
+  },
+};
+
+const CONCEPT_FALLBACK = {
+  title: (t: string) => `A Fresh Take on ${t} the Niche Hasn't Tried`,
+  angle: "An original angle on the pattern, tuned to this channel's audience.",
+};
+
+export interface SynthCompetitorConceptsInput {
+  channelTitle: string;
+  nicheKeywords: string[];
+  themes: { theme: string; formatTag: string; sharedByChannels: number }[];
+}
+
+/** Deterministic ORIGINAL concepts from shared competitor patterns (fixture). */
+export function synthCompetitorConcepts(
+  input: SynthCompetitorConceptsInput,
+): { title: string; angle: string; rationale: string; score: number }[] {
+  const topics =
+    input.nicheKeywords.length > 0 ? input.nicheKeywords : [input.channelTitle || "the niche"];
+  return input.themes.map((theme, i) => {
+    const topicRaw = topics[i % topics.length] ?? "the niche";
+    const topic = topicRaw.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
+    const shape = CONCEPT_BY_TAG[theme.formatTag] ?? CONCEPT_FALLBACK;
+    const seed = fnv1a(`${input.channelTitle}|${theme.formatTag}|${topic}|${i}`);
+    return {
+      title: shape.title(topic).slice(0, 120),
+      angle: shape.angle,
+      rationale: `${theme.sharedByChannels > 1 ? `${theme.sharedByChannels} competitor channels` : "A competitor"} are winning with ${theme.theme}; this adapts the pattern — not the videos — to ${input.channelTitle}'s audience.`,
+      score: 58 + (seed % 40),
+    };
+  });
+}
+
 export interface SynthIdeasInput {
   channelTitle: string;
   nicheKeywords: string[];

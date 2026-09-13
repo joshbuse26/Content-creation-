@@ -41,6 +41,75 @@ export function formatTagsPrompt(input: FormatTagsPromptInput): PromptTemplate {
 }
 
 // ---------------------------------------------------------------------------
+// E3 — "why it worked" blurbs (cheap tier)
+// ---------------------------------------------------------------------------
+
+export interface WhyItWorkedPromptInput {
+  videos: {
+    youtubeVideoId: string;
+    title: string;
+    outlierRatio: number;
+    formatTags: string[];
+    recency: string;
+  }[];
+}
+
+export function whyItWorkedPrompt(input: WhyItWorkedPromptInput): PromptTemplate {
+  return {
+    system: [
+      "You explain, in ONE short sentence, why a YouTube video over-performed",
+      "its channel's median views. Focus on the likely structural driver:",
+      "the title pattern, the format, or the timing — never the creator.",
+      "NEVER name a real person or channel. No hype, no superlatives, under 160",
+      "characters. Respond with JSON only:",
+      '{"videos":[{"youtubeVideoId":"...","blurb":"..."}]} — one entry per',
+      "input video, same ids, no commentary.",
+    ].join(" "),
+    prompt: [
+      "Videos (id · ratio · formats · recency · title):",
+      ...input.videos.map(
+        (v) =>
+          `- ${v.youtubeVideoId} · ${v.outlierRatio.toFixed(1)}x · [${v.formatTags.join(", ")}] · ${v.recency} · ${v.title}`,
+      ),
+    ].join("\n"),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// E3 — competitor compare → ORIGINAL concepts (main tier)
+// ---------------------------------------------------------------------------
+
+export interface CompetitorConceptsPromptInput {
+  channelTitle: string;
+  nicheKeywords: string[];
+  themes: { theme: string; formatTag: string; sharedByChannels: number }[];
+}
+
+export function competitorConceptsPrompt(input: CompetitorConceptsPromptInput): PromptTemplate {
+  return {
+    system: [
+      "You are a YouTube strategist. You are given FORMAT/TOPIC PATTERNS that",
+      "several competitor channels in a niche are winning with (anonymized — no",
+      "creator names). Produce ORIGINAL video concepts that capture each",
+      "pattern's structural strength for THIS channel's own audience. CRITICAL:",
+      "never name, imitate, or clone any real creator; never reproduce a",
+      "specific video — only the abstract pattern. Output a JSON array, no",
+      'commentary: [{"title":"...","angle":"...","rationale":"...","score":0-100}].',
+      "Titles under 120 chars, specific and honest; angle = the distinct",
+      "original take in one sentence; rationale = why this pattern travels to",
+      "this audience; score = 0-100 fit x momentum. Cover distinct themes.",
+    ].join(" "),
+    prompt: [
+      `Channel: ${input.channelTitle}`,
+      `Niche keywords: ${input.nicheKeywords.join(", ")}`,
+      "",
+      "Shared competitor patterns (pattern · format · #channels):",
+      ...input.themes.map((t) => `- ${t.theme} · ${t.formatTag} · ${t.sharedByChannels}`),
+    ].join("\n"),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // §5.4 — daily ideas (main tier)
 // ---------------------------------------------------------------------------
 
