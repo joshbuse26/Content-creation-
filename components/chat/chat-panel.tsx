@@ -21,6 +21,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
 import { useToast } from "@/components/ui/toast";
 import { isUiCreditExempt } from "@/components/lib/credits-ui";
 import { coachSeedPrompt, takeCoachSeed } from "./coach-seed";
+import { OutliersLauncher } from "./outliers-launcher";
 import { useChatStream } from "./use-chat-stream";
 import { toolLabel } from "./tool-labels";
 
@@ -431,6 +432,12 @@ function ChatThreadView({
           </IconButton>
         </div>
       </header>
+
+      <OutliersLauncher
+        onPick={(prompt) => {
+          setComposer(prompt);
+        }}
+      />
 
       <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {messages.length === 0 && live === null ? (

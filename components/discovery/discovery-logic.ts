@@ -1,5 +1,18 @@
 import type { BadgeTone } from "@/components/ui/badge";
-import type { DemandLevel, DemandSignal, Idea, NicheVideo } from "@/lib/types/entities";
+import type {
+  DemandLevel,
+  DemandSignal,
+  Idea,
+  NicheVideo,
+  WhyItWorked,
+} from "@/lib/types/entities";
+import {
+  enrichOutlier,
+  recencyLabel,
+  viewMultipleLabel,
+  viewsPerDayLabel,
+  type OutlierEnrichment,
+} from "@/pipelines/ideation/enrich";
 
 /**
  * Pure logic for the pre-write discovery surface (Wave-D D3) — kept out of the
@@ -78,4 +91,27 @@ export function demandLabel(level: DemandLevel): string {
   if (level === "high") return "High demand";
   if (level === "moderate") return "Steady demand";
   return "Low demand";
+}
+
+// ---------------------------------------------------------------------------
+// E3 enrichment + "why it worked" lookup (re-uses the pure enrich math)
+// ---------------------------------------------------------------------------
+
+export { enrichOutlier, recencyLabel, viewMultipleLabel, viewsPerDayLabel };
+export type { OutlierEnrichment };
+
+/** Look "why it worked" blurbs up by video id. */
+export function whyByVideo(rows: readonly WhyItWorked[]): Map<string, string> {
+  return new Map(rows.map((r) => [r.youtubeVideoId, r.blurb]));
+}
+
+/** The strongest evidence outlier behind an idea (max ratio we have a row for). */
+export function bestEvidenceOutlier(idea: Idea, index: Map<string, NicheVideo>): NicheVideo | null {
+  let best: NicheVideo | null = null;
+  for (const videoId of idea.evidenceVideoIds) {
+    const outlier = index.get(videoId);
+    if (outlier === undefined) continue;
+    if (best === null || outlier.outlierRatio > best.outlierRatio) best = outlier;
+  }
+  return best;
 }
