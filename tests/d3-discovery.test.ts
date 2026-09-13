@@ -41,7 +41,14 @@ describe("ideas.outliers", () => {
   it("fronts the outlier index for the channel's niche", async () => {
     const rows = await ideasHandlers.outliers({
       ctx: fixtureCtx,
-      input: { workspaceId: fixtureCtx.workspaceId, channelId, nicheKeyword: null, limit: 40 },
+      input: {
+        workspaceId: fixtureCtx.workspaceId,
+        channelId,
+        nicheKeyword: null,
+        limit: 40,
+        minOutlierRatio: null,
+        recency: "all",
+      },
     });
     expect(rows.length).toBeGreaterThan(0);
     expect(rows[0]?.outlierRatio).toBeGreaterThan(0);
@@ -55,6 +62,8 @@ describe("ideas.outliers", () => {
         channelId,
         nicheKeyword: "latte art",
         limit: 40,
+        minOutlierRatio: null,
+        recency: "all",
       },
     });
     expect(none).toHaveLength(0);
@@ -65,6 +74,8 @@ describe("ideas.outliers", () => {
         channelId,
         nicheKeyword: "coffee gear",
         limit: 40,
+        minOutlierRatio: null,
+        recency: "all",
       },
     });
     expect(some.length).toBeGreaterThan(0);
@@ -79,6 +90,8 @@ describe("ideas.outliers", () => {
           channelId,
           nicheKeyword: null,
           limit: 40,
+          minOutlierRatio: null,
+          recency: "all",
         },
       }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
