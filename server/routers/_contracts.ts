@@ -90,6 +90,10 @@ export const workspaceRouter = router({
     .input(workspaceContracts.create.input)
     .output(workspaceContracts.create.output)
     .mutation(({ ctx, input }) => workspaceHandlers.create({ ctx, input })),
+  ensureDefault: protectedProcedure
+    .use(general)
+    .output(workspaceContracts.ensureDefault.output)
+    .mutation(({ ctx }) => workspaceHandlers.ensureDefault({ ctx })),
   update: workspaceProcedure("workspace", "update")
     .use(general)
     .input(workspaceContracts.update.input)

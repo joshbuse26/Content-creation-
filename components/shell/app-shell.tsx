@@ -10,6 +10,7 @@ import { fmtNumber } from "@/components/lib/format";
 import { isUiCreditExempt } from "@/components/lib/credits-ui";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 import { ChannelSwitcher } from "./channel-switcher";
+import { WorkspaceGate } from "./workspace-gate";
 
 const navItems = [
   { href: "/coach", label: "Coach", icon: IconSparkle },
@@ -76,7 +77,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
       <div className="ml-60 min-w-0 flex-1">
-        <main className="mx-auto max-w-6xl px-8 py-8">{children}</main>
+        <main className="mx-auto max-w-6xl px-8 py-8">
+          <WorkspaceGate>{children}</WorkspaceGate>
+        </main>
       </div>
     </div>
   );

@@ -49,6 +49,9 @@ type RemoveMemberInput = z.output<typeof workspaceContracts.removeMember.input>;
 
 const FREE_PLAN_CREDITS = 8;
 
+/** Name given to the workspace auto-created for a brand-new user (P0). */
+const DEFAULT_WORKSPACE_NAME = "My Workspace";
+
 async function dbOwnerCount(workspaceId: WorkspaceId): Promise<number> {
   const rows = await getDb()
     .select({ id: schema.memberships.id })
@@ -106,6 +109,26 @@ export const workspaceHandlers = {
       .innerJoin(schema.workspaces, eq(schema.memberships.workspaceId, schema.workspaces.id))
       .where(eq(schema.memberships.userId, opts.ctx.userId));
     return rows.map((r) => ({ ...workspaceSchema.parse(r.workspace), role: r.role }));
+  },
+
+  /**
+   * Idempotent default-workspace bootstrap (P0 empty-workspace hang).
+   *
+   * If the caller already belongs to any workspace, returns their first one
+   * WITHOUT creating anything — so calling this twice (or on every empty-list
+   * load) never produces a second workspace. Only a user with zero
+   * memberships gets a fresh workspace, owned by them alone (tenancy-safe:
+   * reuses `create`, which inserts the owner membership for the caller).
+   */
+  async ensureDefault(opts: { ctx: ProtectedCtx }): Promise<Workspace & { role: Role }> {
+    const existing = await workspaceHandlers.list({ ctx: opts.ctx });
+    const first = existing[0];
+    if (first !== undefined) return first;
+    const created = await workspaceHandlers.create({
+      ctx: opts.ctx,
+      input: { name: DEFAULT_WORKSPACE_NAME },
+    });
+    return { ...created, role: "owner" };
   },
 
   async get(opts: { ctx: WorkspaceCtx }): Promise<Workspace> {

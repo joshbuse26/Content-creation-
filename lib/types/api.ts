@@ -112,6 +112,16 @@ export const workspaceContracts = {
     input: z.object({ name: z.string().min(1).max(120) }),
     output: workspaceSchema,
   },
+  /**
+   * Idempotent first-run bootstrap: returns the caller's existing workspace if
+   * they already belong to one, otherwise creates a single default workspace
+   * owned by them. Safe to call on every empty-list load — it never creates a
+   * second workspace for a user who already has one.
+   */
+  ensureDefault: {
+    input: z.void(),
+    output: workspaceSchema.extend({ role: roleSchema }),
+  },
   update: {
     input: workspaceScopedSchema.extend({ name: z.string().min(1).max(120) }),
     output: workspaceSchema,

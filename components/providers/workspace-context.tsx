@@ -43,6 +43,13 @@ function writeStored(key: string, value: string | null): void {
 export interface WorkspaceContextValue {
   workspaces: (Workspace & { role: Role })[];
   workspacesLoading: boolean;
+  /**
+   * True once workspace.list has loaded successfully and returned zero
+   * workspaces (and no stored selection is still being resolved). Lets the app
+   * shell distinguish "still loading" (spinner) from "loaded, but the user has
+   * no workspace" (auto-create / CTA) instead of spinning forever.
+   */
+  hasNoWorkspaces: boolean;
   workspaceId: WorkspaceId | null;
   workspace: (Workspace & { role: Role }) | null;
   selectWorkspace: (id: WorkspaceId) => void;
@@ -116,10 +123,18 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return channels.find((c) => (c.id as string) === storedCh) ?? null;
   }, [channels, storedCh]);
 
+  const workspacesLoading = !hydrated || workspacesQuery.isLoading || storedWsMissing;
+  // "Loaded and genuinely empty" — the list query settled successfully with no
+  // rows and nothing is still resolving. Distinct from the loading state so the
+  // shell never shows an infinite spinner for a user with no workspace.
+  const hasNoWorkspaces =
+    workspacesQuery.isSuccess && workspaces.length === 0 && !workspacesLoading;
+
   const value: WorkspaceContextValue = useMemo(
     () => ({
       workspaces,
-      workspacesLoading: !hydrated || workspacesQuery.isLoading || storedWsMissing,
+      workspacesLoading,
+      hasNoWorkspaces,
       workspaceId,
       workspace,
       selectWorkspace: (id) => {
@@ -144,9 +159,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }),
     [
       workspaces,
-      hydrated,
-      workspacesQuery.isLoading,
-      storedWsMissing,
+      workspacesLoading,
+      hasNoWorkspaces,
       workspaceId,
       workspace,
       channels,
