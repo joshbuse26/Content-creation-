@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { skipToken } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChatMessage, ChatThread, ChatToolCall } from "@/lib/types/entities";
-import type { ChatThreadId, ProjectId, WorkspaceId } from "@/lib/types/ids";
+import type { ChatMessageId, ChatThreadId, ProjectId, WorkspaceId } from "@/lib/types/ids";
 import { COACH_NAME } from "@/lib/branding";
+import { isRateLimitError } from "@/components/providers/query-client";
 import { trpc } from "@/components/providers/trpc";
 import { useWorkspace } from "@/components/providers/workspace-context";
 import { Button, IconButton } from "@/components/ui/button";
@@ -20,8 +20,10 @@ import {
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
 import { useToast } from "@/components/ui/toast";
 import { isUiCreditExempt } from "@/components/lib/credits-ui";
+import { useChatThreads } from "./chat-threads-context";
 import { coachSeedPrompt, takeCoachSeed } from "./coach-seed";
 import { OutliersLauncher } from "./outliers-launcher";
+import { RateLimitNotice, useRateLimitBackoff } from "./rate-limit";
 import { useChatStream } from "./use-chat-stream";
 import { toolLabel } from "./tool-labels";
 
@@ -33,12 +35,24 @@ import { toolLabel } from "./tool-labels";
  *
  * `projectId` null = the workspace-level coach thread. The persona is product-
  * native throughout (COACH_NAME); the underlying model is never named.
+ *
+ * Request discipline (F0 — Coach reliability, see docs/COACH-RELIABILITY.md):
+ *  - chat.listThreads is owned by <ChatThreadsProvider> (one query per
+ *    surface); this panel only reads it and invalidates it on create/
+ *    rename/delete — never on send, stream completion or tool confirm.
+ *  - chat.getThread fetches on thread change and is refetched exactly ONCE
+ *    per stream completion (keyed on the stream's completionId).
+ *  - a 429 on either read stops everything and shows one "Taking a breath"
+ *    notice with bounded, backed-off retries — never an automatic loop.
  */
+
+/** Surfaced when chat.sendMessage itself is rate-limited. */
+export const SEND_RATE_LIMITED_MESSAGE = `${COACH_NAME} is taking a breath — try again in a moment.`;
 
 export function ChatPanel({ projectId }: { projectId: ProjectId | null }) {
   const { workspaceId } = useWorkspace();
   const { toast } = useToast();
-  const utils = trpc.useUtils();
+  const threadList = useChatThreads();
 
   const [selectedId, setSelectedId] = useState<ChatThreadId | null>(null);
   // A concept handed over from the discovery surface ("Ask Coach"): read once,
@@ -50,10 +64,7 @@ export function ChatPanel({ projectId }: { projectId: ProjectId | null }) {
     if (seed !== null) setSeedPrompt(coachSeedPrompt(seed));
   }, [projectId]);
 
-  const threadsQuery = trpc.chat.listThreads.useQuery(
-    workspaceId !== null ? { workspaceId, projectId, limit: 50 } : skipToken,
-  );
-  const threads = useMemo(() => threadsQuery.data ?? [], [threadsQuery.data]);
+  const { threads, invalidate: invalidateThreads } = threadList;
 
   // Default-select the most recent thread once threads load.
   useEffect(() => {
@@ -63,7 +74,7 @@ export function ChatPanel({ projectId }: { projectId: ProjectId | null }) {
 
   const createMutation = trpc.chat.createThread.useMutation({
     onSuccess: (thread) => {
-      void utils.chat.listThreads.invalidate();
+      void invalidateThreads();
       setSelectedId(thread.id);
     },
     onError: () => {
@@ -86,7 +97,8 @@ export function ChatPanel({ projectId }: { projectId: ProjectId | null }) {
     if (
       seedPrompt !== null &&
       selectedId === null &&
-      !threadsQuery.isLoading &&
+      !threadList.loading &&
+      threadList.hasData &&
       threads.length === 0 &&
       !createMutation.isPending
     ) {
@@ -95,29 +107,26 @@ export function ChatPanel({ projectId }: { projectId: ProjectId | null }) {
   }, [
     seedPrompt,
     selectedId,
-    threadsQuery.isLoading,
+    threadList.loading,
+    threadList.hasData,
     threads.length,
     createMutation.isPending,
     startThread,
   ]);
 
   if (workspaceId === null) return <LoadingState label="Loading workspace…" />;
-  if (threadsQuery.isError) {
-    return (
-      <ErrorState
-        message="Couldn't load your conversations."
-        onRetry={() => {
-          void threadsQuery.refetch();
-        }}
-      />
-    );
+  if (threadList.backoff.limited && !threadList.hasData) {
+    return <RateLimitNotice backoff={threadList.backoff} what="your conversations" />;
+  }
+  if (threadList.failed) {
+    return <ErrorState message="Couldn't load your conversations." onRetry={threadList.refetch} />;
   }
 
   return (
     <div className="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
       <ThreadSidebar
         threads={threads}
-        loading={threadsQuery.isLoading}
+        loading={threadList.loading}
         selectedId={selectedId}
         onSelect={setSelectedId}
         onNew={startThread}
@@ -242,6 +251,18 @@ interface LiveTurn {
   streaming: boolean;
 }
 
+/**
+ * The turn in flight: the optimistic user bubble plus the ids the sendMessage
+ * ack minted, so both bubbles reconcile DECLARATIVELY — each optimistic
+ * bubble hides itself the moment the persisted message with that id is in
+ * the thread query, with no timers and no extra fetches.
+ */
+interface PendingTurn {
+  content: string;
+  userMessageId: ChatMessageId | null;
+  assistantMessageId: ChatMessageId | null;
+}
+
 function ChatThreadView({
   workspaceId,
   threadId,
@@ -260,6 +281,7 @@ function ChatThreadView({
   const { workspace } = useWorkspace();
   const creditExempt = isUiCreditExempt(workspace?.role);
   const utils = trpc.useUtils();
+  const threadList = useChatThreads();
   const stream = useChatStream();
   const [composer, setComposer] = useState(initialComposer ?? "");
   // The seed is consumed at mount (used as the composer's initial value).
@@ -270,15 +292,18 @@ function ChatThreadView({
       onSeedConsumed?.();
     }
   }, [initialComposer, onSeedConsumed]);
-  const [live, setLive] = useState<LiveTurn | null>(null);
+  const [sending, setSending] = useState(false);
+  const [turn, setTurn] = useState<PendingTurn | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
-  const threadQuery = trpc.chat.getThread.useQuery({
-    workspaceId,
-    threadId,
-    limit: 100,
-    cursor: null,
-  });
+  // Fetches on thread change only (the view is keyed by threadId); no
+  // interval, no focus refetch — the stream completion triggers the one
+  // reconciling refetch below.
+  const threadQuery = trpc.chat.getThread.useQuery(
+    { workspaceId, threadId, limit: 100, cursor: null },
+    { staleTime: 30_000, refetchOnWindowFocus: false, refetchOnReconnect: false },
+  );
+  const threadBackoff = useRateLimitBackoff(threadQuery);
   const messages = useMemo(() => threadQuery.data?.messages ?? [], [threadQuery.data]);
   const thread = threadQuery.data?.thread ?? null;
 
@@ -293,10 +318,30 @@ function ChatThreadView({
     [messages],
   );
 
-  const refetch = useCallback(() => {
-    void utils.chat.getThread.invalidate({ workspaceId, threadId });
-    void utils.chat.listThreads.invalidate();
-  }, [utils, workspaceId, threadId]);
+  /** Refetch THIS thread only. The thread list is untouched — a message
+   *  never changes a title, so listThreads has nothing new to say. */
+  const refetchThread = useCallback(
+    () => utils.chat.getThread.invalidate({ workspaceId, threadId }),
+    [utils, workspaceId, threadId],
+  );
+
+  // The live overlay is DERIVED from the stream (no mirrored state, no
+  // effect): typing dots while the send is in flight, the streamed text
+  // while streaming, and the finished text until the persisted message lands.
+  const live = useMemo<LiveTurn | null>(() => {
+    const s = stream.state;
+    if (s.phase === "streaming" || s.phase === "done") {
+      return { text: s.text, proposal: s.proposal, streaming: s.phase === "streaming" };
+    }
+    if (sending && s.phase === "idle") return { text: "", proposal: null, streaming: true };
+    return null;
+  }, [stream.state, sending]);
+
+  const messageIds = useMemo(() => new Set(messages.map((m) => m.id)), [messages]);
+  const optimisticUser =
+    turn !== null && (turn.userMessageId === null || !messageIds.has(turn.userMessageId))
+      ? turn.content
+      : null;
 
   // Keep scrolled to the newest message / streamed tokens.
   useEffect(() => {
@@ -304,14 +349,18 @@ function ChatThreadView({
   }, [messages, live]);
 
   const renameMutation = trpc.chat.renameThread.useMutation({
-    onSuccess: refetch,
+    onSuccess: () => {
+      // A title change is the ONE message-level action the thread list cares about.
+      void refetchThread();
+      void threadList.invalidate();
+    },
     onError: () => {
       toast("Rename failed.");
     },
   });
   const deleteMutation = trpc.chat.deleteThread.useMutation({
     onSuccess: () => {
-      void utils.chat.listThreads.invalidate();
+      void threadList.invalidate();
     },
     onError: () => {
       toast("Delete failed.");
@@ -322,47 +371,59 @@ function ChatThreadView({
 
   const send = useCallback(async () => {
     const content = composer.trim();
-    if (content === "" || sendMutation.isPending || live?.streaming === true) return;
+    if (content === "" || sending) return;
     setComposer("");
-    setLive({ text: "", proposal: null, streaming: true });
+    setSending(true);
+    setTurn({ content, userMessageId: null, assistantMessageId: null });
     try {
       const ack = await sendMutation.mutateAsync({ workspaceId, threadId, content });
-      refetch(); // surface the persisted user message immediately
+      setTurn({
+        content,
+        userMessageId: ack.userMessageId,
+        assistantMessageId: ack.assistantMessageId,
+      });
+      // The reply streams straight into the overlay; getThread is reconciled
+      // once when the stream completes (below), not polled meanwhile.
       await stream.start(ack.streamPath);
-    } catch {
-      toast("The coach couldn't respond. Try again.");
-      setLive(null);
-      return;
+    } catch (err) {
+      toast(
+        isRateLimitError(err)
+          ? SEND_RATE_LIMITED_MESSAGE
+          : "The coach couldn't respond. Try again.",
+      );
+      setTurn(null);
+      setComposer((current) => (current === "" ? content : current));
+    } finally {
+      setSending(false);
     }
-  }, [composer, sendMutation, live, workspaceId, threadId, stream, refetch, toast]);
+  }, [composer, sending, sendMutation, workspaceId, threadId, stream, toast]);
 
-  // Mirror the live stream state into the optimistic turn; reconcile on done.
+  // Reconcile EXACTLY ONCE per completed stream (done or error), keyed on the
+  // stream's monotonic completionId — never on the phase, which would refire
+  // on every render while it still reads "done".
+  const handledCompletion = useRef(0);
   useEffect(() => {
-    if (stream.state.phase === "idle") return;
-    setLive({
-      text: stream.state.text,
-      proposal: stream.state.proposal,
-      streaming: stream.state.phase === "streaming",
-    });
-    if (stream.state.phase === "done") {
-      refetch();
-      // Clear the overlay once the authoritative message lands.
-      const timer = window.setTimeout(() => {
-        setLive(null);
-        stream.reset();
-      }, 150);
-      return () => {
-        window.clearTimeout(timer);
-      };
+    const { completionId, phase, error } = stream.state;
+    if (completionId === handledCompletion.current) return;
+    handledCompletion.current = completionId;
+    if (phase === "error") toast(error ?? "The coach stream failed.");
+    void refetchThread();
+  }, [stream.state, refetchThread, toast]);
+
+  // Clear the overlay only once the authoritative assistant message is in
+  // the thread (the server persists it before streaming), so the reply never
+  // flickers away — and never lingers as a duplicate.
+  useEffect(() => {
+    if (stream.state.phase !== "done") return;
+    const assistantId = turn?.assistantMessageId ?? null;
+    if (assistantId !== null && messageIds.has(assistantId)) {
+      stream.reset();
     }
-    if (stream.state.phase === "error") {
-      toast(stream.state.error ?? "The coach stream failed.");
-    }
-  }, [stream.state, refetch, toast, stream]);
+  }, [stream, stream.state.phase, turn, messageIds]);
 
   const confirmMutation = trpc.chat.confirmTool.useMutation({
     onSuccess: (ack) => {
-      refetch();
+      void refetchThread();
       toast(
         !creditExempt && ack.estimatedCredits > 0
           ? `Done — ${ack.estimatedCredits} credit${ack.estimatedCredits === 1 ? "" : "s"} charged.`
@@ -401,7 +462,12 @@ function ChatThreadView({
   }, [deleteMutation, workspaceId, threadId]);
 
   if (threadQuery.isLoading) return <LoadingState label="Loading conversation…" />;
-  if (threadQuery.isError) {
+  if (threadQuery.data === undefined) {
+    // Nothing to show yet: a 429 gets the bounded-retry notice, anything
+    // else the plain error state. Never a blank panel, never a spinner.
+    if (threadBackoff.limited) {
+      return <RateLimitNotice backoff={threadBackoff} what="this conversation" />;
+    }
     return (
       <ErrorState
         message="Couldn't load this conversation."
@@ -439,8 +505,31 @@ function ChatThreadView({
         }}
       />
 
+      {threadQuery.isError ? (
+        // Stale data is still on screen; the refresh failed. Keep the
+        // conversation visible and surface the (bounded) retry inline.
+        threadBackoff.limited ? (
+          <div className="px-3 pt-3">
+            <RateLimitNotice backoff={threadBackoff} what="this conversation" />
+          </div>
+        ) : (
+          <p className="px-4 pt-3 text-xs text-zinc-500 dark:text-zinc-400">
+            Couldn't refresh this conversation.{" "}
+            <button
+              type="button"
+              className="font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+              onClick={() => {
+                void threadQuery.refetch();
+              }}
+            >
+              Try again
+            </button>
+          </p>
+        )
+      ) : null}
+
       <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
-        {messages.length === 0 && live === null ? (
+        {messages.length === 0 && live === null && optimisticUser === null ? (
           <p className="py-8 text-center text-sm text-zinc-400">
             Say hello, or ask {COACH_NAME} for a hook, an outline, or a full draft.
           </p>
@@ -455,6 +544,15 @@ function ChatThreadView({
             projectId={projectId}
           />
         ))}
+        {optimisticUser !== null ? (
+          <div className="flex flex-col gap-1.5" data-testid="optimistic-user-message">
+            <div
+              className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap ${roleClasses("user")}`}
+            >
+              {optimisticUser}
+            </div>
+          </div>
+        ) : null}
         {live !== null ? (
           <LiveAssistantBubble
             text={live.text}
@@ -472,7 +570,7 @@ function ChatThreadView({
         onSend={() => {
           void send();
         }}
-        disabled={sendMutation.isPending || live?.streaming === true}
+        disabled={sending}
       />
     </div>
   );

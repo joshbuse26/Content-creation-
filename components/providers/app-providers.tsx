@@ -1,26 +1,17 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
 import superjson from "superjson";
 import { ToastProvider } from "@/components/ui/toast";
+import { createAppQueryClient } from "./query-client";
 import { trpc } from "./trpc";
 import { WorkspaceProvider } from "./workspace-context";
 
 export function AppProviders({ children }: { children: ReactNode }) {
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            staleTime: 30_000,
-            retry: 1,
-            refetchOnWindowFocus: false,
-          },
-        },
-      }),
-  );
+  // Retry/stale policy lives in query-client.ts (never retries a 429).
+  const [queryClient] = useState(createAppQueryClient);
   const [trpcClient] = useState(() =>
     trpc.createClient({
       links: [

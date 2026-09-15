@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { chatStreamEventSchema, type ChatStreamEvent } from "@/lib/types/chat";
 import type { ChatToolCall } from "@/lib/types/entities";
 
@@ -13,6 +13,12 @@ import type { ChatToolCall } from "@/lib/types/entities";
  * The hook accumulates the assistant's streamed text, captures a proposed
  * tool, and surfaces terminal done/error. It drives BOTH the assistant-turn
  * stream and the draft bridge (which reuses message_delta + tool_result).
+ *
+ * Identity contract (F0): the returned object is memoized, so it is safe in
+ * effect dependency lists — a fresh object per render was what turned the
+ * chat panel's "reconcile on done" effect into a render→invalidate loop.
+ * `state.completionId` increments exactly once per terminal transition
+ * (done or error); consumers key one-shot work on it, never on `phase`.
  */
 
 const CHAT_EVENT_TYPES = [
@@ -34,14 +40,31 @@ export interface ChatStreamState {
   /** A tool_result summary (draft bridge / confirm echo), if any. */
   result: { toolCallId: string; ok: boolean; summary: string } | null;
   error: string | null;
+  /**
+   * Monotonic counter, bumped once per transition INTO done/error. 0 until
+   * the first completion. Lets a consumer react to a completion exactly once
+   * (compare against the last value it handled) rather than on every render
+   * while the phase happens to still read "done".
+   */
+  completionId: number;
 }
 
-function initialState(): ChatStreamState {
-  return { phase: "idle", text: "", proposal: null, result: null, error: null };
+/** Generic message when the stream cannot be opened or drops before any reply. */
+export const STREAM_UNREACHABLE_MESSAGE = "Could not reach the coach. Try again.";
+
+function initialState(completionId: number): ChatStreamState {
+  return {
+    phase: "idle",
+    text: "",
+    proposal: null,
+    result: null,
+    error: null,
+    completionId,
+  };
 }
 
 export function useChatStream() {
-  const [state, setState] = useState<ChatStreamState>(initialState());
+  const [state, setState] = useState<ChatStreamState>(() => initialState(0));
   const sourceRef = useRef<EventSource | null>(null);
   const doneRef = useRef<(() => void) | null>(null);
 
@@ -74,9 +97,13 @@ export function useChatStream() {
               result: { toolCallId: event.toolCallId, ok: event.ok, summary: event.summary },
             };
           case "done":
-            return { ...s, phase: "done" };
+            return s.phase === "streaming"
+              ? { ...s, phase: "done", completionId: s.completionId + 1 }
+              : s;
           case "error":
-            return { ...s, phase: "error", error: event.message };
+            return s.phase === "streaming"
+              ? { ...s, phase: "error", error: event.message, completionId: s.completionId + 1 }
+              : s;
         }
       });
       if (event.type === "done" || event.type === "error") {
@@ -92,14 +119,20 @@ export function useChatStream() {
   const start = useCallback(
     (streamPath: string): Promise<void> => {
       cleanup();
-      setState({ ...initialState(), phase: "streaming" });
+      setState((s) => ({ ...initialState(s.completionId), phase: "streaming" }));
       return new Promise<void>((resolve) => {
         doneRef.current = resolve;
         let source: EventSource;
         try {
           source = new EventSource(streamPath);
         } catch {
-          setState((s) => ({ ...s, phase: "error", error: "Could not reach the coach." }));
+          setState((s) => ({
+            ...s,
+            phase: "error",
+            error: STREAM_UNREACHABLE_MESSAGE,
+            completionId: s.completionId + 1,
+          }));
+          doneRef.current = null;
           resolve();
           return;
         }
@@ -116,15 +149,28 @@ export function useChatStream() {
         };
         for (const type of CHAT_EVENT_TYPES) source.addEventListener(type, onEvent);
         source.onerror = () => {
-          // Terminal or unreachable — surface and stop (the turn is short and
-          // the reply is already persisted server-side).
-          if (source.readyState === EventSource.CLOSED) {
-            source.close();
-            sourceRef.current = null;
-            setState((s) => (s.phase === "streaming" ? { ...s, phase: "done" } : s));
-            doneRef.current?.();
-            doneRef.current = null;
-          }
+          // Any transport error is TERMINAL for a one-shot turn: the reply is
+          // persisted server-side before it streams, and the panel reconciles
+          // by refetching the thread — so we never let EventSource auto-
+          // reconnect (which would re-run the turn). A drop before ANY reply
+          // text (e.g. the route answered 401/429/5xx) is surfaced as an
+          // error, not a silent "done": the user must see something actionable.
+          source.close();
+          sourceRef.current = null;
+          setState((s) =>
+            s.phase === "streaming"
+              ? s.text === "" && s.proposal === null && s.result === null
+                ? {
+                    ...s,
+                    phase: "error",
+                    error: STREAM_UNREACHABLE_MESSAGE,
+                    completionId: s.completionId + 1,
+                  }
+                : { ...s, phase: "done", completionId: s.completionId + 1 }
+              : s,
+          );
+          doneRef.current?.();
+          doneRef.current = null;
         };
       });
     },
@@ -133,8 +179,8 @@ export function useChatStream() {
 
   const reset = useCallback(() => {
     cleanup();
-    setState(initialState());
+    setState((s) => initialState(s.completionId));
   }, [cleanup]);
 
-  return { state, start, reset };
+  return useMemo(() => ({ state, start, reset }), [state, start, reset]);
 }
