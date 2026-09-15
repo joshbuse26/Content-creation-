@@ -135,6 +135,11 @@ export const channelRouter = router({
     .input(channelContracts.connectPublic.input)
     .output(channelContracts.connectPublic.output)
     .mutation(({ ctx, input }) => channelHandlers.connectPublic({ ctx, input })),
+  connectDemo: workspaceProcedure("channel", "create")
+    .use(general)
+    .input(channelContracts.connectDemo.input)
+    .output(channelContracts.connectDemo.output)
+    .mutation(({ ctx, input }) => channelHandlers.connectDemo({ ctx, input })),
   sync: workspaceProcedure("channel", "update")
     .use(general)
     .input(channelContracts.sync.input)

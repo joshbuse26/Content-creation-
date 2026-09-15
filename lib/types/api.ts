@@ -165,6 +165,18 @@ export const channelContracts = {
     }),
     output: channelSchema,
   },
+  /**
+   * One-click "use a demo channel": seeds a rich, synthetic channel (channel +
+   * avatar + niche outliers + own-video transcripts) into the current
+   * workspace so a playtester with no real channel — and no Google/OAuth keys —
+   * can exercise the whole product. Seeded static data, NOT a provider call, so
+   * it needs zero keys and works in fixture AND live mode. Idempotent: a second
+   * connect reuses the same channel. Charges no credits.
+   */
+  connectDemo: {
+    input: workspaceScopedSchema,
+    output: channelSchema,
+  },
   sync: {
     input: workspaceScopedSchema.extend({ channelId: channelIdSchema }),
     output: jobAcceptedSchema,

@@ -5,6 +5,7 @@ import { getProviders } from "@/lib/providers";
 import type { LlmProvider, TranscriptProvider, YoutubeProvider } from "@/lib/providers/types";
 import { claimsSoundsLikeNamedCreator } from "@/lib/named-creator-claim";
 import { containsRealCreatorName } from "@/lib/seed-lint";
+import { demoOwnTranscripts } from "@/lib/fixtures/demo";
 import type { TrainStyleCardInput, TrainStyleCardResult } from "@/lib/types/entities";
 import type { ChannelId, UserId, WorkspaceId } from "@/lib/types/ids";
 import { channelIdSchema } from "@/lib/types/ids";
@@ -150,14 +151,29 @@ export async function trainStyleCardFromChannel(
   // authenticated it (mode === "oauth"). A remix, OR training on any
   // unverified/public channel, is GUARDED — treated as remix-equivalent:
   // full originality guard, original card, generic name.
-  const provenOwned = channel.mode === "oauth";
+  //
+  // A "demo" channel is proven-owned-equivalent: its data is entirely
+  // synthetic (channel.connectDemo seeds it — no real person's channel), so
+  // there is nothing to guard against reproducing. Allowing the own-path lets
+  // the derived card carry the demo title + verbatim demo snippets, giving the
+  // playtester the full, un-neutered trained-voice result. Safe by
+  // construction and scoped to demo channels only.
+  const isDemo = channel.mode === "demo";
+  const provenOwned = channel.mode === "oauth" || isDemo;
   const guarded = remix || !provenOwned;
 
-  // 2. Sample transcripts (TranscriptProvider only). The SOURCE is the
-  //    competitor channels for a remix, else the (own/connected) channel.
-  const { videoIds, texts } = remix
-    ? await sampleTranscripts(deps, remixFrom, null)
-    : await sampleTranscripts(deps, [channel.youtubeChannelId], input.sampleVideoIds);
+  // 2. Sample transcripts. A demo channel's own uploads are synthetic ids the
+  //    real transcript provider cannot serve, so its own-channel training uses
+  //    SEEDED transcripts directly — additive, demo-only, so it works with zero
+  //    keys in BOTH fixture and live mode and never touches the real-channel
+  //    path. Otherwise: TranscriptProvider only (competitors for a remix, else
+  //    the own/connected channel).
+  const { videoIds, texts } =
+    isDemo && !remix
+      ? demoOwnTranscripts(input.sampleVideoIds)
+      : remix
+        ? await sampleTranscripts(deps, remixFrom, null)
+        : await sampleTranscripts(deps, [channel.youtubeChannelId], input.sampleVideoIds);
 
   if (texts.length === 0) {
     throw new TRPCError({

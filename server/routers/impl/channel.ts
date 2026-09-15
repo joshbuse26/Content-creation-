@@ -1,15 +1,24 @@
 import { TRPCError } from "@trpc/server";
 import type { z } from "zod";
+import { hasDb } from "@/db";
 import { logger } from "@/lib/logger";
 import type { channelContracts } from "@/lib/types/api";
-import type { Channel, ChannelStatsSnapshot } from "@/lib/types/entities";
+import type { AudienceAvatar, Channel, ChannelStatsSnapshot } from "@/lib/types/entities";
 import type { Role } from "@/lib/types/enums";
 import type { UserId, WorkspaceId } from "@/lib/types/ids";
 import type { JobAccepted } from "@/lib/types/api";
+import {
+  DEMO_AVATAR_FIELDS,
+  DEMO_CHANNEL,
+  DEMO_NICHE_VIDEOS,
+  DEMO_SNAPSHOT,
+} from "@/lib/fixtures/demo";
 import { assertChannelLimit, getBillingStore } from "@/server/billing";
 import { getChannelDomainDeps, type ChannelDomainDeps } from "@/server/channel/deps";
 import { getDefaultSyncEnqueuer, type SyncEnqueuer } from "@/server/channel/jobs";
 import { InvalidChannelRefError, parseChannelRef } from "@/server/channel/parse";
+import { getIdeationStore, type IdeationStore } from "@/pipelines/ideation/store";
+import { getEngineStore, InMemoryEngineStore } from "@/pipelines/script/store";
 import { QuotaExceededError } from "@/pipelines/sync/quota";
 
 /**
@@ -38,11 +47,33 @@ type In<K extends keyof typeof channelContracts> = z.output<(typeof channelContr
 export interface ChannelHandlerDeps {
   getDeps(): Promise<ChannelDomainDeps>;
   getEnqueuer(): SyncEnqueuer;
+  /**
+   * niche_videos store for seeding the demo channel's outlier index. Optional
+   * — defaults to the shared ideation store (tests may omit it).
+   */
+  getIdeationStore?(): IdeationStore;
+  /**
+   * Mirror a freshly-seeded demo avatar into the script engine's avatar view
+   * so avatar-in-context (generation) sees it. In DB mode the engine store
+   * reads the same audience_avatars row the avatar repo wrote, so this is a
+   * no-op; in keyless fixture mode the engine store is a SEPARATE in-memory
+   * store, so we push the avatar into it. Demo-only, additive. Optional —
+   * defaults to the shared engine store.
+   */
+  seedEngineAvatar?(avatar: AudienceAvatar): void;
+}
+
+function defaultSeedEngineAvatar(avatar: AudienceAvatar): void {
+  if (hasDb()) return;
+  const store = getEngineStore();
+  if (store instanceof InMemoryEngineStore) store.seedAvatar(avatar);
 }
 
 const defaultHandlerDeps: ChannelHandlerDeps = {
   getDeps: getChannelDomainDeps,
   getEnqueuer: getDefaultSyncEnqueuer,
+  getIdeationStore,
+  seedEngineAvatar: defaultSeedEngineAvatar,
 };
 
 function notFound(): TRPCError {
@@ -151,6 +182,72 @@ export function createChannelHandlers(handlerDeps: ChannelHandlerDeps = defaultH
 
       const fresh = await channelRepo.get(opts.ctx.workspaceId, created.id);
       return fresh ?? created;
+    },
+
+    /**
+     * connectDemo (playtest affordance): idempotently seed a rich, synthetic
+     * demo channel into the CURRENT workspace — channel row (mode "demo"),
+     * populated audience avatar, a set of niche outliers, and (via the train
+     * fallback) own-video transcripts. Pure seeding: no provider/API call, no
+     * credits, no quota, no keys — so it behaves identically in fixture and
+     * live mode. Everything downstream (Discovery, avatar, voice training,
+     * generation, packaging, thumbnails) lights up on the seeded data.
+     */
+    async connectDemo(opts: {
+      ctx: WorkspaceHandlerCtx;
+      input: In<"connectDemo">;
+    }): Promise<Channel> {
+      const { channelRepo, avatarRepo } = await handlerDeps.getDeps();
+      const ws = opts.ctx.workspaceId;
+
+      // Idempotent: reuse the existing demo channel (find-or-create keyed on
+      // the stable synthetic youtube id) — connecting twice never duplicates.
+      const existing = await channelRepo.findByYoutubeId(ws, DEMO_CHANNEL.youtubeChannelId);
+      let channel = existing;
+      const isNew = existing === null;
+      if (channel === null) {
+        const created = await channelRepo.create({
+          workspaceId: ws,
+          mode: "demo",
+          youtubeChannelId: DEMO_CHANNEL.youtubeChannelId,
+          title: DEMO_CHANNEL.title,
+          handle: DEMO_CHANNEL.handle,
+          nicheKeywords: [...DEMO_CHANNEL.nicheKeywords],
+          oauthRefreshTokenEnc: null,
+        });
+        // Present as fully connected: the demo is pre-"synced" seeded data.
+        channel =
+          (await channelRepo.update(ws, created.id, {
+            syncStatus: "synced",
+            lastSyncedAt: new Date(),
+          })) ?? created;
+        await channelRepo.insertSnapshot({
+          workspaceId: ws,
+          channelId: channel.id,
+          capturedAt: new Date(),
+          subs: DEMO_SNAPSHOT.subs,
+          totalViews: DEMO_SNAPSHOT.totalViews,
+          medianViews90d: DEMO_SNAPSHOT.medianViews90d,
+        });
+      }
+
+      // Audience avatar — upsert is idempotent on (workspace, channel).
+      const avatar = await avatarRepo.upsert(ws, channel.id, DEMO_AVATAR_FIELDS, {
+        aiGeneratedAt: new Date(),
+        lastEditedBy: null,
+      });
+      // On first connect, mirror into the engine store so avatar-in-context
+      // (generation) sees it in keyless fixture mode (no-op in DB mode).
+      if (isNew) (handlerDeps.seedEngineAvatar ?? defaultSeedEngineAvatar)(avatar);
+
+      // Niche outlier index for Discovery/enrichment. upsertNicheVideos is
+      // idempotent on youtube_video_id; niche_videos is a GLOBAL index by
+      // design (spec §8), so this is a plain upsert, not workspace-scoped.
+      const ideationStore = handlerDeps.getIdeationStore?.() ?? getIdeationStore();
+      await ideationStore.upsertNicheVideos(DEMO_NICHE_VIDEOS);
+
+      const fresh = await channelRepo.get(ws, channel.id);
+      return fresh ?? channel;
     },
 
     async sync(opts: { ctx: WorkspaceHandlerCtx; input: In<"sync"> }): Promise<JobAccepted> {
