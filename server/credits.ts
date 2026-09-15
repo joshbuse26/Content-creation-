@@ -37,8 +37,8 @@ export const CREDIT_COSTS = {
   researchRun: 1,
   titles: 1,
   avatarRegen: 1,
-  /** Extra user-requested idea batch (spec §7; daily scheduled runs are free). */
-  ideaBatch: 1,
+  /** Extra user-requested idea batch — free during playtest (was 1). */
+  ideaBatch: 0,
   /**
    * Train a voice from a channel (WAVE-D-PLAN §2c) — pulls transcripts and
    * derives a structured StyleCard via the LLM. Charged once per training run

@@ -147,7 +147,8 @@ export const ideasHandlers = {
     const payload = {
       workspaceId: input.workspaceId,
       channelId: input.channelId,
-      chargeCredits: !isCtxCreditExempt(ctx),
+      // Free while ideaBatch cost is 0; still skip charge for credit-exempt actors.
+      chargeCredits: CREDIT_COSTS.ideaBatch > 0 && !isCtxCreditExempt(ctx),
       actorUserId: ctx.userId as string,
       // Each requested batch is its own run (and its own idempotent
       // 1-credit charge) even on the same day.

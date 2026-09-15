@@ -142,12 +142,12 @@ export function IdeasFeedScreen() {
           <Button
             variant="primary"
             busy={batchMutation.isPending}
-            aria-label="Request a fresh batch of ideas (costs 1 credit)"
+            aria-label="Request a fresh batch of ideas"
             onClick={() => {
               batchMutation.mutate({ workspaceId, channelId });
             }}
           >
-            <IconSparkle size={14} /> New batch · 1 credit
+            <IconSparkle size={14} /> New batch
           </Button>
         ) : undefined
       }
@@ -233,7 +233,7 @@ export function IdeasFeedScreen() {
           title={filter === "new" ? "No new ideas right now" : "Nothing here yet"}
           hint={
             filter === "new"
-              ? "The daily run delivers 5 ideas each morning — or request a batch now for 1 credit."
+              ? "The daily run delivers 5 ideas each morning — or request a batch now (free)."
               : "Ideas you save or act on will show up under this tab."
           }
           action={
@@ -245,7 +245,7 @@ export function IdeasFeedScreen() {
                   batchMutation.mutate({ workspaceId, channelId });
                 }}
               >
-                <IconSparkle size={14} /> Get ideas now · 1 credit
+                <IconSparkle size={14} /> Get ideas now
               </Button>
             ) : undefined
           }
