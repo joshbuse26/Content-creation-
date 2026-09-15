@@ -109,6 +109,64 @@ export function OwnershipVerifyCard({
   );
 }
 
+/**
+ * Demo-channel CTA. The fastest path for someone who has no channel of their
+ * own (or is just kicking the tires): one click seeds a rich, ready-made demo
+ * channel — with an audience avatar, niche outliers, and sample videos — so the
+ * whole product (Discovery, voice training, generation) can be explored right
+ * away. It is clearly labeled as demo data and needs no sign-in or keys.
+ */
+export function DemoChannelCard({
+  workspaceId,
+  onConnected,
+}: {
+  workspaceId: WorkspaceId | null;
+  onConnected?: (channel: Channel) => void;
+}) {
+  const { selectChannel } = useWorkspace();
+  const utils = trpc.useUtils();
+  const noWorkspace = workspaceId === null;
+
+  const demoMutation = trpc.channel.connectDemo.useMutation({
+    onSuccess: (channel) => {
+      if (workspaceId !== null) void utils.channel.list.invalidate({ workspaceId });
+      selectChannel(channel.id);
+      if (onConnected !== undefined) onConnected(channel);
+    },
+  });
+
+  return (
+    <Card>
+      <CardHeader
+        title="No channel yet? Try a demo channel"
+        subtitle="One click loads a ready-made sample channel — audience, outliers, and videos — so you can explore everything without connecting your own."
+      />
+      <CardBody>
+        <Button
+          type="button"
+          variant="primary"
+          disabled={noWorkspace}
+          busy={demoMutation.isPending}
+          onClick={() => {
+            if (workspaceId === null) return;
+            demoMutation.mutate({ workspaceId });
+          }}
+        >
+          <IconChannel size={14} /> Use a demo channel
+        </Button>
+        <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+          Sample data for exploring the product — you can connect your real channel above any time.
+        </p>
+        {demoMutation.isError ? (
+          <p className="mt-2 text-xs text-red-600 dark:text-red-400">
+            Could not load the demo channel — please try again.
+          </p>
+        ) : null}
+      </CardBody>
+    </Card>
+  );
+}
+
 export function ConnectChannel({ onConnected }: { onConnected?: (channel: Channel) => void }) {
   const { workspaceId, selectChannel } = useWorkspace();
   const utils = trpc.useUtils();
@@ -132,6 +190,9 @@ export function ConnectChannel({ onConnected }: { onConnected?: (channel: Channe
           No workspace selected — create or pick a workspace first, then connect a channel.
         </p>
       ) : null}
+
+      {/* Playtest fast-path: try everything with a seeded demo channel. */}
+      <DemoChannelCard workspaceId={workspaceId} onConnected={onConnected} />
 
       {/* PRIMARY: paste a public @handle or URL. Works for any channel. */}
       <Card>

@@ -29,6 +29,9 @@ vi.mock("@/components/providers/trpc", () => ({
       connectPublic: {
         useMutation: () => ({ mutate: connectMutate, isPending: false, isError: false }),
       },
+      connectDemo: {
+        useMutation: () => ({ mutate: vi.fn(), isPending: false, isError: false }),
+      },
     },
   },
 }));
