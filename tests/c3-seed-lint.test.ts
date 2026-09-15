@@ -27,6 +27,7 @@ const ROOT = join(__dirname, "..");
 /** Fixture-content files scanned as raw text alongside the structured seeds. */
 const FIXTURE_CONTENT_FILES = [
   join(ROOT, "lib", "fixtures", "index.ts"),
+  join(ROOT, "lib", "fixtures", "demo.ts"),
   join(ROOT, "pipelines", "script", "fixture-content.ts"),
   join(ROOT, "scripts", "seed.ts"),
 ];

@@ -1,0 +1,1 @@
+ALTER TYPE "public"."channel_mode" ADD VALUE 'demo';

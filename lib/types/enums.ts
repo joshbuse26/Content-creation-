@@ -16,7 +16,12 @@ export const ROLES = ["owner", "admin", "writer", "viewer"] as const;
 export const roleSchema = z.enum(ROLES);
 export type Role = z.infer<typeof roleSchema>;
 
-export const CHANNEL_MODES = ["oauth", "public"] as const;
+// "demo" is a synthetic, product-seeded channel (channel.connectDemo) — it
+// carries no real creator's data, needs no Google/OAuth keys, and is treated
+// as connected + usable everywhere. Because its data is fabricated (not a real
+// person's channel), the voice-training path treats it as proven-owned, the
+// same trust level as an oauth-verified channel (see server/voice/train.ts).
+export const CHANNEL_MODES = ["oauth", "public", "demo"] as const;
 export const channelModeSchema = z.enum(CHANNEL_MODES);
 export type ChannelMode = z.infer<typeof channelModeSchema>;
 
