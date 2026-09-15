@@ -9,6 +9,7 @@ import type {
 import { scanDenylist } from "@/lib/seed-lint";
 import { extractSharedThemes, median } from "@/pipelines/ideation/compete";
 import { setIdeationDepsForTests } from "@/pipelines/ideation/deps";
+import { CREDIT_COSTS } from "@/server/credits";
 import { ideasHandlers } from "@/server/routers/impl/ideas";
 import {
   getSharedWorkspaceStore,
@@ -125,6 +126,10 @@ describe("ideas.competitorCompare", () => {
     channelHandles: ["@alpha", "@beta", "@gamma"],
   };
 
+  // The batch cost is config (currently 0 for playtest); widen the literal so
+  // every expectation below derives from it instead of assuming either value.
+  const batchCost: number = CREDIT_COSTS.ideaBatch;
+
   it("surfaces shared THEMES and ORIGINAL concepts with no real-creator names", async () => {
     const result = await ideasHandlers.competitorCompare({ ctx: fixtureCtx, input });
 
@@ -158,10 +163,13 @@ describe("ideas.competitorCompare", () => {
     expect(feed.length).toBeGreaterThan(1);
   });
 
-  it("charges 1 credit, once, idempotently on a repeat compare", async () => {
+  it("charges the configured batch cost once, idempotently on a repeat compare", async () => {
+    // competitorCompare always settles ONE ledger entry keyed on the compare
+    // hash; its delta is -CREDIT_COSTS.ideaBatch (a 0-delta entry while
+    // batches are free). A repeat never adds a second entry.
     await ideasHandlers.competitorCompare({ ctx: fixtureCtx, input });
     expect(deps.engineStore.creditEntries).toHaveLength(1);
-    expect(deps.engineStore.creditEntries[0]?.delta).toBe(-1);
+    expect(deps.engineStore.creditEntries[0]?.delta).toBe(-batchCost);
     expect(deps.engineStore.creditEntries[0]?.reason).toBe("idea_batch");
 
     // Same competitors again → no second charge, no duplicate concepts.
@@ -170,13 +178,20 @@ describe("ideas.competitorCompare", () => {
     expect(second.ideas).toHaveLength(0); // all titles already exist (deduped)
   });
 
-  it("fails PRECONDITION_FAILED without credits, and charges nothing", async () => {
+  it("with a zero balance: fails PRECONDITION_FAILED when compares cost credits, otherwise succeeds free", async () => {
     const ws = getSharedWorkspaceStore().workspaces.find((w) => w.id === fixtureCtx.workspaceId);
     if (ws !== undefined) ws.creditBalance = 0;
-    await expect(ideasHandlers.competitorCompare({ ctx: fixtureCtx, input })).rejects.toMatchObject(
-      { code: "PRECONDITION_FAILED" },
-    );
-    expect(deps.engineStore.creditEntries).toHaveLength(0);
+    const compare = ideasHandlers.competitorCompare({ ctx: fixtureCtx, input });
+    if (batchCost > 0) {
+      await expect(compare).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+      expect(deps.engineStore.creditEntries).toHaveLength(0);
+    } else {
+      // Free compares never gate on balance; the settled entry debits nothing.
+      const result = await compare;
+      expect(result.ideas.length).toBeGreaterThan(0);
+      expect(deps.engineStore.creditEntries).toHaveLength(1);
+      expect(deps.engineStore.creditEntries[0]?.delta).toBe(-batchCost);
+    }
   });
 
   it("rejects a cross-workspace channel (tenancy)", async () => {

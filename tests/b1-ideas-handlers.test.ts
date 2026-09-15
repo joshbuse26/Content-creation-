@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { FIXTURE_IDS, fixtureIdea } from "@/lib/fixtures";
 import { ideaIdSchema } from "@/lib/types/ids";
 import { setIdeationDepsForTests } from "@/pipelines/ideation/deps";
+import { CREDIT_COSTS } from "@/server/credits";
 import { ideasHandlers } from "@/server/routers/impl/ideas";
 import {
   getSharedWorkspaceStore,
@@ -136,23 +137,33 @@ describe("ideas.promote", () => {
 });
 
 describe("ideas.requestBatch", () => {
-  it("runs the batch inline (no Redis) and lands 1 idempotent credit charge", async () => {
+  // The batch cost is config (currently 0 for playtest); widen the literal so
+  // every expectation below derives from it instead of assuming either value.
+  const batchCost: number = CREDIT_COSTS.ideaBatch;
+  // The handler only charges when a batch actually costs something
+  // (`chargeCredits: CREDIT_COSTS.ideaBatch > 0`), so a free batch lands NO
+  // ledger entry; a paid batch lands exactly one, for the configured cost.
+  const entriesPerBatch = batchCost > 0 ? 1 : 0;
+
+  it("runs the batch inline (no Redis) and lands the configured charge once, idempotently", async () => {
     const result = await ideasHandlers.requestBatch({
       ctx: fixtureCtx,
       input: { workspaceId: fixtureCtx.workspaceId, channelId },
     });
     expect(result.status).toBe("queued");
 
-    expect(deps.engineStore.creditEntries).toHaveLength(1);
-    expect(deps.engineStore.creditEntries[0]?.delta).toBe(-1);
-    expect(deps.engineStore.creditEntries[0]?.reason).toBe("idea_batch");
+    expect(deps.engineStore.creditEntries).toHaveLength(entriesPerBatch);
+    for (const entry of deps.engineStore.creditEntries) {
+      expect(entry.delta).toBe(-batchCost);
+      expect(entry.reason).toBe("idea_batch");
+    }
 
     // The fresh batch is visible in the feed.
     const ideas = await ideasHandlers.feed({ ctx: fixtureCtx, input: feedInput() });
     expect(ideas.length).toBeGreaterThan(1);
   });
 
-  it("each requested batch is its own charge", async () => {
+  it("each requested batch is its own charge (at the configured cost)", async () => {
     await ideasHandlers.requestBatch({
       ctx: fixtureCtx,
       input: { workspaceId: fixtureCtx.workspaceId, channelId },
@@ -161,22 +172,33 @@ describe("ideas.requestBatch", () => {
       ctx: fixtureCtx,
       input: { workspaceId: fixtureCtx.workspaceId, channelId },
     });
-    expect(deps.engineStore.creditEntries).toHaveLength(2);
+    expect(deps.engineStore.creditEntries).toHaveLength(2 * entriesPerBatch);
+    const keys = deps.engineStore.creditEntries.map((e) => e.idempotencyKey);
+    expect(new Set(keys).size).toBe(keys.length);
+    for (const entry of deps.engineStore.creditEntries) {
+      expect(entry.delta).toBe(-batchCost);
+    }
   });
 
-  it("fails PRECONDITION_FAILED without enough credits, and charges nothing", async () => {
+  it("with a zero balance: fails PRECONDITION_FAILED when batches cost credits, otherwise succeeds free", async () => {
     const workspace = getSharedWorkspaceStore().workspaces.find(
       (w) => w.id === fixtureCtx.workspaceId,
     );
     expect(workspace).toBeDefined();
     if (workspace !== undefined) workspace.creditBalance = 0;
 
-    await expect(
-      ideasHandlers.requestBatch({
-        ctx: fixtureCtx,
-        input: { workspaceId: fixtureCtx.workspaceId, channelId },
-      }),
-    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    const request = ideasHandlers.requestBatch({
+      ctx: fixtureCtx,
+      input: { workspaceId: fixtureCtx.workspaceId, channelId },
+    });
+    if (batchCost > 0) {
+      await expect(request).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    } else {
+      // Free batches never gate on balance and never touch the ledger.
+      await expect(request).resolves.toMatchObject({ status: "queued" });
+      const ideas = await ideasHandlers.feed({ ctx: fixtureCtx, input: feedInput() });
+      expect(ideas.length).toBeGreaterThan(1);
+    }
     expect(deps.engineStore.creditEntries).toHaveLength(0);
   });
 

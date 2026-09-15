@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { fixtureChannel, fixtureIdea, FIXTURE_IDS } from "@/lib/fixtures";
 import { channelSchema } from "@/lib/types/entities";
 import { runDailyIdeas, DAILY_IDEAS_COUNT } from "@/pipelines/ideation/ideas";
+import { CREDIT_COSTS } from "@/server/credits";
 import { makeIdeationDeps } from "./b1-helpers";
 
 const input = { workspaceId: FIXTURE_IDS.workspace, channelId: FIXTURE_IDS.channel };
@@ -77,14 +78,18 @@ describe("daily ideas pipeline (§5.4)", () => {
   });
 });
 
-describe("idea batch credits (spec §7: extra batch = 1 credit)", () => {
+describe("idea batch credits (spec §7: extra batch = CREDIT_COSTS.ideaBatch)", () => {
   it("does NOT charge for the free daily run", async () => {
     const deps = makeIdeationDeps();
     await runDailyIdeas(deps, { input });
     expect(deps.engineStore.creditEntries).toHaveLength(0);
   });
 
-  it("charges exactly 1 credit for a requested batch, idempotently", async () => {
+  it("charges the configured batch cost once for a requested batch, idempotently", async () => {
+    // The pipeline records exactly one ledger entry per charged run, with the
+    // delta derived from CREDIT_COSTS.ideaBatch (a 0-delta entry while
+    // batches are free). Whether to charge at all is the router's decision.
+    const batchCost: number = CREDIT_COSTS.ideaBatch;
     const deps = makeIdeationDeps();
     await runDailyIdeas(deps, {
       input,
@@ -94,7 +99,7 @@ describe("idea batch credits (spec §7: extra batch = 1 credit)", () => {
     });
     expect(deps.engineStore.creditEntries).toHaveLength(1);
     const entry = deps.engineStore.creditEntries[0];
-    expect(entry?.delta).toBe(-1);
+    expect(entry?.delta).toBe(-batchCost);
     expect(entry?.reason).toBe("idea_batch");
     expect(entry?.actorUserId).toBe(FIXTURE_IDS.user);
 
