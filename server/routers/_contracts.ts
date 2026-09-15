@@ -72,6 +72,9 @@ import { protectedProcedure, router, workspaceProcedure } from "@/server/trpc";
 
 const general = rateLimitMiddleware("general");
 const generation = rateLimitMiddleware("generation");
+// Chat reads sit in their own bucket (policies.ts `chatRead`) so a read burst
+// can never rate-limit chat.sendMessage, which stays on `general`.
+const chatRead = rateLimitMiddleware("chatRead");
 
 // ---------------------------------------------------------------------------
 
@@ -215,12 +218,12 @@ export const voiceRouter = router({
 // the credit-costing happens inside tool execution (D1), never here.
 export const chatRouter = router({
   listThreads: workspaceProcedure("chat", "read")
-    .use(general)
+    .use(chatRead)
     .input(chatContracts.listThreads.input)
     .output(chatContracts.listThreads.output)
     .query((opts) => chatImpl.listThreads(opts)),
   getThread: workspaceProcedure("chat", "read")
-    .use(general)
+    .use(chatRead)
     .input(chatContracts.getThread.input)
     .output(chatContracts.getThread.output)
     .query((opts) => chatImpl.getThread(opts)),
