@@ -3,6 +3,27 @@ import type { LlmProvider, LlmRequest, LlmResponse } from "../types";
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 const API_URL = "https://api.x.ai/v1/chat/completions";
+/** Provider error bodies are logged truncated — enough to diagnose, never a dump. */
+const ERROR_BODY_LOG_CHARS = 500;
+
+/**
+ * Log a non-2xx provider response (status + truncated body) for ops and
+ * return the error to throw. The request headers (bearer key) are never
+ * logged; the body is the provider's own error text. The logger is imported
+ * lazily so this module stays side-effect free at import (it is itself
+ * lazily loaded by getProviders()).
+ */
+async function providerHttpError(res: Response, kind: "complete" | "stream"): Promise<Error> {
+  let body = "";
+  try {
+    body = (await res.text()).slice(0, ERROR_BODY_LOG_CHARS);
+  } catch {
+    // Body unreadable — status alone is still useful.
+  }
+  const { logger } = await import("@/lib/logger");
+  logger.error({ provider: "llm", kind, status: res.status, body }, "LLM provider request failed");
+  return new Error(`Grok API error: HTTP ${String(res.status)}`);
+}
 
 interface GrokMessage {
   role: "system" | "user";
@@ -74,7 +95,7 @@ export class GrokLlm implements LlmProvider {
       signal: AbortSignal.timeout(req.timeoutMs ?? DEFAULT_TIMEOUT_MS),
     });
     if (!res.ok) {
-      throw new Error(`Grok API error: HTTP ${String(res.status)}`);
+      throw await providerHttpError(res, "complete");
     }
     const data = (await res.json()) as GrokCompletion;
     const choice = data.choices?.[0];
@@ -95,7 +116,7 @@ export class GrokLlm implements LlmProvider {
       signal: AbortSignal.timeout(req.timeoutMs ?? DEFAULT_TIMEOUT_MS),
     });
     if (!res.ok || res.body === null) {
-      throw new Error(`Grok API error: HTTP ${String(res.status)}`);
+      throw await providerHttpError(res, "stream");
     }
     const reader = res.body.getReader();
     const decoder = new TextDecoder();

@@ -1,4 +1,5 @@
-import { LLM_MODELS } from "@/lib/config";
+import { getConfig, LLM_MODELS } from "@/lib/config";
+import { logger } from "@/lib/logger";
 import { buildCoachContext } from "@/lib/chat/context";
 import { buildCoachSystemPrompt } from "@/lib/chat/persona";
 import { synthCoachReply, toCoachTurn, TOOL_PROTOCOL_INSTRUCTIONS } from "@/lib/chat/orchestrator";
@@ -27,9 +28,46 @@ import { getChatStore, type ChatStore } from "@/server/chat/store";
  *
  * The vendor name never reaches the stream: the persona forbids it and the
  * reply text is all that is surfaced (tool directive stripped).
+ *
+ * HARD DEADLINE (F0): the provider call races a timer (the research
+ * guardedFetch pattern) so a stalled LLM can NEVER hang the browser — past
+ * the deadline the turn emits a terminal `error` event and the SSE stream
+ * closes, whether or not the provider honoured its own timeout.
  */
 
 const DELTA_WORDS = 6;
+
+/** Surfaced to the user when the Coach reply exceeds the turn deadline. */
+export const CHAT_TURN_TIMEOUT_MESSAGE =
+  "The coach took too long to answer. Try again in a moment.";
+/** Surfaced to the user when the provider fails (never the vendor's text). */
+export const CHAT_TURN_FAILED_MESSAGE = "The coach couldn't answer just now. Try again.";
+
+export class ChatTurnTimeoutError extends Error {
+  constructor(deadlineMs: number) {
+    super(`chat turn exceeded ${String(deadlineMs)}ms`);
+    this.name = "ChatTurnTimeoutError";
+  }
+}
+
+/**
+ * Race `work` against a hard deadline. Rejects with ChatTurnTimeoutError
+ * when the timer fires first — even if `work` never settles (an LLM that
+ * ignores its abort signal). The timer is always cleared.
+ */
+export async function withTurnDeadline<T>(work: Promise<T>, deadlineMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new ChatTurnTimeoutError(deadlineMs));
+    }, deadlineMs);
+  });
+  try {
+    return await Promise.race([work, deadline]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
 
 /** Chunk reply text into word-group deltas for a natural streaming cadence. */
 function* chunkText(text: string): Generator<string> {
@@ -65,9 +103,12 @@ export async function* runAssistantTurn(params: {
   projectId: ProjectId | null;
   assistantMessageId: ChatMessageId;
   store?: ChatStore;
+  /** Hard deadline for the provider call; defaults to CHAT_TURN_DEADLINE_MS. */
+  deadlineMs?: number;
 }): AsyncGenerator<ChatStreamEvent> {
   const store = params.store ?? getChatStore();
   const deps = await getStageDeps();
+  const deadlineMs = params.deadlineMs ?? getConfig().CHAT_TURN_DEADLINE_MS;
 
   const context = await buildCoachContext(params.projectId, params.workspaceId, deps);
   const history = await store.listMessages(params.workspaceId, params.threadId);
@@ -78,15 +119,42 @@ export async function* runAssistantTurn(params: {
   if (deps.engine.mode === "fixture") {
     raw = synthCoachReply(userText, context);
   } else {
+    // Live: the provider selected by getProviders() (PROVIDERS=live), never
+    // the fixture synth. The call races the hard deadline; the provider's own
+    // timeoutMs is set to the same budget so a well-behaved client aborts too.
     const system = `${buildCoachSystemPrompt(context)}\n\n${TOOL_PROTOCOL_INSTRUCTIONS}`;
-    const response = await deps.engine.llm.complete({
-      model: LLM_MODELS.sonnet,
-      system,
-      prompt: buildTranscript(history),
-      maxTokens: 1200,
-      temperature: 0.7,
-    });
-    raw = response.text;
+    const startedAt = Date.now();
+    try {
+      const response = await withTurnDeadline(
+        deps.engine.llm.complete({
+          model: LLM_MODELS.sonnet,
+          system,
+          prompt: buildTranscript(history),
+          maxTokens: 1200,
+          temperature: 0.7,
+          timeoutMs: deadlineMs,
+        }),
+        deadlineMs,
+      );
+      raw = response.text;
+    } catch (err) {
+      const timedOut = err instanceof ChatTurnTimeoutError;
+      logger.error(
+        {
+          threadId: params.threadId,
+          elapsedMs: Date.now() - startedAt,
+          deadlineMs,
+          timedOut,
+          err: err instanceof Error ? err.message : String(err),
+        },
+        timedOut ? "chat turn exceeded its deadline" : "chat turn provider call failed",
+      );
+      yield {
+        type: "error",
+        message: timedOut ? CHAT_TURN_TIMEOUT_MESSAGE : CHAT_TURN_FAILED_MESSAGE,
+      };
+      return;
+    }
   }
 
   const turn = toCoachTurn(raw);

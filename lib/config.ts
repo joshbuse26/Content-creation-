@@ -117,6 +117,16 @@ const envSchema = z
     LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error", "fatal"]).default("info"),
 
     /**
+     * Hard deadline for one Coach reply (server/chat/turn.ts). If the LLM
+     * provider stalls past this, the SSE stream emits an `error` event and
+     * closes instead of hanging the browser.
+     */
+    CHAT_TURN_DEADLINE_MS: z.preprocess(
+      emptyToUndefined,
+      z.coerce.number().int().positive().default(60_000),
+    ),
+
+    /**
      * Comma-separated product-admin emails that skip credit gating and
      * are never debited (free-admin bypass). Compared case-insensitively.
      * Workspace owners/admins are also exempt via isCreditExempt.
