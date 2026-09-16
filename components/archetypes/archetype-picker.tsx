@@ -122,7 +122,7 @@ export function ArchetypePicker({
               }}
               className={`flex h-full cursor-pointer flex-col rounded-lg border border-dashed p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                 value === null
-                  ? "border-emerald-600 bg-emerald-50/60 ring-1 ring-emerald-600 dark:border-emerald-500 dark:bg-emerald-950/40 dark:ring-emerald-500"
+                  ? "border-accent-600 bg-accent-50/60 ring-1 ring-accent-600 dark:border-accent-500 dark:bg-accent-950/40 dark:ring-accent-500"
                   : "border-zinc-300 hover:border-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-500"
               }`}
             >
@@ -201,7 +201,7 @@ export function ArchetypePicker({
                     setWeightA(w);
                     emitCrossover(slotA, slotB, w);
                   }}
-                  className="w-full accent-emerald-600"
+                  className="w-full accent-accent-600"
                   aria-valuetext={`${Math.round(weightA * 100)}% ${a.displayName}, ${
                     100 - Math.round(weightA * 100)
                   }% ${b.displayName}`}

@@ -6,6 +6,7 @@ import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { TextInput, Label } from "@/components/ui/field";
 import { IconGoogle, IconMail } from "@/components/ui/icons";
+import { APP_HOME } from "@/components/shell/nav";
 
 export function LoginForm({
   fixtureMode,
@@ -25,7 +26,7 @@ export function LoginForm({
     setBusy(true);
     setError(null);
     try {
-      const res = await signIn("email", { email, callbackUrl: "/projects", redirect: false });
+      const res = await signIn("email", { email, callbackUrl: APP_HOME, redirect: false });
       if (typeof res.error === "string" && res.error !== "") {
         setError("Could not send the sign-in link. Check the address and try again.");
       } else {
@@ -47,7 +48,7 @@ export function LoginForm({
     setError(null);
     try {
       // TEMPORARY playtest bypass — Credentials provider id "playtest".
-      await signIn("playtest", { callbackUrl: "/projects" });
+      await signIn("playtest", { callbackUrl: APP_HOME });
     } catch {
       setError("Playtest sign-in failed. Try again in a moment.");
       setPlaytestBusy(false);
@@ -87,7 +88,7 @@ export function LoginForm({
           <button
             type="button"
             onClick={() => {
-              void signIn("google", { callbackUrl: "/projects" });
+              void signIn("google", { callbackUrl: APP_HOME });
             }}
             className="mt-6 flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
           >
@@ -102,7 +103,7 @@ export function LoginForm({
           </div>
 
           {sent ? (
-            <div className="rounded-md border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
+            <div className="rounded-md border border-accent-300 bg-accent-50 p-4 text-sm text-accent-900 dark:border-accent-800 dark:bg-accent-950 dark:text-accent-200">
               <p className="font-medium">Check your inbox</p>
               <p className="mt-1">
                 We sent a sign-in link to <strong>{email}</strong>. It expires in 24 hours.
@@ -142,7 +143,7 @@ export function LoginForm({
           <button
             type="button"
             onClick={() => {
-              void signIn("google", { callbackUrl: "/projects" });
+              void signIn("google", { callbackUrl: APP_HOME });
             }}
             className="mt-4 flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
           >
@@ -155,7 +156,7 @@ export function LoginForm({
             <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
           </div>
           {sent ? (
-            <div className="rounded-md border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
+            <div className="rounded-md border border-accent-300 bg-accent-50 p-4 text-sm text-accent-900 dark:border-accent-800 dark:bg-accent-950 dark:text-accent-200">
               <p className="font-medium">Check your inbox</p>
               <p className="mt-1">
                 We sent a sign-in link to <strong>{email}</strong>. It expires in 24 hours.
@@ -199,8 +200,8 @@ export function LoginForm({
           <p className="mt-1">
             Auth providers are not configured. You can{" "}
             <Link
-              href="/projects"
-              className="font-medium text-emerald-700 underline dark:text-emerald-400"
+              href={APP_HOME}
+              className="font-medium text-accent-700 underline dark:text-accent-400"
             >
               enter the app on fixture data
             </Link>{" "}

@@ -168,7 +168,7 @@ export function IdeasFeedScreen() {
             action={
               <Link
                 href="/channels"
-                className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+                className="text-sm font-medium text-accent-700 hover:underline dark:text-accent-400"
               >
                 Connect a channel →
               </Link>
@@ -195,7 +195,7 @@ export function IdeasFeedScreen() {
           action={
             <Link
               href={`/channels/${channelId}`}
-              className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+              className="text-sm font-medium text-accent-700 hover:underline dark:text-accent-400"
             >
               Set niche keywords →
             </Link>

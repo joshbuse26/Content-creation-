@@ -101,7 +101,7 @@ export function MembersPanel() {
                 ))}
               </Select>
             ) : (
-              <Badge tone={m.role === "owner" ? "emerald" : "neutral"} title={roleHelp[m.role]}>
+              <Badge tone={m.role === "owner" ? "accent" : "neutral"} title={roleHelp[m.role]}>
                 {m.role}
               </Badge>
             )}
@@ -165,9 +165,7 @@ export function MembersPanel() {
             </p>
           ) : null}
           {inviteMutation.isSuccess ? (
-            <p className="w-full text-xs text-emerald-700 dark:text-emerald-400">
-              Invitation sent.
-            </p>
+            <p className="w-full text-xs text-accent-700 dark:text-accent-400">Invitation sent.</p>
           ) : null}
         </form>
       ) : (

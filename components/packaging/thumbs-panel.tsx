@@ -115,7 +115,7 @@ export function ThumbsPanel() {
                   }}
                   className={`rounded-md border px-2.5 py-2 text-left text-xs font-medium transition-colors ${
                     pattern === "auto"
-                      ? "border-emerald-600 bg-emerald-50 text-emerald-900 ring-1 ring-emerald-600 dark:border-emerald-500 dark:bg-emerald-950/40 dark:text-emerald-200 dark:ring-emerald-500"
+                      ? "border-accent-600 bg-accent-50 text-accent-900 ring-1 ring-accent-600 dark:border-accent-500 dark:bg-accent-950/40 dark:text-accent-200 dark:ring-accent-500"
                       : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:border-zinc-700 dark:hover:bg-zinc-900"
                   }`}
                 >
@@ -134,7 +134,7 @@ export function ThumbsPanel() {
                   }}
                   className={`rounded-md border px-2.5 py-2 text-left text-xs font-medium transition-colors ${
                     p.id === pattern
-                      ? "border-emerald-600 bg-emerald-50 text-emerald-900 ring-1 ring-emerald-600 dark:border-emerald-500 dark:bg-emerald-950/40 dark:text-emerald-200 dark:ring-emerald-500"
+                      ? "border-accent-600 bg-accent-50 text-accent-900 ring-1 ring-accent-600 dark:border-accent-500 dark:bg-accent-950/40 dark:text-accent-200 dark:ring-accent-500"
                       : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:border-zinc-700 dark:hover:bg-zinc-900"
                   }`}
                 >
@@ -219,9 +219,7 @@ export function ThumbsPanel() {
           {concepts.map((c) => (
             <Card
               key={c.id}
-              className={
-                c.status === "chosen" ? "ring-2 ring-emerald-600 dark:ring-emerald-500" : ""
-              }
+              className={c.status === "chosen" ? "ring-2 ring-accent-600 dark:ring-accent-500" : ""}
             >
               {c.imageKey !== null ? (
                 // Plain <img>: bytes come from our authed object-storage
@@ -238,7 +236,7 @@ export function ThumbsPanel() {
                 <div className="flex items-center gap-2">
                   <Badge tone="purple">{c.compositionPattern}</Badge>
                   {c.status === "chosen" ? (
-                    <Badge tone="emerald">
+                    <Badge tone="accent">
                       <IconCheck size={10} /> chosen
                     </Badge>
                   ) : null}

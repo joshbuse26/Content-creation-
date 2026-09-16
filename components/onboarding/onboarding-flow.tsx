@@ -63,7 +63,7 @@ export function OnboardingFlow() {
               <span
                 className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${
                   i < stepIndex
-                    ? "bg-emerald-600 text-white"
+                    ? "bg-accent-600 text-white"
                     : i === stepIndex
                       ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
                       : "bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"

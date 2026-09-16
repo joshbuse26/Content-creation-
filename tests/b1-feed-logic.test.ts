@@ -63,8 +63,8 @@ describe("matchesFilter / canChangeStatus", () => {
 
 describe("scoreTone", () => {
   it("bands scores for the badge", () => {
-    expect(scoreTone(95)).toBe("emerald");
-    expect(scoreTone(80)).toBe("emerald");
+    expect(scoreTone(95)).toBe("accent");
+    expect(scoreTone(80)).toBe("accent");
     expect(scoreTone(79)).toBe("blue");
     expect(scoreTone(59)).toBe("yellow");
     expect(scoreTone(10)).toBe("neutral");

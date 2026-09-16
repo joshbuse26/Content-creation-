@@ -323,3 +323,39 @@ export function IconExternal(p: IconProps) {
     </Svg>
   );
 }
+
+export function IconBulb(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M5.5 11.5v-1.2A4.2 4.2 0 0 1 3.8 7a4.2 4.2 0 1 1 8.4 0 4.2 4.2 0 0 1-1.7 3.3v1.2h-5Z" />
+      <path d="M6.2 14h3.6" />
+    </Svg>
+  );
+}
+
+export function IconGrid(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="2" y="2" width="5" height="5" rx="1" />
+      <rect x="9" y="2" width="5" height="5" rx="1" />
+      <rect x="2" y="9" width="5" height="5" rx="1" />
+      <rect x="9" y="9" width="5" height="5" rx="1" />
+    </Svg>
+  );
+}
+
+export function IconPulse(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M1.5 8.5h3l1.5-4 3 7 1.5-3h4" />
+    </Svg>
+  );
+}
+
+export function IconChat(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h9A1.5 1.5 0 0 1 14 3.5v6a1.5 1.5 0 0 1-1.5 1.5H7l-3.5 3v-3h-.5A1.5 1.5 0 0 1 1.5 9.5v-6Z" />
+    </Svg>
+  );
+}

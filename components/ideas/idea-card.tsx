@@ -63,7 +63,7 @@ export function IdeaCard({
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={`Watch evidence video ${videoId} on YouTube (opens in a new tab)`}
-                className="inline-flex items-center gap-1 rounded-full border border-zinc-300 px-2 py-0.5 text-[11px] font-medium text-zinc-600 transition-colors hover:border-emerald-500 hover:text-emerald-700 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-emerald-500 dark:hover:text-emerald-400"
+                className="inline-flex items-center gap-1 rounded-full border border-zinc-300 px-2 py-0.5 text-[11px] font-medium text-zinc-600 transition-colors hover:border-accent-500 hover:text-accent-700 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-accent-500 dark:hover:text-accent-400"
               >
                 <IconPlay size={10} /> {videoId} <IconExternal size={10} />
               </a>

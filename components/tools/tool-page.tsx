@@ -71,7 +71,7 @@ export function ToolPage({ def }: { def: ToolDef }) {
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-14">
-      <p className="text-xs font-semibold uppercase tracking-widest text-emerald-700 dark:text-emerald-500">
+      <p className="text-xs font-semibold uppercase tracking-widest text-accent-700 dark:text-accent-500">
         Free tool
       </p>
       <h1 className="mt-1 text-3xl font-bold tracking-tight">{def.name}</h1>
@@ -95,7 +95,7 @@ export function ToolPage({ def }: { def: ToolDef }) {
             {f.kind === "textarea" ? (
               <textarea
                 id={`tool-${f.name}`}
-                className="min-h-28 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-emerald-600 focus:outline-none focus:ring-1 focus:ring-emerald-600 dark:border-zinc-700 dark:bg-zinc-950"
+                className="min-h-28 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-accent-600 focus:outline-none focus:ring-1 focus:ring-accent-600 dark:border-zinc-700 dark:bg-zinc-950"
                 maxLength={f.maxLength}
                 value={values[f.name] ?? ""}
                 onChange={(e) => {
@@ -107,7 +107,7 @@ export function ToolPage({ def }: { def: ToolDef }) {
               <input
                 id={`tool-${f.name}`}
                 type="text"
-                className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-emerald-600 focus:outline-none focus:ring-1 focus:ring-emerald-600 dark:border-zinc-700 dark:bg-zinc-950"
+                className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-accent-600 focus:outline-none focus:ring-1 focus:ring-accent-600 dark:border-zinc-700 dark:bg-zinc-950"
                 maxLength={f.maxLength}
                 value={values[f.name] ?? ""}
                 onChange={(e) => {
@@ -120,8 +120,8 @@ export function ToolPage({ def }: { def: ToolDef }) {
         ))}
 
         {gateOpen ? (
-          <div className="space-y-3 rounded-md border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/40">
-            <p className="text-sm text-emerald-900 dark:text-emerald-200">
+          <div className="space-y-3 rounded-md border border-accent-200 bg-accent-50 p-4 dark:border-accent-900 dark:bg-accent-950/40">
+            <p className="text-sm text-accent-900 dark:text-accent-200">
               You&rsquo;ve used your two quick tries — drop your email to keep going free (5 runs a
               day).
             </p>
@@ -129,7 +129,7 @@ export function ToolPage({ def }: { def: ToolDef }) {
               <input
                 type="email"
                 aria-label="Email address"
-                className="w-full rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm focus:border-emerald-600 focus:outline-none focus:ring-1 focus:ring-emerald-600 dark:border-emerald-800 dark:bg-zinc-950"
+                className="w-full rounded-md border border-accent-300 bg-white px-3 py-2 text-sm focus:border-accent-600 focus:outline-none focus:ring-1 focus:ring-accent-600 dark:border-accent-800 dark:bg-zinc-950"
                 placeholder="you@example.com"
                 value={email}
                 onChange={(e) => {
@@ -138,7 +138,7 @@ export function ToolPage({ def }: { def: ToolDef }) {
               />
               <button
                 type="button"
-                className="shrink-0 rounded-md bg-emerald-700 px-3.5 py-2 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+                className="shrink-0 rounded-md bg-accent-700 px-3.5 py-2 text-sm font-medium text-white hover:bg-accent-600 disabled:opacity-50 dark:bg-accent-600 dark:hover:bg-accent-500"
                 disabled={!isPlausibleEmail(email)}
                 onClick={() => {
                   unlock();
@@ -153,7 +153,7 @@ export function ToolPage({ def }: { def: ToolDef }) {
         ) : (
           <button
             type="submit"
-            className="rounded-md bg-emerald-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+            className="rounded-md bg-accent-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-600 disabled:opacity-50 dark:bg-accent-600 dark:hover:bg-accent-500"
             disabled={!filled || busy}
           >
             {busy ? "Working…" : def.submitLabel}
@@ -215,7 +215,7 @@ export function ToolPage({ def }: { def: ToolDef }) {
             </p>
             <Link
               href="/login"
-              className="mt-3 inline-block rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+              className="mt-3 inline-block rounded-md bg-accent-700 px-4 py-2 text-sm font-medium text-white hover:bg-accent-600 dark:bg-accent-600 dark:hover:bg-accent-500"
             >
               Start writing free
             </Link>

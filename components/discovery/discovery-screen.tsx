@@ -196,7 +196,7 @@ export function DiscoveryScreen() {
 
   const header = (
     <PageHeader
-      title="Discovery"
+      title="Intel"
       subtitle="High-performing concepts and live demand for your niche — one click to start writing."
       actions={
         channelId !== null ? (
@@ -229,7 +229,7 @@ export function DiscoveryScreen() {
             action={
               <Link
                 href="/channels"
-                className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+                className="text-sm font-medium text-accent-700 hover:underline dark:text-accent-400"
               >
                 Connect a channel →
               </Link>
@@ -256,7 +256,7 @@ export function DiscoveryScreen() {
           action={
             <Link
               href={`/channels/${channelId}`}
-              className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+              className="text-sm font-medium text-accent-700 hover:underline dark:text-accent-400"
             >
               Set niche keywords →
             </Link>
@@ -444,7 +444,7 @@ function ShelfTab({
       onClick={onClick}
       className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
         active
-          ? "bg-emerald-600 text-white"
+          ? "bg-accent-600 text-white"
           : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
       }`}
     >
@@ -469,7 +469,7 @@ function NicheChip({
       aria-pressed={active}
       className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
         active
-          ? "border-emerald-600 bg-emerald-50 text-emerald-800 dark:border-emerald-500 dark:bg-emerald-950/60 dark:text-emerald-300"
+          ? "border-accent-600 bg-accent-50 text-accent-800 dark:border-accent-500 dark:bg-accent-950/60 dark:text-accent-300"
           : "border-zinc-300 text-zinc-600 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600"
       }`}
     >

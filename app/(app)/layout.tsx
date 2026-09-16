@@ -12,8 +12,13 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     redirect("/login");
   }
   return (
-    <AppProviders>
-      <AppShell>{children}</AppShell>
-    </AppProviders>
+    // `.dark` forces the command-center theme for every authenticated route
+    // (globals.css defines the dark variant as class-driven); `data-app-shell`
+    // lets <html> paint the charcoal background before hydration.
+    <div className="dark min-h-screen bg-bg text-ink" data-app-shell="">
+      <AppProviders>
+        <AppShell>{children}</AppShell>
+      </AppProviders>
+    </div>
   );
 }

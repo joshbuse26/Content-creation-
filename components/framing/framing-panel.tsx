@@ -98,13 +98,13 @@ export function FramingPanel() {
           {frames.map((frame) => (
             <Card
               key={frame.id}
-              className={frame.chosen ? "ring-2 ring-emerald-600 dark:ring-emerald-500" : ""}
+              className={frame.chosen ? "ring-2 ring-accent-600 dark:ring-accent-500" : ""}
             >
               <CardBody className="flex h-full flex-col gap-3">
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-sm leading-relaxed font-medium">{frame.angle}</p>
                   {frame.chosen ? (
-                    <Badge tone="emerald">
+                    <Badge tone="accent">
                       <IconCheck size={10} /> chosen
                     </Badge>
                   ) : null}
@@ -161,7 +161,7 @@ export function FramingPanel() {
         <div className="flex justify-end">
           <Link
             href={`/projects/${projectId}/generate`}
-            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-emerald-700 px-3.5 text-sm font-medium text-white hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-accent-700 px-3.5 text-sm font-medium text-white hover:bg-accent-600 dark:bg-accent-600 dark:hover:bg-accent-500"
           >
             <IconSparkle size={14} /> Generate script from this frame
           </Link>

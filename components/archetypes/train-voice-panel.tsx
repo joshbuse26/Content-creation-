@@ -312,7 +312,7 @@ function TrainedCard({
     <div
       className={`flex flex-col rounded-lg border p-3 transition-colors ${
         selected
-          ? "border-emerald-600 bg-emerald-50/60 ring-1 ring-emerald-600 dark:border-emerald-500 dark:bg-emerald-950/40 dark:ring-emerald-500"
+          ? "border-accent-600 bg-accent-50/60 ring-1 ring-accent-600 dark:border-accent-500 dark:bg-accent-950/40 dark:ring-accent-500"
           : "border-zinc-300 dark:border-zinc-700"
       }`}
     >

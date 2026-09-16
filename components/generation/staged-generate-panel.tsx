@@ -244,7 +244,7 @@ export function StagedGeneratePanel() {
         <div className="flex items-center gap-3">
           {streaming ? (
             <span className="inline-flex items-center gap-1.5 font-mono text-sm text-zinc-600 tabular-nums dark:text-zinc-300">
-              <IconClock size={14} className={running ? "text-emerald-600" : "text-zinc-400"} />
+              <IconClock size={14} className={running ? "text-accent-600" : "text-zinc-400"} />
               {fmtDuration(elapsedS)}
             </span>
           ) : null}
@@ -279,7 +279,7 @@ export function StagedGeneratePanel() {
             </p>
             <Link
               href={`/projects/${projectId}/framing`}
-              className="mt-2 inline-block text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+              className="mt-2 inline-block text-sm font-medium text-accent-700 hover:underline dark:text-accent-400"
             >
               Go to framing →
             </Link>
@@ -293,7 +293,7 @@ export function StagedGeneratePanel() {
         </p>
       ) : null}
       {resuming && running ? (
-        <p className="text-xs text-emerald-700 dark:text-emerald-400">
+        <p className="text-xs text-accent-700 dark:text-accent-400">
           Resuming — reconnected to a generation that was already in progress.
         </p>
       ) : null}
@@ -309,9 +309,9 @@ export function StagedGeneratePanel() {
                 aria-current={active ? "step" : undefined}
                 className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${
                   status === "done"
-                    ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                    ? "border-accent-300 bg-accent-50 text-accent-800 dark:border-accent-800 dark:bg-accent-950 dark:text-accent-300"
                     : active
-                      ? "border-emerald-600 text-emerald-700 dark:border-emerald-500 dark:text-emerald-400"
+                      ? "border-accent-600 text-accent-700 dark:border-accent-500 dark:text-accent-400"
                       : "border-zinc-200 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400"
                 }`}
               >
@@ -449,7 +449,7 @@ function StepCard({
       <CardBody>
         <div className="mb-2 flex items-center gap-2">
           <h3 className="text-sm font-semibold">{STEP_TITLES[step]}</h3>
-          <Badge tone={status === "done" ? "emerald" : "neutral"}>
+          <Badge tone={status === "done" ? "accent" : "neutral"}>
             {status === "done" ? "done" : status}
           </Badge>
           <StepCostLabel step={step} />
@@ -498,7 +498,7 @@ function TopicsStep({
         >
           Skip — write from the chosen frame (free)
         </Button>
-        {flow.topicsSkipped ? <Badge tone="emerald">Using the chosen frame</Badge> : null}
+        {flow.topicsSkipped ? <Badge tone="accent">Using the chosen frame</Badge> : null}
       </div>
 
       {flow.topics !== null ? (
@@ -516,7 +516,7 @@ function TopicsStep({
                 }}
                 className={`block w-full cursor-pointer rounded-md border p-3 text-left text-sm transition-colors ${
                   selected
-                    ? "border-emerald-500 bg-emerald-50/60 dark:border-emerald-600 dark:bg-emerald-950/40"
+                    ? "border-accent-500 bg-accent-50/60 dark:border-accent-600 dark:bg-accent-950/40"
                     : "border-zinc-200 hover:border-zinc-400 dark:border-zinc-800 dark:hover:border-zinc-600"
                 }`}
               >
@@ -563,7 +563,7 @@ function TopicsStep({
       {flow.chosenTopic !== null ? (
         <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-300">
           Chosen: <span className="font-medium">{flow.chosenTopic.title}</span>{" "}
-          {flow.customTopic ? <Badge tone="emerald">your own — no charge</Badge> : null}
+          {flow.customTopic ? <Badge tone="accent">your own — no charge</Badge> : null}
         </p>
       ) : null}
     </StepCard>
@@ -623,7 +623,7 @@ function OutlineStep({
                     <Badge tone="neutral">{s.kind}</Badge>
                     <input
                       aria-label={`Section ${i + 1} heading`}
-                      className="min-w-40 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-sm font-medium hover:border-zinc-300 focus:border-emerald-500 focus:outline-none dark:hover:border-zinc-700"
+                      className="min-w-40 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-sm font-medium hover:border-zinc-300 focus:border-accent-500 focus:outline-none dark:hover:border-zinc-700"
                       value={s.heading}
                       onChange={(e) => {
                         editSection(i, { heading: e.target.value });
@@ -705,11 +705,11 @@ function HooksStep({
                     }}
                     className={`cursor-pointer rounded-md border p-3 text-left text-sm transition-colors ${
                       selected
-                        ? "border-emerald-500 bg-emerald-50/60 dark:border-emerald-600 dark:bg-emerald-950/40"
+                        ? "border-accent-500 bg-accent-50/60 dark:border-accent-600 dark:bg-accent-950/40"
                         : "border-zinc-200 hover:border-zinc-400 dark:border-zinc-800 dark:hover:border-zinc-600"
                     }`}
                   >
-                    <Badge tone={selected ? "emerald" : "blue"}>{HOOK_STYLE_LABELS[h.style]}</Badge>
+                    <Badge tone={selected ? "accent" : "blue"}>{HOOK_STYLE_LABELS[h.style]}</Badge>
                     <p className="mt-1.5 text-sm leading-relaxed">{h.body}</p>
                   </button>
                 );
@@ -758,7 +758,7 @@ function DraftStep({
           A finished draft already exists —{" "}
           <Link
             href={`/projects/${projectId}/editor`}
-            className="font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+            className="font-medium text-accent-700 hover:underline dark:text-accent-400"
           >
             open it in the editor
           </Link>{" "}
@@ -766,7 +766,7 @@ function DraftStep({
           <button
             type="button"
             onClick={onReset}
-            className="cursor-pointer font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+            className="cursor-pointer font-medium text-accent-700 hover:underline dark:text-accent-400"
           >
             start this flow over
           </button>

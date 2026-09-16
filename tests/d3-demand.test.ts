@@ -157,6 +157,6 @@ describe("discovery-logic", () => {
     expect(ratioLabel(10.84)).toContain("×");
     expect(demandLabel("high")).toMatch(/demand/i);
     expect(demandTone("low")).toBe("neutral");
-    expect(demandTone("high")).toBe("emerald");
+    expect(demandTone("high")).toBe("accent");
   });
 });

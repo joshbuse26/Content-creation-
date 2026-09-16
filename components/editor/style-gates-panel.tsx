@@ -24,7 +24,7 @@ function VerdictBadge({ verdict }: { verdict: GateVerdict }) {
     );
   }
   return verdict ? (
-    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+    <span className="inline-flex items-center gap-1 rounded-full bg-accent-100 px-2 py-0.5 text-[11px] font-medium text-accent-800 dark:bg-accent-950 dark:text-accent-300">
       <IconCheck size={11} /> Pass
     </span>
   ) : (

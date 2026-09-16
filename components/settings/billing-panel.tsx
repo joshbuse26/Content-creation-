@@ -215,7 +215,7 @@ export function BillingPanel() {
                   className="h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800"
                 >
                   <div
-                    className="h-full rounded-full bg-emerald-600 transition-all dark:bg-emerald-500"
+                    className="h-full rounded-full bg-accent-600 transition-all dark:bg-accent-500"
                     style={{ width: `${String(cyclePct)}%` }}
                   />
                 </div>
@@ -258,7 +258,7 @@ export function BillingPanel() {
                   <CardBody className="space-y-3">
                     <div className="flex items-center justify-between">
                       <p className="font-semibold">{t.label}</p>
-                      {isCurrent ? <Badge tone="emerald">Current</Badge> : null}
+                      {isCurrent ? <Badge tone="accent">Current</Badge> : null}
                     </div>
                     <p>
                       <span className="text-2xl font-semibold tracking-tight">

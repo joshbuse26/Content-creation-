@@ -99,7 +99,7 @@ export function CompetitorCompare({
               setRaw(e.target.value);
             }}
             placeholder="@channelone, @channeltwo, youtube.com/@three"
-            className="w-full resize-none rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200"
+            className="w-full resize-none rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-accent-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200"
           />
           <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
             {handles.length === 0

@@ -45,7 +45,7 @@ export function canChangeStatus(status: IdeaStatus): boolean {
 }
 
 export function scoreTone(score: number): BadgeTone {
-  if (score >= 80) return "emerald";
+  if (score >= 80) return "accent";
   if (score >= 60) return "blue";
   if (score >= 40) return "yellow";
   return "neutral";

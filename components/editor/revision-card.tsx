@@ -48,7 +48,7 @@ export function RevisionCard({
       data-testid={`revision-${revision.id}`}
       className={`rounded-lg border bg-white dark:bg-zinc-900 ${
         decision === "accepted"
-          ? "border-emerald-300 dark:border-emerald-800"
+          ? "border-accent-300 dark:border-accent-800"
           : decision === "rejected"
             ? "border-zinc-200 opacity-60 dark:border-zinc-800"
             : "border-zinc-200 dark:border-zinc-800"
@@ -90,7 +90,7 @@ export function RevisionCard({
               </Button>
             </>
           ) : (
-            <Badge tone={decision === "accepted" ? "emerald" : "neutral"}>{decision}</Badge>
+            <Badge tone={decision === "accepted" ? "accent" : "neutral"}>{decision}</Badge>
           )}
         </div>
       </div>
@@ -101,7 +101,7 @@ export function RevisionCard({
               key={i}
               className={`flex gap-2 px-4 py-0.5 whitespace-pre-wrap ${
                 row.type === "added"
-                  ? "bg-emerald-50 text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200"
+                  ? "bg-accent-50 text-accent-900 dark:bg-accent-950/50 dark:text-accent-200"
                   : row.type === "removed"
                     ? "bg-red-50 text-red-900 line-through decoration-red-400/60 dark:bg-red-950/40 dark:text-red-300"
                     : "text-zinc-500 dark:text-zinc-400"

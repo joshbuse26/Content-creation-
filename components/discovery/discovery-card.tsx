@@ -85,7 +85,7 @@ export function DiscoveryCard({
               onChange={(e) => {
                 setAngle(e.target.value);
               }}
-              className="w-full resize-none rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-700 outline-none focus:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200"
+              className="w-full resize-none rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-700 outline-none focus:border-accent-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200"
               placeholder="Sharpen the unique angle before you write…"
             />
           </div>
@@ -100,7 +100,7 @@ export function DiscoveryCard({
           onClick={() => {
             setEditing((v) => !v);
           }}
-          className="mt-1 text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+          className="mt-1 text-xs font-medium text-accent-700 hover:underline dark:text-accent-400"
         >
           {editing ? "Done" : "Sharpen angle"}
         </button>
@@ -112,7 +112,7 @@ export function DiscoveryCard({
       </p>
 
       {outlierRatio !== null ? (
-        <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+        <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-accent-700 dark:text-accent-400">
           <IconSparkle size={12} /> Proven concept — {ratioLabel(outlierRatio)}
         </p>
       ) : null}
@@ -126,7 +126,7 @@ export function DiscoveryCard({
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={`Watch evidence video ${videoId} on YouTube (opens in a new tab)`}
-                className="inline-flex items-center gap-1 rounded-full border border-zinc-300 px-2 py-0.5 text-[11px] font-medium text-zinc-600 transition-colors hover:border-emerald-500 hover:text-emerald-700 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-emerald-500 dark:hover:text-emerald-400"
+                className="inline-flex items-center gap-1 rounded-full border border-zinc-300 px-2 py-0.5 text-[11px] font-medium text-zinc-600 transition-colors hover:border-accent-500 hover:text-accent-700 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-accent-500 dark:hover:text-accent-400"
               >
                 <IconPlay size={10} /> {videoId} <IconExternal size={10} />
               </a>

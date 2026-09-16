@@ -177,7 +177,7 @@ function CommentRow({
               label={comment.resolved ? "Reopen comment" : "Resolve comment"}
               disabled={busy}
               className={
-                comment.resolved ? "text-zinc-400" : "text-emerald-600 dark:text-emerald-400"
+                comment.resolved ? "text-zinc-400" : "text-accent-600 dark:text-accent-400"
               }
               onClick={comment.resolved ? onUnresolve : onResolve}
             >

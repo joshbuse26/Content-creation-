@@ -16,7 +16,7 @@ export function WorkspaceSwitcher() {
         <span className="flex min-w-0 items-center gap-2">
           <span
             aria-hidden="true"
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-emerald-700 text-[10px] font-bold text-white dark:bg-emerald-600"
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-accent-700 text-[10px] font-bold text-white dark:bg-accent-600"
           >
             {(workspace?.name ?? "?").slice(0, 1).toUpperCase()}
           </span>

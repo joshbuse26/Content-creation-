@@ -17,13 +17,14 @@ import {
   IconTrash,
   IconPencil,
 } from "@/components/ui/icons";
-import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
+import { ErrorState, LoadingState } from "@/components/ui/state";
 import { useToast } from "@/components/ui/toast";
 import { isUiCreditExempt } from "@/components/lib/credits-ui";
 import { useChatThreads } from "./chat-threads-context";
 import { coachSeedPrompt, takeCoachSeed } from "./coach-seed";
 import { OutliersLauncher } from "./outliers-launcher";
 import { RateLimitNotice, useRateLimitBackoff } from "./rate-limit";
+import { ThreadList } from "./thread-list";
 import { useChatStream } from "./use-chat-stream";
 import { toolLabel } from "./tool-labels";
 
@@ -49,12 +50,32 @@ import { toolLabel } from "./tool-labels";
 /** Surfaced when chat.sendMessage itself is rate-limited. */
 export const SEND_RATE_LIMITED_MESSAGE = `${COACH_NAME} is taking a breath — try again in a moment.`;
 
-export function ChatPanel({ projectId }: { projectId: ProjectId | null }) {
-  const { workspaceId } = useWorkspace();
-  const { toast } = useToast();
-  const threadList = useChatThreads();
+/**
+ * Starter prompts for an empty coach: the three jobs creators come for.
+ * Plain product copy — no model is named.
+ */
+export const COACH_STARTERS = [
+  "Give me 5 hooks for my next video",
+  "Outline a 10-minute explainer",
+  "Package this idea: titles + thumbnail",
+] as const;
 
-  const [selectedId, setSelectedId] = useState<ChatThreadId | null>(null);
+export function ChatPanel({
+  projectId,
+  threadRail = "inline",
+}: {
+  projectId: ProjectId | null;
+  /**
+   * Where the thread list renders. "inline" = this panel's own sidebar;
+   * "shell" = the app shell's left rail renders it (Coach), so this panel
+   * is conversation-only. Both read the same ChatThreadsProvider.
+   */
+  threadRail?: "inline" | "shell";
+}) {
+  const { workspaceId } = useWorkspace();
+  const threadList = useChatThreads();
+  const { threads, selectedId, select, startThread, creating } = threadList;
+
   // A concept handed over from the discovery surface ("Ask Coach"): read once,
   // used to prefill the composer so the Coach can go straight to a hook/outline.
   const [seedPrompt, setSeedPrompt] = useState<string | null>(null);
@@ -64,44 +85,21 @@ export function ChatPanel({ projectId }: { projectId: ProjectId | null }) {
     if (seed !== null) setSeedPrompt(coachSeedPrompt(seed));
   }, [projectId]);
 
-  const { threads, invalidate: invalidateThreads } = threadList;
-
-  // Default-select the most recent thread once threads load.
-  useEffect(() => {
-    const first = threads[0];
-    if (selectedId === null && first !== undefined) setSelectedId(first.id);
-  }, [threads, selectedId]);
-
-  const createMutation = trpc.chat.createThread.useMutation({
-    onSuccess: (thread) => {
-      void invalidateThreads();
-      setSelectedId(thread.id);
-    },
-    onError: () => {
-      toast("Couldn't start a new conversation.");
-    },
-  });
-
-  const startThread = useCallback(() => {
-    if (workspaceId === null) return;
-    createMutation.mutate({
-      workspaceId,
-      projectId,
-      title: projectId === null ? "New coach chat" : "New conversation",
-    });
-  }, [workspaceId, projectId, createMutation]);
-
-  // A discovery hand-off with no thread yet: open one so the seeded concept
-  // lands in a fresh conversation.
+  // A seeded prompt (discovery hand-off or a starter chip) with no thread
+  // yet: open one so it lands in a fresh conversation. Guarded per seed so a
+  // failed create surfaces its toast once instead of retrying forever.
+  const autoStartedFor = useRef<string | null>(null);
   useEffect(() => {
     if (
       seedPrompt !== null &&
+      autoStartedFor.current !== seedPrompt &&
       selectedId === null &&
       !threadList.loading &&
       threadList.hasData &&
       threads.length === 0 &&
-      !createMutation.isPending
+      !creating
     ) {
+      autoStartedFor.current = seedPrompt;
       startThread();
     }
   }, [
@@ -110,7 +108,7 @@ export function ChatPanel({ projectId }: { projectId: ProjectId | null }) {
     threadList.loading,
     threadList.hasData,
     threads.length,
-    createMutation.isPending,
+    creating,
     startThread,
   ]);
 
@@ -122,51 +120,100 @@ export function ChatPanel({ projectId }: { projectId: ProjectId | null }) {
     return <ErrorState message="Couldn't load your conversations." onRetry={threadList.refetch} />;
   }
 
+  const conversation =
+    selectedId === null ? (
+      <CoachEmptyState
+        projectId={projectId}
+        onStart={startThread}
+        onStarter={setSeedPrompt}
+        creating={creating}
+      />
+    ) : (
+      <ChatThreadView
+        key={selectedId}
+        workspaceId={workspaceId}
+        threadId={selectedId}
+        projectId={projectId}
+        initialComposer={seedPrompt}
+        onSeedConsumed={() => {
+          setSeedPrompt(null);
+        }}
+      />
+    );
+
+  if (threadRail === "shell") {
+    return <div className="flex min-h-0 flex-1 flex-col">{conversation}</div>;
+  }
+
   return (
-    <div className="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
+    <div className="grid min-h-0 flex-1 gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
       <ThreadSidebar
         threads={threads}
         loading={threadList.loading}
         selectedId={selectedId}
-        onSelect={setSelectedId}
+        onSelect={select}
         onNew={startThread}
-        creating={createMutation.isPending}
+        creating={creating}
       />
-      <div className="min-w-0">
-        {selectedId === null ? (
-          <EmptyState
-            title={`Chat with ${COACH_NAME}`}
-            hint={
-              projectId === null
-                ? "Your channel coach helps you plan videos and run any studio tool."
-                : "Plan this video conversationally — ask for hooks, an outline, a full draft, titles, or research."
-            }
-            action={
-              <div className="flex flex-wrap items-center justify-center gap-2">
-                <Button variant="primary" onClick={startThread} busy={createMutation.isPending}>
-                  <IconPlus size={14} /> Start a conversation
-                </Button>
-                <Link
-                  href="/discover"
-                  className="inline-flex items-center gap-1 text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
-                >
-                  <IconSearch size={13} /> Browse trending ideas
-                </Link>
-              </div>
-            }
-          />
-        ) : (
-          <ChatThreadView
-            key={selectedId}
-            workspaceId={workspaceId}
-            threadId={selectedId}
-            projectId={projectId}
-            initialComposer={seedPrompt}
-            onSeedConsumed={() => {
-              setSeedPrompt(null);
+      <div className="flex min-h-0 min-w-0 flex-col">{conversation}</div>
+    </div>
+  );
+}
+
+function CoachEmptyState({
+  projectId,
+  onStart,
+  onStarter,
+  creating,
+}: {
+  projectId: ProjectId | null;
+  /** Open a blank conversation. */
+  onStart: () => void;
+  /** Seed the composer with a starter; the panel opens the conversation. */
+  onStarter: (prompt: string) => void;
+  creating: boolean;
+}) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-5 px-6 py-12 text-center">
+      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent-500/15 text-accent-400">
+        <IconSparkle size={20} />
+      </div>
+      <div>
+        <h2 className="text-xl font-semibold tracking-tight">Ask {COACH_NAME}</h2>
+        <p className="mt-1 max-w-md text-sm text-zinc-500 dark:text-zinc-400">
+          {projectId === null
+            ? "Hooks, outlines, packaging, research — plan your next video and run any studio tool from here."
+            : "Plan this video conversationally — ask for hooks, an outline, a full draft, titles, or research."}
+        </p>
+      </div>
+      <div
+        className="flex flex-wrap items-center justify-center gap-2"
+        aria-label="Starter prompts"
+      >
+        {COACH_STARTERS.map((starter) => (
+          <button
+            key={starter}
+            type="button"
+            disabled={creating}
+            onClick={() => {
+              onStarter(starter);
             }}
-          />
-        )}
+            className="cursor-pointer rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:border-accent-400 hover:text-accent-700 disabled:opacity-50 dark:border-line dark:text-zinc-300 dark:hover:border-accent-500 dark:hover:text-accent-300"
+          >
+            {starter}
+          </button>
+        ))}
+      </div>
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <Button variant="primary" onClick={onStart} busy={creating}>
+          <IconPlus size={14} /> Start a conversation
+        </Button>
+        <Link
+          href="/discover"
+          className="inline-flex items-center gap-1 text-sm font-medium text-accent-700 hover:underline dark:text-accent-400"
+        >
+          <IconSearch size={13} /> Browse trending ideas
+        </Link>
       </div>
     </div>
   );
@@ -204,39 +251,11 @@ function ThreadSidebar({
       </Button>
       <Link
         href="/discover"
-        className="inline-flex w-full items-center gap-1.5 rounded-md px-2.5 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
+        className="inline-flex w-full items-center gap-1.5 rounded-md px-2.5 py-2 text-sm font-medium text-accent-700 transition-colors hover:bg-accent-50 dark:text-accent-400 dark:hover:bg-accent-950/40"
       >
         <IconSearch size={13} /> Trending ideas
       </Link>
-      <ul className="flex flex-col gap-0.5" aria-label="Conversations">
-        {loading ? (
-          <li className="px-2 py-2 text-xs text-zinc-400">Loading…</li>
-        ) : threads.length === 0 ? (
-          <li className="px-2 py-2 text-xs text-zinc-400">No conversations yet.</li>
-        ) : (
-          threads.map((t) => {
-            const active = t.id === selectedId;
-            return (
-              <li key={t.id}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onSelect(t.id);
-                  }}
-                  aria-current={active ? "true" : undefined}
-                  className={`w-full truncate rounded-md px-2.5 py-2 text-left text-sm transition-colors ${
-                    active
-                      ? "bg-emerald-50 font-medium text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
-                      : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-                  }`}
-                >
-                  {t.title}
-                </button>
-              </li>
-            );
-          })
-        )}
-      </ul>
+      <ThreadList threads={threads} loading={loading} selectedId={selectedId} onSelect={onSelect} />
     </aside>
   );
 }
@@ -359,8 +378,11 @@ function ChatThreadView({
     },
   });
   const deleteMutation = trpc.chat.deleteThread.useMutation({
-    onSuccess: () => {
-      void threadList.invalidate();
+    onSuccess: async () => {
+      // Refresh the list FIRST, then drop the selection, so the provider's
+      // default-to-newest never lands on the thread that was just deleted.
+      await threadList.invalidate();
+      threadList.select(null);
     },
     onError: () => {
       toast("Delete failed.");
@@ -479,8 +501,8 @@ function ChatThreadView({
   }
 
   return (
-    <div className="flex h-[calc(100vh-18rem)] min-h-[24rem] flex-col rounded-lg border border-zinc-200 dark:border-zinc-800">
-      <header className="flex items-center justify-between gap-2 border-b border-zinc-200 px-4 py-2.5 dark:border-zinc-800">
+    <div className="flex min-h-[24rem] flex-1 flex-col rounded-card border border-zinc-200 bg-white dark:border-line dark:bg-surface">
+      <header className="flex items-center justify-between gap-2 border-b border-zinc-200 px-4 py-2.5 dark:border-line">
         <h2 className="truncate text-sm font-semibold">{thread?.title ?? "Conversation"}</h2>
         <div className="flex items-center gap-1">
           {creditExempt ? (
@@ -517,7 +539,7 @@ function ChatThreadView({
             Couldn't refresh this conversation.{" "}
             <button
               type="button"
-              className="font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+              className="font-medium text-accent-700 hover:underline dark:text-accent-400"
               onClick={() => {
                 void threadQuery.refetch();
               }}
@@ -581,10 +603,11 @@ function ChatThreadView({
 // ---------------------------------------------------------------------------
 
 function roleClasses(role: ChatMessage["role"]): string {
-  if (role === "user") return "ml-auto bg-emerald-600 text-white";
+  if (role === "user")
+    return "ml-auto bg-accent-600 text-white dark:bg-accent-500 dark:text-accent-fg";
   if (role === "tool")
-    return "mr-auto border border-zinc-200 bg-zinc-50 text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300";
-  return "mr-auto bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100";
+    return "mr-auto border border-zinc-200 bg-zinc-50 text-zinc-700 dark:border-line dark:bg-surface dark:text-zinc-300";
+  return "mr-auto bg-zinc-100 text-zinc-800 dark:bg-surface-2 dark:text-zinc-100";
 }
 
 function MessageBubble({
@@ -608,7 +631,7 @@ function MessageBubble({
       >
         {isTool ? (
           <span className="flex items-start gap-1.5">
-            <IconSparkle size={14} className="mt-0.5 shrink-0 text-emerald-500" />
+            <IconSparkle size={14} className="mt-0.5 shrink-0 text-accent-500" />
             <span>{message.content}</span>
           </span>
         ) : (
@@ -617,7 +640,7 @@ function MessageBubble({
         {isTool && projectId !== null && /editor/i.test(message.content) ? (
           <Link
             href={`/projects/${projectId}/editor`}
-            className="mt-1.5 block text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+            className="mt-1.5 block text-xs font-medium text-accent-700 hover:underline dark:text-accent-400"
           >
             Open in editor →
           </Link>
@@ -645,7 +668,7 @@ function LiveAssistantBubble({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="max-w-[85%] rounded-2xl bg-zinc-100 px-3.5 py-2 text-sm whitespace-pre-wrap dark:bg-zinc-800 dark:text-zinc-100">
+      <div className="max-w-[85%] rounded-2xl bg-zinc-100 px-3.5 py-2 text-sm whitespace-pre-wrap dark:bg-surface-2 dark:text-zinc-100">
         {text === "" && streaming ? (
           <span className="inline-flex gap-1" aria-label={`${COACH_NAME} is typing`}>
             <Dot /> <Dot /> <Dot />
@@ -687,7 +710,7 @@ function ToolCard({
   if (skipped) return null;
   const credits = proposal.estimatedCredits;
   return (
-    <div className="max-w-[85%] rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 dark:border-emerald-900 dark:bg-emerald-950/40">
+    <div className="max-w-[85%] rounded-xl border border-accent-200 bg-accent-50/60 p-3 dark:border-accent-900 dark:bg-accent-950/40">
       <p className="text-sm text-zinc-700 dark:text-zinc-200">
         {COACH_NAME} wants to run <span className="font-semibold">{toolLabel(proposal.name)}</span>
         {exempt || credits === 0 ? (
@@ -744,7 +767,7 @@ function Composer({
   disabled: boolean;
 }) {
   return (
-    <div className="border-t border-zinc-200 p-2.5 dark:border-zinc-800">
+    <div className="border-t border-zinc-200 p-2.5 dark:border-line">
       <div className="flex items-end gap-2">
         <label htmlFor="chat-composer" className="sr-only">
           Message {COACH_NAME}
@@ -763,7 +786,7 @@ function Composer({
             }
           }}
           placeholder={`Ask ${COACH_NAME} for a hook, an outline, a draft…`}
-          className="max-h-40 min-h-[2.25rem] flex-1 resize-none rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+          className="max-h-40 min-h-[2.25rem] flex-1 resize-none rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-accent-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
         />
         <Button
           variant="primary"

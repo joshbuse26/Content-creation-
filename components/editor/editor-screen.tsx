@@ -229,7 +229,7 @@ export function EditorScreen() {
         action={
           <Link
             href={`/projects/${projectId}/generate`}
-            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-emerald-700 px-3.5 text-sm font-medium text-white hover:bg-emerald-600 dark:bg-emerald-600"
+            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-accent-700 px-3.5 text-sm font-medium text-white hover:bg-accent-600 dark:bg-accent-600"
           >
             <IconSparkle size={14} /> Generate script
           </Link>

@@ -28,7 +28,7 @@ export function EnergyMeter({ energy }: { energy: number }) {
           aria-hidden="true"
           style={{ height: `${4 + level * 2}px` }}
           className={`w-1 rounded-sm ${
-            level <= energy ? "bg-emerald-600 dark:bg-emerald-400" : "bg-zinc-200 dark:bg-zinc-700"
+            level <= energy ? "bg-accent-600 dark:bg-accent-400" : "bg-zinc-200 dark:bg-zinc-700"
           }`}
         />
       ))}
@@ -80,12 +80,12 @@ export function ArchetypeCard({
       onClick={onSelect}
       className={`relative flex h-full cursor-pointer flex-col rounded-lg border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
         selected
-          ? "border-emerald-600 bg-emerald-50/60 ring-1 ring-emerald-600 dark:border-emerald-500 dark:bg-emerald-950/40 dark:ring-emerald-500"
+          ? "border-accent-600 bg-accent-50/60 ring-1 ring-accent-600 dark:border-accent-500 dark:bg-accent-950/40 dark:ring-accent-500"
           : "border-zinc-200 bg-white hover:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-600"
       }`}
     >
       {slot !== undefined ? (
-        <span className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-700 text-[11px] font-bold text-white dark:bg-emerald-600">
+        <span className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-accent-700 text-[11px] font-bold text-white dark:bg-accent-600">
           {slot}
         </span>
       ) : null}

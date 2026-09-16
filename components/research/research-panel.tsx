@@ -220,7 +220,7 @@ export function ResearchPanel() {
                         href={doc.sourceUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="truncate text-emerald-700 hover:underline dark:text-emerald-400"
+                        className="truncate text-accent-700 hover:underline dark:text-accent-400"
                       >
                         {doc.sourceUrl}
                       </a>
@@ -243,7 +243,7 @@ export function ResearchPanel() {
           Done gathering?{" "}
           <Link
             href={`/projects/${projectId}/framing`}
-            className="font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+            className="font-medium text-accent-700 hover:underline dark:text-accent-400"
           >
             Continue to framing →
           </Link>

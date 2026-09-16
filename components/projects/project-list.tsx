@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { skipToken } from "@tanstack/react-query";
 import { PROJECT_STATUSES, type ProjectStatus } from "@/lib/types/enums";
@@ -11,6 +11,7 @@ import { useWorkspace } from "@/components/providers/workspace-context";
 import { ArchetypePicker } from "@/components/archetypes/archetype-picker";
 import { storeGenerationTarget } from "@/components/generation/generation-store";
 import { PageHeader } from "@/components/shell/app-shell";
+import { SEARCH_PARAM } from "@/components/shell/top-bar";
 import { Button } from "@/components/ui/button";
 import { Select, TextInput, Label } from "@/components/ui/field";
 import { IconPlus } from "@/components/ui/icons";
@@ -21,8 +22,12 @@ import { ProjectStatusBadge } from "./status-badge";
 export function ProjectListScreen() {
   const { workspaceId, channelId, channels, channelsLoading } = useWorkspace();
   const router = useRouter();
+  const params = useSearchParams();
+  // Both come from the shell's top bar: `?q=` filters by title, `?new=1`
+  // opens the create form (the bar's "New project" CTA).
+  const search = (params.get(SEARCH_PARAM) ?? "").trim().toLowerCase();
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | "all">("all");
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(params.get("new") === "1");
   const [title, setTitle] = useState("");
   const [newChannelId, setNewChannelId] = useState<string>("");
   const [newTarget, setNewTarget] = useState<GenerationTarget | null>(null);
@@ -65,7 +70,9 @@ export function ProjectListScreen() {
     channels.find((c) => c.id === newChannelId) ??
     channels.find((c) => c.id === channelId) ??
     channels[0];
-  const projects = listQuery.data ?? [];
+  const projects = (listQuery.data ?? []).filter(
+    (p) => search === "" || p.title.toLowerCase().includes(search),
+  );
 
   return (
     <div>
@@ -209,6 +216,8 @@ export function ProjectListScreen() {
             void listQuery.refetch();
           }}
         />
+      ) : projects.length === 0 && search !== "" ? (
+        <EmptyState title="No projects match" hint="Try a different search." />
       ) : projects.length === 0 ? (
         <EmptyState
           title="No projects yet"

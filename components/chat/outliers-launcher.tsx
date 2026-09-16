@@ -38,7 +38,7 @@ export function OutliersLauncher({ onPick }: { onPick: (prompt: string) => void 
         onClick={() => {
           setOpen((v) => !v);
         }}
-        className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+        className="inline-flex items-center gap-1.5 text-xs font-medium text-accent-700 hover:underline dark:text-accent-400"
       >
         <IconSparkle size={12} /> {open ? "Hide trending concepts" : "Trending in your niche"}
       </button>
@@ -59,7 +59,7 @@ export function OutliersLauncher({ onPick }: { onPick: (prompt: string) => void 
                     onPick(coachSeedPrompt({ title: idea.title, angle: idea.angle }));
                     setOpen(false);
                   }}
-                  className="rounded-full border border-zinc-300 px-2.5 py-1 text-[11px] font-medium text-zinc-600 transition-colors hover:border-emerald-500 hover:text-emerald-700 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-emerald-500 dark:hover:text-emerald-400"
+                  className="rounded-full border border-zinc-300 px-2.5 py-1 text-[11px] font-medium text-zinc-600 transition-colors hover:border-accent-500 hover:text-accent-700 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-accent-500 dark:hover:text-accent-400"
                   title={idea.angle}
                 >
                   {idea.title}

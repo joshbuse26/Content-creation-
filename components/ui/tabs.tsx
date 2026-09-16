@@ -37,7 +37,7 @@ export function Tabs<T extends string>({
             }}
             className={`-mb-px cursor-pointer rounded-t-md border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
               isActive
-                ? "border-emerald-600 text-emerald-700 dark:border-emerald-500 dark:text-emerald-400"
+                ? "border-accent-600 text-accent-700 dark:border-accent-500 dark:text-accent-400"
                 : "border-transparent text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
             }`}
           >

@@ -27,7 +27,7 @@ export function ErrorState({
           onClick={() => {
             onRetry();
           }}
-          className="cursor-pointer text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+          className="cursor-pointer text-sm font-medium text-accent-700 hover:underline dark:text-accent-400"
         >
           Try again
         </button>

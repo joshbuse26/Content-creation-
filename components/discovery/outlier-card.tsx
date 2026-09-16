@@ -46,7 +46,7 @@ export function OutlierCard({
           target="_blank"
           rel="noopener noreferrer"
           aria-label={`Watch ${video.title} on YouTube (opens in a new tab)`}
-          className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+          className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-accent-700 hover:underline dark:text-accent-400"
         >
           <IconPlay size={11} /> Watch <IconExternal size={10} />
         </a>
@@ -65,7 +65,7 @@ export function OutlierCard({
           <IconClock size={10} /> {viewsPerDayLabel(e.viewsPerDay)}
         </Badge>
         <Badge
-          tone={e.recency === "older" ? "neutral" : "emerald"}
+          tone={e.recency === "older" ? "neutral" : "accent"}
           title="How recently it published"
         >
           {recencyLabel(e.recency)}

@@ -137,7 +137,8 @@ export function ChannelListScreen() {
           ))}
         </ul>
       )}
-      <h2 className="mb-3 text-sm font-semibold text-zinc-600 dark:text-zinc-400">
+      {/* Anchor target for the shell's "Connect channel" CTA (/channels#connect). */}
+      <h2 id="connect" className="mb-3 text-sm font-semibold text-zinc-600 dark:text-zinc-400">
         Connect another channel
       </h2>
       <ConnectChannel />

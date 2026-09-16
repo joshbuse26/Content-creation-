@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PRODUCT_NAME } from "@/lib/branding";
+import { APP_HOME } from "@/components/shell/nav";
 import { getConfig } from "@/lib/config";
 import { ARCHETYPE_SEEDS } from "@/lib/archetypes";
 import {
@@ -100,7 +101,7 @@ function EnergyBars({ energy }: { energy: number }) {
           aria-hidden="true"
           style={{ height: `${4 + level * 2}px` }}
           className={`w-1 rounded-sm ${
-            level <= energy ? "bg-emerald-600 dark:bg-emerald-400" : "bg-zinc-200 dark:bg-zinc-700"
+            level <= energy ? "bg-accent-600 dark:bg-accent-400" : "bg-zinc-200 dark:bg-zinc-700"
           }`}
         />
       ))}
@@ -110,13 +111,13 @@ function EnergyBars({ energy }: { energy: number }) {
 
 export default function LandingPage() {
   const fixtureMode = getConfig().PROVIDERS === "fixture";
-  const enterHref = fixtureMode ? "/projects" : "/login";
+  const enterHref = fixtureMode ? APP_HOME : "/login";
   const enterLabel = fixtureMode ? "Enter the app" : "Write your first script free";
   return (
     <div>
       {/* Hero */}
       <section className="mx-auto max-w-5xl px-6 pt-20 pb-16 sm:pt-28" data-testid="marketing-hero">
-        <p className="text-sm font-medium tracking-wide text-emerald-700 uppercase dark:text-emerald-400">
+        <p className="text-sm font-medium tracking-wide text-accent-700 uppercase dark:text-accent-400">
           AI scriptwriting for YouTube
         </p>
         <h1 className="mt-3 max-w-3xl font-display text-4xl leading-tight font-semibold tracking-tight text-zinc-900 sm:text-6xl dark:text-zinc-50">
@@ -130,7 +131,7 @@ export default function LandingPage() {
         <div className="mt-8 flex flex-wrap items-center gap-4">
           <Link
             href={enterHref}
-            className="rounded-md bg-emerald-700 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+            className="rounded-md bg-accent-700 px-5 py-3 text-sm font-semibold text-white hover:bg-accent-600 dark:bg-accent-600 dark:hover:bg-accent-500"
           >
             {enterLabel}
           </Link>
@@ -190,9 +191,7 @@ export default function LandingPage() {
         <div className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {steps.map((s) => (
             <div key={s.n}>
-              <span className="font-mono text-xs text-emerald-700 dark:text-emerald-400">
-                {s.n}
-              </span>
+              <span className="font-mono text-xs text-accent-700 dark:text-accent-400">{s.n}</span>
               <h3 className="mt-1 text-sm font-semibold">{s.title}</h3>
               <p className="mt-1.5 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
                 {s.body}
@@ -240,7 +239,7 @@ export default function LandingPage() {
                 key={t.name}
                 className={`rounded-lg border p-5 ${
                   t.featured === true
-                    ? "border-emerald-600 ring-1 ring-emerald-600 dark:border-emerald-500 dark:ring-emerald-500"
+                    ? "border-accent-600 ring-1 ring-accent-600 dark:border-accent-500 dark:ring-accent-500"
                     : "border-zinc-200 dark:border-zinc-800"
                 }`}
               >
@@ -250,7 +249,7 @@ export default function LandingPage() {
                 <ul className="mt-4 space-y-1.5 text-sm text-zinc-600 dark:text-zinc-400">
                   {t.items.map((item) => (
                     <li key={item} className="flex items-center gap-2">
-                      <span className="h-1 w-1 rounded-full bg-emerald-600 dark:bg-emerald-500" />
+                      <span className="h-1 w-1 rounded-full bg-accent-600 dark:bg-accent-500" />
                       {item}
                     </li>
                   ))}
@@ -259,7 +258,7 @@ export default function LandingPage() {
                   href="/login"
                   className={`mt-5 block rounded-md py-2 text-center text-sm font-medium ${
                     t.featured === true
-                      ? "bg-emerald-700 text-white hover:bg-emerald-600 dark:bg-emerald-600"
+                      ? "bg-accent-700 text-white hover:bg-accent-600 dark:bg-accent-600"
                       : "border border-zinc-300 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
                   }`}
                 >
@@ -285,7 +284,7 @@ export default function LandingPage() {
         </p>
         <Link
           href={enterHref}
-          className="mt-6 inline-block rounded-md bg-emerald-700 px-6 py-3 text-sm font-semibold text-white hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+          className="mt-6 inline-block rounded-md bg-accent-700 px-6 py-3 text-sm font-semibold text-white hover:bg-accent-600 dark:bg-accent-600 dark:hover:bg-accent-500"
         >
           {fixtureMode ? "Enter the app" : "Start free"}
         </Link>

@@ -59,7 +59,7 @@ export default function PrivacyPage() {
           {PRODUCT_NAME}&rsquo;s use and transfer of information received from Google APIs adheres
           to the{" "}
           <a
-            className="text-emerald-700 underline dark:text-emerald-400"
+            className="text-accent-700 underline dark:text-accent-400"
             href="https://developers.google.com/terms/api-services-user-data-policy"
           >
             Google API Services User Data Policy

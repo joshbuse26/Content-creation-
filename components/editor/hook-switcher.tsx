@@ -20,8 +20,8 @@ export function HookSwitcher({
   const activeIndex = candidates.findIndex((c) => c.body.trim() === currentBody.trim());
 
   return (
-    <div className="mb-3 rounded-md border border-emerald-200 bg-emerald-50/50 p-2.5 dark:border-emerald-900 dark:bg-emerald-950/30">
-      <p className="mb-1.5 text-[11px] font-semibold tracking-wide text-emerald-800 uppercase dark:text-emerald-300">
+    <div className="mb-3 rounded-md border border-accent-200 bg-accent-50/50 p-2.5 dark:border-accent-900 dark:bg-accent-950/30">
+      <p className="mb-1.5 text-[11px] font-semibold tracking-wide text-accent-800 uppercase dark:text-accent-300">
         Hook candidates
       </p>
       <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Hook candidates">
@@ -39,8 +39,8 @@ export function HookSwitcher({
               }}
               className={`cursor-pointer rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
                 active
-                  ? "border-emerald-600 bg-emerald-600 text-white dark:border-emerald-500 dark:bg-emerald-500"
-                  : "border-emerald-300 bg-white text-emerald-800 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-zinc-900 dark:text-emerald-300 dark:hover:bg-emerald-950"
+                  ? "border-accent-600 bg-accent-600 text-white dark:border-accent-500 dark:bg-accent-500"
+                  : "border-accent-300 bg-white text-accent-800 hover:bg-accent-100 dark:border-accent-800 dark:bg-zinc-900 dark:text-accent-300 dark:hover:bg-accent-950"
               }`}
             >
               {c.style.replace(/_/g, " ")}
@@ -50,7 +50,7 @@ export function HookSwitcher({
         })}
       </div>
       {activeIndex === -1 ? (
-        <p className="mt-1.5 text-[11px] text-emerald-800 dark:text-emerald-300">
+        <p className="mt-1.5 text-[11px] text-accent-800 dark:text-accent-300">
           Custom hook in use — pick a candidate to swap it in.
         </p>
       ) : null}

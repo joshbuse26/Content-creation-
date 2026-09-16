@@ -175,7 +175,7 @@ export function ContentPacks({
                   key={p.id}
                   className="flex items-center gap-2 rounded-md border border-zinc-200 px-2.5 py-1.5 text-xs dark:border-zinc-800"
                 >
-                  <Badge tone={p.kind === "outline" ? "neutral" : "emerald"}>
+                  <Badge tone={p.kind === "outline" ? "neutral" : "accent"}>
                     {p.kind === "outline" ? "outline" : "hooks"}
                   </Badge>
                   <span className="truncate font-medium">{p.name}</span>

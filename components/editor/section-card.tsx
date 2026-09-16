@@ -186,7 +186,7 @@ export function SectionCard({
             <IconArrowDown size={11} />
           </IconButton>
         </div>
-        <Badge tone={section.kind === "hook" ? "emerald" : "neutral"}>{section.kind}</Badge>
+        <Badge tone={section.kind === "hook" ? "accent" : "neutral"}>{section.kind}</Badge>
         {editing ? (
           <TextInput
             aria-label="Section heading"
@@ -310,7 +310,7 @@ export function SectionCard({
           }}
         >
           {selection !== "" ? (
-            <p className="mb-2 rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
+            <p className="mb-2 rounded border border-accent-300 bg-accent-50 px-2 py-1 text-[11px] text-accent-900 dark:border-accent-800 dark:bg-accent-950/40 dark:text-accent-200">
               Editing this part:{" "}
               <span className="italic">
                 “{selection.length > 120 ? `${selection.slice(0, 120)}…` : selection}”
@@ -355,7 +355,7 @@ export function SectionCard({
       {regenPreview != null && !editing ? (
         <div className="border-b border-zinc-100 dark:border-zinc-800/60">
           <div className="flex items-center gap-2 px-4 pt-3 pb-1">
-            <Badge tone="emerald">Regenerated</Badge>
+            <Badge tone="accent">Regenerated</Badge>
             <span className="text-xs text-zinc-500 dark:text-zinc-400">
               Review the change, then keep or discard it.
             </span>
@@ -384,7 +384,7 @@ export function SectionCard({
                 key={i}
                 className={`flex gap-2 px-1 py-0.5 whitespace-pre-wrap ${
                   row.type === "added"
-                    ? "bg-emerald-50 text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200"
+                    ? "bg-accent-50 text-accent-900 dark:bg-accent-950/50 dark:text-accent-200"
                     : row.type === "removed"
                       ? "bg-red-50 text-red-900 line-through decoration-red-400/60 dark:bg-red-950/40 dark:text-red-300"
                       : "text-zinc-500 dark:text-zinc-400"

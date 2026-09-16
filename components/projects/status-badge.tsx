@@ -5,7 +5,7 @@ const projectTones: Record<ProjectStatus, BadgeTone> = {
   idea: "neutral",
   researching: "blue",
   framing: "purple",
-  scripting: "emerald",
+  scripting: "accent",
   revising: "orange",
   packaging: "yellow",
   scheduled: "green",

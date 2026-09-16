@@ -113,7 +113,7 @@ export function TitlesPanel() {
                   <li key={opt.text} className="flex items-center gap-3 px-4 py-2.5">
                     <span className="flex-1 text-sm">{opt.text}</span>
                     <Badge
-                      tone={opt.score >= 85 ? "emerald" : opt.score >= 70 ? "yellow" : "neutral"}
+                      tone={opt.score >= 85 ? "accent" : opt.score >= 70 ? "yellow" : "neutral"}
                     >
                       {Math.round(opt.score)}
                     </Badge>
@@ -124,7 +124,7 @@ export function TitlesPanel() {
                       }}
                     >
                       {copied === opt.text ? (
-                        <IconCheck size={13} className="text-emerald-600" />
+                        <IconCheck size={13} className="text-accent-600" />
                       ) : (
                         <IconCopy size={13} />
                       )}

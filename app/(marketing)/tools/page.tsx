@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 export default function ToolsIndexPage() {
   return (
     <div className="mx-auto max-w-3xl px-6 py-16">
-      <p className="text-xs font-semibold uppercase tracking-widest text-emerald-700 dark:text-emerald-500">
+      <p className="text-xs font-semibold uppercase tracking-widest text-accent-700 dark:text-accent-500">
         Free tools
       </p>
       <h1 className="mt-1 text-3xl font-bold tracking-tight">Package a video in minutes, free</h1>
@@ -32,7 +32,7 @@ export default function ToolsIndexPage() {
           <Link
             key={t.id}
             href={t.path}
-            className="rounded-lg border border-zinc-200 bg-white p-5 transition-colors hover:border-emerald-600 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:border-emerald-500"
+            className="rounded-lg border border-zinc-200 bg-white p-5 transition-colors hover:border-accent-600 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:border-accent-500"
           >
             <h2 className="font-semibold">{t.name}</h2>
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{t.blurb}</p>

@@ -82,7 +82,7 @@ export function demandByTopic(signals: readonly DemandSignal[]): Map<string, Dem
 }
 
 export function demandTone(level: DemandLevel): BadgeTone {
-  if (level === "high") return "emerald";
+  if (level === "high") return "accent";
   if (level === "moderate") return "blue";
   return "neutral";
 }

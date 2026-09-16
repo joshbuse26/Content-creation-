@@ -57,7 +57,7 @@ export function StreamView({
           <li className="mt-2 border-t border-zinc-200 pt-2 dark:border-zinc-800">
             <Link
               href={`/projects/${projectId}/editor`}
-              className="block rounded-md bg-emerald-700 px-3 py-2 text-center text-sm font-medium text-white hover:bg-emerald-600 dark:bg-emerald-600"
+              className="block rounded-md bg-accent-700 px-3 py-2 text-center text-sm font-medium text-white hover:bg-accent-600 dark:bg-accent-600"
             >
               Open in editor →
             </Link>
@@ -104,16 +104,16 @@ export function StreamView({
                     key={h.style}
                     className={`rounded-md border p-3 text-sm ${
                       h.autoPicked
-                        ? "border-emerald-400 bg-emerald-50/60 dark:border-emerald-700 dark:bg-emerald-950/40"
+                        ? "border-accent-400 bg-accent-50/60 dark:border-accent-700 dark:bg-accent-950/40"
                         : "border-zinc-200 dark:border-zinc-800"
                     }`}
                   >
                     <div className="mb-1 flex items-center gap-2">
-                      <Badge tone={h.autoPicked ? "emerald" : "neutral"}>
+                      <Badge tone={h.autoPicked ? "accent" : "neutral"}>
                         {h.style.replace(/_/g, " ")}
                       </Badge>
                       {h.autoPicked ? (
-                        <span className="text-[11px] text-emerald-700 dark:text-emerald-400">
+                        <span className="text-[11px] text-accent-700 dark:text-accent-400">
                           picked — switch any time in the editor
                         </span>
                       ) : null}
@@ -157,7 +157,7 @@ export function StreamView({
           <div
             className={`rounded-lg border p-4 text-sm ${
               state.report.passed
-                ? "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
+                ? "border-accent-300 bg-accent-50 text-accent-900 dark:border-accent-800 dark:bg-accent-950 dark:text-accent-200"
                 : "border-yellow-300 bg-yellow-50 text-yellow-900 dark:border-yellow-800 dark:bg-yellow-950 dark:text-yellow-200"
             }`}
           >
@@ -195,7 +195,7 @@ function StageRow({ index, label, status }: { index: number; label: string; stat
     <li
       className={`flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm ${
         status === "running"
-          ? "bg-emerald-50 font-medium text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
+          ? "bg-accent-50 font-medium text-accent-800 dark:bg-accent-950/60 dark:text-accent-300"
           : status === "done"
             ? "text-zinc-700 dark:text-zinc-300"
             : status === "failed"
@@ -205,7 +205,7 @@ function StageRow({ index, label, status }: { index: number; label: string; stat
     >
       <span className="flex h-4.5 w-4.5 shrink-0 items-center justify-center">
         {status === "done" ? (
-          <IconCheck size={13} className="text-emerald-600 dark:text-emerald-400" />
+          <IconCheck size={13} className="text-accent-600 dark:text-accent-400" />
         ) : status === "running" ? (
           <Spinner size={12} />
         ) : status === "failed" ? (

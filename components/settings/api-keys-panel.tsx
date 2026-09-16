@@ -184,7 +184,7 @@ export function ApiKeysPanel() {
                     {revoked ? (
                       <Badge tone="red">revoked</Badge>
                     ) : (
-                      <Badge tone="emerald">active</Badge>
+                      <Badge tone="accent">active</Badge>
                     )}
                   </p>
                   <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
@@ -280,7 +280,7 @@ export function ApiKeysPanel() {
                       >
                         <input
                           type="checkbox"
-                          className="mt-0.5 accent-emerald-600"
+                          className="mt-0.5 accent-accent-600"
                           checked={selectedScopes.includes(tool)}
                           onChange={() => {
                             toggleScope(tool);
@@ -319,7 +319,7 @@ export function ApiKeysPanel() {
                         >
                           <input
                             type="checkbox"
-                            className="accent-emerald-600"
+                            className="accent-accent-600"
                             checked={selectedChannels.includes(channel.id)}
                             onChange={() => {
                               toggleChannel(channel.id);

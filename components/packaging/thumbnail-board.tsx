@@ -258,7 +258,7 @@ export function ConceptCard({
   const chosen = concept.status === "chosen";
   return (
     <div data-testid="concept-card">
-      <Card className={chosen ? "ring-2 ring-emerald-600 dark:ring-emerald-500" : ""}>
+      <Card className={chosen ? "ring-2 ring-accent-600 dark:ring-accent-500" : ""}>
         <div className="relative">
           {concept.imageKey !== null ? (
             // Plain <img>: bytes come from our authed object-storage route.
@@ -295,7 +295,7 @@ export function ConceptCard({
             {concept.subjectMode !== null ? <Badge>{concept.subjectMode}</Badge> : null}
             {concept.colorMood !== null ? <Badge>{concept.colorMood}</Badge> : null}
             {chosen ? (
-              <Badge tone="emerald">
+              <Badge tone="accent">
                 <IconCheck size={10} /> chosen
               </Badge>
             ) : null}

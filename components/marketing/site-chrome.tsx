@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { PRODUCT_NAME } from "@/lib/branding";
 import { getConfig } from "@/lib/config";
+import { APP_HOME } from "@/components/shell/nav";
 
 export function Wordmark({ className = "" }: { className?: string }) {
   return (
     <span className={`inline-flex items-baseline gap-1.5 ${className}`}>
       <span
         aria-hidden="true"
-        className="inline-block h-2.5 w-2.5 self-center rounded-[3px] bg-emerald-600 dark:bg-emerald-500"
+        className="inline-block h-2.5 w-2.5 self-center rounded-[3px] bg-accent-600 dark:bg-accent-500"
       />
       <span className="font-semibold tracking-tight">{PRODUCT_NAME}</span>
     </span>
@@ -16,7 +17,7 @@ export function Wordmark({ className = "" }: { className?: string }) {
 
 export function SiteNav() {
   const fixtureMode = getConfig().PROVIDERS === "fixture";
-  const enterHref = fixtureMode ? "/projects" : "/login";
+  const enterHref = fixtureMode ? APP_HOME : "/login";
   return (
     <header className="border-b border-zinc-200 dark:border-zinc-800">
       <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-6">
@@ -40,7 +41,7 @@ export function SiteNav() {
           )}
           <Link
             href={enterHref}
-            className="rounded-md bg-emerald-700 px-3.5 py-2 font-medium text-white hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+            className="rounded-md bg-accent-700 px-3.5 py-2 font-medium text-white hover:bg-accent-600 dark:bg-accent-600 dark:hover:bg-accent-500"
           >
             {fixtureMode ? "Enter the app" : "Start writing"}
           </Link>

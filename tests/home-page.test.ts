@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import LandingPage from "@/app/(marketing)/page";
 import { PRODUCT_NAME } from "@/lib/branding";
+import { APP_HOME } from "@/components/shell/nav";
 
 // Updated by A3 when the placeholder home page became the marketing landing
 // page (app/(marketing)/page.tsx). Intent preserved: branding renders from
@@ -27,6 +28,7 @@ describe("LandingPage", () => {
       .getAllByRole("link")
       .find((el) => /Enter the app|Write your first script free|Start free/i.test(el.textContent));
     expect(cta).toBeTruthy();
-    expect(cta?.getAttribute("href")).toMatch(/^\/(projects|login)$/);
+    // F1: the product's home is the Coach (APP_HOME); signed-out goes to /login.
+    expect([APP_HOME, "/login"]).toContain(cta?.getAttribute("href"));
   });
 });

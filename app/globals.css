@@ -1,26 +1,75 @@
 @import "tailwindcss";
 
+/*
+ * Dark mode is class-driven, not OS-driven: the authenticated app group
+ * (app/(app)/layout.tsx) sets `.dark` on its root so the command center is
+ * always dark, while marketing routes stay light regardless of OS setting.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   /* Display face for marketing headlines — system serif stack, no webfont fetch. */
   --font-display:
     "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+
+  /*
+   * Brand accent — ONE system. `accent-*` is the only accent scale in the
+   * codebase (Tailwind's orange scale, anchored on #f97316 at 500). Changing
+   * the brand colour is a change to these eleven lines and nothing else.
+   */
+  --color-accent-50: #fff7ed;
+  --color-accent-100: #ffedd5;
+  --color-accent-200: #fed7aa;
+  --color-accent-300: #fdba74;
+  --color-accent-400: #fb923c;
+  --color-accent-500: #f97316;
+  --color-accent-600: #ea580c;
+  --color-accent-700: #c2410c;
+  --color-accent-800: #9a3412;
+  --color-accent-900: #7c2d12;
+  --color-accent-950: #431407;
+  /* Text on an accent-filled control. */
+  --color-accent-fg: #0b0f14;
+
+  /* Command-center surfaces (authenticated shell). */
+  --color-bg: #0b0f14;
+  --color-surface: #12181f;
+  --color-surface-2: #1a222d;
+  --color-line: #2a3340;
+  --color-ink: #f4f4f5;
+  --color-muted: #9aa3b2;
+
+  /* Semantic: positive deltas ONLY (never a brand accent). */
+  --color-success: #2ba640;
+  --color-danger: #ef4444;
+
+  --radius-card: 10px;
+  --spacing-rail: 240px;
+}
+
+/*
+ * The app group's root carries `.dark` and `data-app-shell`; painting the
+ * page background on <html> (not just the wrapper) keeps overscroll and the
+ * pre-hydration frame charcoal instead of flashing the marketing white.
+ */
+html:has([data-app-shell]) {
+  background-color: var(--color-bg);
+  color-scheme: dark;
 }
 
 ::selection {
-  background-color: var(--color-emerald-200);
+  background-color: var(--color-accent-200);
   color: var(--color-zinc-900);
 }
 
-@media (prefers-color-scheme: dark) {
-  ::selection {
-    background-color: var(--color-emerald-800);
-    color: var(--color-zinc-50);
-  }
+.dark ::selection {
+  background-color: var(--color-accent-800);
+  color: var(--color-zinc-50);
 }
 
 /* Keyboard-first: a consistent, visible focus ring everywhere. */
 :focus-visible {
-  outline: 2px solid var(--color-emerald-500);
+  outline: 2px solid var(--color-accent-500);
   outline-offset: 2px;
   border-radius: 2px;
 }
@@ -34,8 +83,6 @@ mark.claim-unsupported {
   box-decoration-break: clone;
 }
 
-@media (prefers-color-scheme: dark) {
-  mark.claim-unsupported {
-    background-color: color-mix(in srgb, var(--color-yellow-500) 30%, transparent);
-  }
+.dark mark.claim-unsupported {
+  background-color: color-mix(in srgb, var(--color-yellow-500) 30%, transparent);
 }

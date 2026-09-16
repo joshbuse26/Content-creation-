@@ -486,10 +486,7 @@ function EvidenceListField({
       <ul className="space-y-1.5">
         {rows.map((row, i) =>
           editingIndex === i ? (
-            <li
-              key={i}
-              className="rounded-md border border-emerald-400 p-2 dark:border-emerald-700"
-            >
+            <li key={i} className="rounded-md border border-accent-400 p-2 dark:border-accent-700">
               <RowEditor
                 nounSingular={nounSingular}
                 text={draftText}
@@ -535,7 +532,7 @@ function EvidenceListField({
           ),
         )}
         {editingIndex !== null && editingIndex >= rows.length ? (
-          <li className="rounded-md border border-emerald-400 p-2 dark:border-emerald-700">
+          <li className="rounded-md border border-accent-400 p-2 dark:border-accent-700">
             <RowEditor
               nounSingular={nounSingular}
               text={draftText}

@@ -134,7 +134,7 @@ export function DropdownItem({
       }}
       className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-zinc-800 ${
         selected
-          ? "font-semibold text-emerald-700 dark:text-emerald-400"
+          ? "font-semibold text-accent-700 dark:text-accent-400"
           : "text-zinc-700 dark:text-zinc-300"
       }`}
     >
