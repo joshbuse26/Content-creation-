@@ -52,8 +52,8 @@ export interface ChatThreadsContextValue {
   /** The open thread; defaults to the most recent once the list loads. */
   selectedId: ChatThreadId | null;
   select: (id: ChatThreadId | null) => void;
-  /** Create a thread and open it. */
-  startThread: () => void;
+  /** Create a thread and open it; resolves to the thread, or null on failure (already toasted). */
+  startThread: () => Promise<ChatThread | null>;
   creating: boolean;
 }
 
@@ -108,14 +108,18 @@ export function ChatThreadsProvider({
       toast("Couldn't start a new conversation.");
     },
   });
-  const { mutate: createThread, isPending: creating } = createMutation;
-  const startThread = useCallback(() => {
-    if (workspaceId === null) return;
-    createThread({
-      workspaceId,
-      projectId,
-      title: projectId === null ? "New coach chat" : "New conversation",
-    });
+  const { mutateAsync: createThread, isPending: creating } = createMutation;
+  const startThread = useCallback(async (): Promise<ChatThread | null> => {
+    if (workspaceId === null) return null;
+    try {
+      return await createThread({
+        workspaceId,
+        projectId,
+        title: projectId === null ? "New coach chat" : "New conversation",
+      });
+    } catch {
+      return null; // onError already toasted
+    }
   }, [workspaceId, projectId, createThread]);
 
   const value = useMemo<ChatThreadsContextValue>(

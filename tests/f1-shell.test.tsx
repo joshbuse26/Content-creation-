@@ -181,7 +181,6 @@ describe("F1 — information architecture", () => {
       "Coach",
       "Intel",
       "Projects",
-      "Ideas",
       "Channels",
       "Tools",
       "Settings",

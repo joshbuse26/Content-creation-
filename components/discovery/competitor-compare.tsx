@@ -4,17 +4,15 @@ import { useState } from "react";
 import type { CompetitorTheme } from "@/lib/types/entities";
 import type { ChannelId, WorkspaceId } from "@/lib/types/ids";
 import { trpc } from "@/components/providers/trpc";
-import { useWorkspace } from "@/components/providers/workspace-context";
 import { Button } from "@/components/ui/button";
 import { IconSparkle } from "@/components/ui/icons";
 import { useToast } from "@/components/ui/toast";
-import { isUiCreditExempt } from "@/components/lib/credits-ui";
 
 /**
  * Competitor compare (Wave-D E3). Paste 1-3 competitor channel handles/URLs;
  * we pull their top outliers and surface the SHARED patterns as ORIGINAL
- * concepts added to your feed. Costs 1 credit (idempotent on the same
- * competitors). Never clones a creator — only the abstract format/topic
+ * concepts added to your feed. Idempotent on the same competitors. Never
+ * clones a creator — only the abstract format/topic
  * pattern travels over.
  */
 export function CompetitorCompare({
@@ -26,8 +24,6 @@ export function CompetitorCompare({
   channelId: ChannelId;
   onDone: () => void;
 }) {
-  const { workspace } = useWorkspace();
-  const exempt = isUiCreditExempt(workspace?.role);
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [raw, setRaw] = useState("");
@@ -104,7 +100,7 @@ export function CompetitorCompare({
           <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
             {handles.length === 0
               ? "Enter 1–3 channels, separated by commas."
-              : `${handles.length} channel${handles.length === 1 ? "" : "s"} · ${exempt ? "included" : "1 credit"}`}
+              : `${handles.length} channel${handles.length === 1 ? "" : "s"}`}
           </p>
           <div className="mt-2 flex items-center gap-2">
             <Button

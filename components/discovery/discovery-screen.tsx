@@ -203,12 +203,12 @@ export function DiscoveryScreen() {
           <Button
             variant="primary"
             busy={batchMutation.isPending}
-            aria-label="Generate a fresh batch of concepts (costs 1 credit)"
+            aria-label="Generate a fresh batch of concepts"
             onClick={() => {
               batchMutation.mutate({ workspaceId, channelId });
             }}
           >
-            <IconSparkle size={14} /> New batch · 1 credit
+            <IconSparkle size={14} /> New batch
           </Button>
         ) : undefined
       }
@@ -371,7 +371,7 @@ export function DiscoveryScreen() {
         ) : (
           <EmptyState
             title={niche === null ? "No concepts yet" : `Nothing in “${niche}” yet`}
-            hint="The daily run surfaces fresh concepts each morning — or generate a batch now for 1 credit."
+            hint="The daily run surfaces fresh concepts each morning — or generate a batch now."
             action={
               <Button
                 variant="primary"
@@ -380,7 +380,7 @@ export function DiscoveryScreen() {
                   batchMutation.mutate({ workspaceId, channelId });
                 }}
               >
-                <IconSparkle size={14} /> Get concepts now · 1 credit
+                <IconSparkle size={14} /> Get concepts now
               </Button>
             }
           />

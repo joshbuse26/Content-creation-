@@ -67,12 +67,21 @@ export type CreditExemption = {
   workspaceRole?: Role | null;
 };
 
-/** True when the actor is on ADMIN_EMAILS (case-insensitive) or is a workspace owner/admin. */
+/**
+ * True when the actor is on ADMIN_EMAILS (case-insensitive) or is a workspace
+ * owner/admin — or, TEMPORARILY, whenever PLAYTEST_AUTH_BYPASS is on: the
+ * playtest deployment is free for everyone (no gating, no debits) so nobody
+ * hits a paywall. Every ledger path below still runs and is still tested
+ * with the flag off; flipping the env restores metering. Remove together with
+ * PLAYTEST_AUTH_BYPASS before public launch.
+ */
 export function isCreditExempt(
   userEmail: string | null | undefined,
   workspaceRole: Role | null | undefined,
 ): boolean {
-  return isCreditExemptCore(userEmail, workspaceRole, getConfig().ADMIN_EMAILS);
+  const { ADMIN_EMAILS, PLAYTEST_AUTH_BYPASS } = getConfig();
+  if (PLAYTEST_AUTH_BYPASS) return true;
+  return isCreditExemptCore(userEmail, workspaceRole, ADMIN_EMAILS);
 }
 
 export function exemptionFromCtx(ctx: {

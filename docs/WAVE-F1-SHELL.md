@@ -63,3 +63,59 @@ Known dev-only quirk (unchanged by F1): with no `DATABASE_URL`, `next dev` compi
 and `/api/chat-stream` as separate bundles, each with its own in-memory chat store, so a thread
 created in one is "not found" by the other. Production (Postgres) and `pnpm build && start` are
 unaffected; use the seeded fixture threads when playtesting on a bare dev server.
+
+---
+
+# Wave G — simplified playtest (2026-09-18)
+
+## A) No paywalls
+
+- **Server:** while `PLAYTEST_AUTH_BYPASS` is on, `isCreditExempt()` (server/credits.ts) returns
+  true for everyone — no gating, no debits, for every metered path (staged pipeline, chat tools,
+  thumbnails, research, titles, train-voice, competitor compare). The ledger code is untouched and
+  still tested with the flag off; flipping the env restores metering. TEMPORARY — remove with the
+  auth bypass before public launch.
+- **UI:** no product CTA carries "N credit(s)" copy any more (Intel batch/concepts, competitor
+  compare, thumbnail board/quick-3/tweak, titles, research, Coach confirm cards + toasts, train
+  voice). `tests/g-playtest-simplify.test.tsx` greps every component for charge copy; the only
+  allowed surfaces are the billing page, the rail footer balance link, the staged pipeline's
+  exempt-aware notes, and the public marketing tool page.
+
+## B) Ideas is a Tools card
+
+Rail: Coach · Intel · Projects · Channels · Tools · Settings. `/ideas` redirects to `/toolkit`; the
+Ideas card opens the Coach with an ideas prompt. (`components/ideas/ideas-feed.tsx` is kept —
+nothing links to it; delete or re-home it in a later wave.)
+
+## C) Tools open the Coach with the job in the composer
+
+`coachLaunchHref(prompt)` → `/coach?prompt=…`. The Coach page reads the param once, opens ONE new
+conversation with the prompt seeded in the composer, then `router.replace("/coach")` so refresh /
+back never opens another. Hooks, titles, ideas, research, outline/script, description/tags all
+launch this way; Thumbnail Studio and Intel are their own screens.
+
+## D) Thumbnail Studio (Tools → `/toolkit/thumbnails`)
+
+Pick a video (or name a new one in one field) → the whiteboard: how many (3–6, default 4), preset,
+subject, mood, overlay text → **Generate N thumbnails** → real 1280×720 images → ★ star keepers,
+Pick winner (attaches to that video's packaging), Export (downloads the PNG), Regenerate one with
+tweaks. Same `thumbnails.generateBoard` path the packaging stage uses; `ThumbnailBoard` now takes a
+`projectId` prop instead of reading the project route.
+
+### Image provider env (Railway, both `web` and `worker`)
+
+| Var                                                                       | Value                           | Notes                                                                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `IMAGE_API_KEY`                                                           | fal.ai key                      | `lib/providers/live/image.ts` calls `https://fal.run/fal-ai/flux/dev` (FLUX), 1280×720, N images per call. Required when `PROVIDERS=live`.                                                                                                                    |
+| `S3_ENDPOINT` / `S3_BUCKET` / `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | Railway Storage Bucket (S3 API) | Generated images are copied from the provider's short-lived URL into the bucket and served by `/api/thumbnail-image`. Without `S3_*` the app falls back to in-memory storage (images vanish on restart — fine for a quick playtest, not for keeping winners). |
+
+No other provider is wired; swapping models means editing the one fetch in `live/image.ts`.
+
+## Playtest (≤6 clicks)
+
+1. Enter playtest → rail shows no Ideas; no button anywhere says "credit".
+2. Tools → Hook Generator → lands on the Coach in a NEW conversation with "Give me 5 hooks for a
+   video about: " in the composer → finish the sentence → Enter → streams.
+3. Tools → Thumbnail Studio → pick/name a video → Generate 4 thumbnails → four 1280×720 images → ★
+   one → Pick winner → Export.
+4. Intel → "New batch" / "Get concepts now" — no credit suffix.

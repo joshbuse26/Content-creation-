@@ -1,6 +1,5 @@
 import type { ComponentType, SVGProps } from "react";
 import {
-  IconBulb,
   IconChannel,
   IconFolder,
   IconGear,
@@ -16,7 +15,8 @@ import {
  *
  * Route notes: "Intel" keeps the `/discover` route (renaming the URL buys
  * nothing and breaks deep links); "Tools" lives at `/toolkit` because
- * `/tools` is the public free-tools marketing route.
+ * `/tools` is the public free-tools marketing route; Ideas is a Tools card,
+ * not a section (`/ideas` redirects to `/toolkit`).
  */
 
 export type NavIcon = ComponentType<SVGProps<SVGSVGElement> & { size?: number }>;
@@ -49,7 +49,6 @@ export const APP_NAV: readonly NavSection[] = [
     icon: IconFolder,
     cta: { label: "New project", action: { kind: "href", href: "/projects?new=1" } },
   },
-  { href: "/ideas", label: "Ideas", icon: IconBulb, cta: null },
   {
     href: "/channels",
     label: "Channels",

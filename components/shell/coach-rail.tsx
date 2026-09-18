@@ -17,7 +17,15 @@ export function CoachRail() {
 
   return (
     <section className="flex min-h-0 flex-1 flex-col gap-2 px-3" aria-label="Chats">
-      <Button variant="primary" size="sm" onClick={startThread} busy={creating} className="w-full">
+      <Button
+        variant="primary"
+        size="sm"
+        onClick={() => {
+          void startThread();
+        }}
+        busy={creating}
+        className="w-full"
+      >
         <IconPlus size={13} /> New chat
       </Button>
       <p className="px-2.5 pt-1 text-[11px] font-semibold tracking-wide text-muted uppercase">

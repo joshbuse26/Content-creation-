@@ -1,8 +1,6 @@
-import type { Metadata } from "next";
-import { IdeasFeedScreen } from "@/components/ideas/ideas-feed";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "Ideas" };
-
+/** Ideas is a Tools card now, not a section — old links land on the grid. */
 export default function IdeasPage() {
-  return <IdeasFeedScreen />;
+  redirect("/toolkit");
 }

@@ -4,11 +4,11 @@ import { useMemo, useState } from "react";
 import { skipToken } from "@tanstack/react-query";
 import { ARCHETYPE_SEEDS } from "@/lib/archetypes";
 import type { ThumbnailConcept } from "@/lib/types/entities";
+import type { ProjectId } from "@/lib/types/ids";
 import { COLOR_MOODS, SUBJECT_MODES, type ColorMood, type SubjectMode } from "@/lib/types/enums";
 import { COMPOSITION_PATTERNS } from "@/pipelines/thumbnails/patterns";
 import { trpc } from "@/components/providers/trpc";
 import { useWorkspace } from "@/components/providers/workspace-context";
-import { useProjectId } from "@/components/projects/project-frame";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
@@ -17,8 +17,6 @@ import { IconCheck, IconDownload, IconPencil, IconSparkle } from "@/components/u
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
 import { useToast } from "@/components/ui/toast";
 
-/** Per-image credit rate (spec §7); a board of N costs N credits. */
-export const BOARD_PER_IMAGE_CREDIT = 1;
 const COUNT_OPTIONS = [3, 4, 5, 6] as const;
 
 const SUBJECT_LABELS: Record<SubjectMode, string> = {
@@ -217,7 +215,7 @@ export function TweakPanel({
           Cancel
         </Button>
         <span className="text-xs text-zinc-500 dark:text-zinc-400">
-          1 credit — charged when the new image is ready.
+          A fresh 1280×720 image with these tweaks.
         </span>
       </div>
     </form>
@@ -341,9 +339,8 @@ export function ConceptCard({
 // Board container (trpc-wired)
 // ---------------------------------------------------------------------------
 
-export function ThumbnailBoard() {
+export function ThumbnailBoard({ projectId }: { projectId: ProjectId }) {
   const { workspaceId } = useWorkspace();
-  const projectId = useProjectId();
   const utils = trpc.useUtils();
   const { toast } = useToast();
 
@@ -373,7 +370,7 @@ export function ThumbnailBoard() {
   ) => {
     toast(
       err.data?.code === "PRECONDITION_FAILED"
-        ? "Not enough credits for this action."
+        ? "This workspace can't generate thumbnails right now."
         : err.data?.code === "BAD_REQUEST"
           ? err.message
           : fallback,
@@ -531,10 +528,10 @@ export function ThumbnailBoard() {
             </Field>
             <div className="flex items-center gap-3">
               <Button type="submit" variant="primary" busy={generateMutation.isPending}>
-                <IconSparkle size={13} /> Generate board
+                <IconSparkle size={13} /> Generate {base.count} thumbnails
               </Button>
               <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                {base.count} credits — {BOARD_PER_IMAGE_CREDIT} per concept, charged as each lands.
+                Real 1280×720 images — star the keepers, pick a winner, export.
               </span>
             </div>
           </form>

@@ -16,9 +16,8 @@ import { PipelineStatusNote } from "@/components/ui/pipeline-note";
 import { useToast } from "@/components/ui/toast";
 import { usePipelinePoll } from "@/components/lib/use-pipeline-poll";
 
-/** Spec §7: 1 credit per image, 3 images per run. */
+/** Spec §7: 3 images per run. */
 const IMAGE_COUNT = 3;
-const CREDIT_COST = 3;
 
 export function ThumbsPanel() {
   const { workspaceId } = useWorkspace();
@@ -58,7 +57,7 @@ export function ThumbsPanel() {
     onError: (err) => {
       toast(
         err.data?.code === "PRECONDITION_FAILED"
-          ? "Not enough credits for a thumbnail run (3 needed)."
+          ? "This workspace can't run thumbnails right now."
           : err.data?.code === "BAD_REQUEST"
             ? // Overlay word-cap / auto-pattern violations carry a clear message.
               err.message
@@ -194,10 +193,10 @@ export function ThumbsPanel() {
                 busy={generateMutation.isPending}
                 disabled={subject.trim() === ""}
               >
-                <IconSparkle size={13} /> Generate {IMAGE_COUNT} images
+                <IconSparkle size={13} /> Generate {IMAGE_COUNT} thumbnails
               </Button>
               <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                {CREDIT_COST} credits — 1 per image, charged when the run completes.
+                1280×720 — ready in about a minute.
               </span>
             </div>
           </form>

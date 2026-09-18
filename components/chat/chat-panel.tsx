@@ -19,7 +19,6 @@ import {
 } from "@/components/ui/icons";
 import { ErrorState, LoadingState } from "@/components/ui/state";
 import { useToast } from "@/components/ui/toast";
-import { isUiCreditExempt } from "@/components/lib/credits-ui";
 import { useChatThreads } from "./chat-threads-context";
 import { coachSeedPrompt, takeCoachSeed } from "./coach-seed";
 import { OutliersLauncher } from "./outliers-launcher";
@@ -60,9 +59,17 @@ export const COACH_STARTERS = [
   "Package this idea: titles + thumbnail",
 ] as const;
 
+/** A composer prefill and the one thread it belongs to. */
+interface ComposerSeed {
+  threadId: ChatThreadId;
+  prompt: string;
+}
+
 export function ChatPanel({
   projectId,
   threadRail = "inline",
+  launchPrompt = null,
+  onLaunchConsumed,
 }: {
   projectId: ProjectId | null;
   /**
@@ -71,45 +78,68 @@ export function ChatPanel({
    * is conversation-only. Both read the same ChatThreadsProvider.
    */
   threadRail?: "inline" | "shell";
+  /**
+   * A tool launch (Tools → "Hook Generator" etc.): open a NEW conversation
+   * with this prompt in the composer, whether or not threads already exist.
+   * Consumed once; `onLaunchConsumed` lets the page drop it from the URL.
+   */
+  launchPrompt?: string | null;
+  onLaunchConsumed?: () => void;
 }) {
   const { workspaceId } = useWorkspace();
   const threadList = useChatThreads();
   const { threads, selectedId, select, startThread, creating } = threadList;
 
-  // A concept handed over from the discovery surface ("Ask Coach"): read once,
-  // used to prefill the composer so the Coach can go straight to a hook/outline.
-  const [seedPrompt, setSeedPrompt] = useState<string | null>(null);
+  // A composer prefill is BOUND to the thread it was written for, so a seed
+  // never lands in whichever thread happens to be open while its own is
+  // still being created (the default-select races the create otherwise).
+  const [seed, setSeed] = useState<ComposerSeed | null>(null);
+  const openWith = useCallback(
+    async (prompt: string) => {
+      const created = await startThread();
+      if (created !== null) setSeed({ threadId: created.id, prompt });
+    },
+    [startThread],
+  );
+
+  // A tool launch always gets a fresh conversation, then is consumed once.
+  const launchedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (launchPrompt === null || launchedFor.current === launchPrompt) return;
+    if (workspaceId === null || threadList.loading) return;
+    launchedFor.current = launchPrompt;
+    void openWith(launchPrompt);
+    onLaunchConsumed?.();
+  }, [launchPrompt, workspaceId, threadList.loading, openWith, onLaunchConsumed]);
+
+  // A concept handed over from the discovery surface ("Ask Coach"): read
+  // once; it prefills the open conversation, or opens one if there is none.
+  const [handoff, setHandoff] = useState<string | null>(null);
   useEffect(() => {
     if (projectId === null) return;
-    const seed = takeCoachSeed(projectId);
-    if (seed !== null) setSeedPrompt(coachSeedPrompt(seed));
+    const concept = takeCoachSeed(projectId);
+    if (concept !== null) setHandoff(coachSeedPrompt(concept));
   }, [projectId]);
-
-  // A seeded prompt (discovery hand-off or a starter chip) with no thread
-  // yet: open one so it lands in a fresh conversation. Guarded per seed so a
-  // failed create surfaces its toast once instead of retrying forever.
-  const autoStartedFor = useRef<string | null>(null);
   useEffect(() => {
-    if (
-      seedPrompt !== null &&
-      autoStartedFor.current !== seedPrompt &&
-      selectedId === null &&
-      !threadList.loading &&
-      threadList.hasData &&
-      threads.length === 0 &&
-      !creating
-    ) {
-      autoStartedFor.current = seedPrompt;
-      startThread();
+    if (handoff === null || threadList.loading || !threadList.hasData) return;
+    if (selectedId !== null) {
+      setSeed({ threadId: selectedId, prompt: handoff });
+      setHandoff(null);
+    } else if (threads.length === 0 && !creating) {
+      // Guarded by clearing first: a failed create toasts once, never loops.
+      setHandoff(null);
+      void openWith(handoff);
     }
+    // threads.length > 0 with nothing selected: the provider is about to
+    // default-select the newest thread; the effect re-runs then.
   }, [
-    seedPrompt,
+    handoff,
     selectedId,
     threadList.loading,
     threadList.hasData,
     threads.length,
     creating,
-    startThread,
+    openWith,
   ]);
 
   if (workspaceId === null) return <LoadingState label="Loading workspace…" />;
@@ -124,8 +154,12 @@ export function ChatPanel({
     selectedId === null ? (
       <CoachEmptyState
         projectId={projectId}
-        onStart={startThread}
-        onStarter={setSeedPrompt}
+        onStart={() => {
+          void startThread();
+        }}
+        onStarter={(prompt) => {
+          void openWith(prompt);
+        }}
         creating={creating}
       />
     ) : (
@@ -134,9 +168,9 @@ export function ChatPanel({
         workspaceId={workspaceId}
         threadId={selectedId}
         projectId={projectId}
-        initialComposer={seedPrompt}
+        seedPrompt={seed !== null && seed.threadId === selectedId ? seed.prompt : null}
         onSeedConsumed={() => {
-          setSeedPrompt(null);
+          setSeed(null);
         }}
       />
     );
@@ -152,7 +186,9 @@ export function ChatPanel({
         loading={threadList.loading}
         selectedId={selectedId}
         onSelect={select}
-        onNew={startThread}
+        onNew={() => {
+          void startThread();
+        }}
         creating={creating}
       />
       <div className="flex min-h-0 min-w-0 flex-col">{conversation}</div>
@@ -286,31 +322,30 @@ function ChatThreadView({
   workspaceId,
   threadId,
   projectId,
-  initialComposer = null,
+  seedPrompt = null,
   onSeedConsumed,
 }: {
   workspaceId: WorkspaceId;
   threadId: ChatThreadId;
   projectId: ProjectId | null;
-  /** Prefill for the composer, handed over from the discovery surface. */
-  initialComposer?: string | null;
+  /**
+   * A prefill for the composer (tool launch, starter chip, discovery
+   * hand-off). Applied whenever it arrives — at mount or later, since the
+   * view may already be open when its seed is bound — then consumed.
+   */
+  seedPrompt?: string | null;
   onSeedConsumed?: () => void;
 }) {
   const { toast } = useToast();
-  const { workspace } = useWorkspace();
-  const creditExempt = isUiCreditExempt(workspace?.role);
   const utils = trpc.useUtils();
   const threadList = useChatThreads();
   const stream = useChatStream();
-  const [composer, setComposer] = useState(initialComposer ?? "");
-  // The seed is consumed at mount (used as the composer's initial value).
-  const seedConsumed = useRef(false);
+  const [composer, setComposer] = useState("");
   useEffect(() => {
-    if (!seedConsumed.current && initialComposer !== null) {
-      seedConsumed.current = true;
-      onSeedConsumed?.();
-    }
-  }, [initialComposer, onSeedConsumed]);
+    if (seedPrompt === null) return;
+    setComposer(seedPrompt);
+    onSeedConsumed?.();
+  }, [seedPrompt, onSeedConsumed]);
   const [sending, setSending] = useState(false);
   const [turn, setTurn] = useState<PendingTurn | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -325,11 +360,6 @@ function ChatThreadView({
   const threadBackoff = useRateLimitBackoff(threadQuery);
   const messages = useMemo(() => threadQuery.data?.messages ?? [], [threadQuery.data]);
   const thread = threadQuery.data?.thread ?? null;
-
-  const creditsCharged = useMemo(
-    () => messages.reduce((sum, m) => sum + m.creditsCharged, 0),
-    [messages],
-  );
 
   // A proposal is pending when no tool-role message has confirmed it yet.
   const confirmedIds = useMemo(
@@ -444,14 +474,9 @@ function ChatThreadView({
   }, [stream, stream.state.phase, turn, messageIds]);
 
   const confirmMutation = trpc.chat.confirmTool.useMutation({
-    onSuccess: (ack) => {
+    onSuccess: () => {
       void refetchThread();
-      toast(
-        !creditExempt && ack.estimatedCredits > 0
-          ? `Done — ${ack.estimatedCredits} credit${ack.estimatedCredits === 1 ? "" : "s"} charged.`
-          : "Done.",
-        "success",
-      );
+      toast("Done.", "success");
     },
     onError: (err) => {
       toast(err.message || "Couldn't run that tool.");
@@ -505,13 +530,6 @@ function ChatThreadView({
       <header className="flex items-center justify-between gap-2 border-b border-zinc-200 px-4 py-2.5 dark:border-line">
         <h2 className="truncate text-sm font-semibold">{thread?.title ?? "Conversation"}</h2>
         <div className="flex items-center gap-1">
-          {creditExempt ? (
-            <span className="mr-1 text-xs text-zinc-500 dark:text-zinc-400">Unlimited</span>
-          ) : creditsCharged > 0 ? (
-            <span className="mr-1 text-xs text-zinc-500 dark:text-zinc-400">
-              {creditsCharged} credit{creditsCharged === 1 ? "" : "s"} this chat
-            </span>
-          ) : null}
           <IconButton label="Rename conversation" onClick={onRename}>
             <IconPencil size={14} />
           </IconButton>
@@ -705,25 +723,11 @@ function ToolCard({
   confirming: boolean;
 }) {
   const [skipped, setSkipped] = useState(false);
-  const { workspace } = useWorkspace();
-  const exempt = isUiCreditExempt(workspace?.role);
   if (skipped) return null;
-  const credits = proposal.estimatedCredits;
   return (
     <div className="max-w-[85%] rounded-xl border border-accent-200 bg-accent-50/60 p-3 dark:border-accent-900 dark:bg-accent-950/40">
       <p className="text-sm text-zinc-700 dark:text-zinc-200">
-        {COACH_NAME} wants to run <span className="font-semibold">{toolLabel(proposal.name)}</span>
-        {exempt || credits === 0 ? (
-          " — included"
-        ) : (
-          <>
-            {" — "}
-            <span className="font-semibold">
-              {credits} credit{credits === 1 ? "" : "s"}
-            </span>
-          </>
-        )}
-        .
+        {COACH_NAME} wants to run <span className="font-semibold">{toolLabel(proposal.name)}</span>.
       </p>
       <div className="mt-2 flex items-center gap-2">
         <Button

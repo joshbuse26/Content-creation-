@@ -1,52 +1,71 @@
+import { coachLaunchHref } from "@/components/chat/coach-launch";
+
 /**
- * The Tools landing (F1 stub for the F4 grid): every card opens a REAL
- * surface that exists today — never a chat questionnaire. Cards whose home
- * is a project stage point at /projects until F4/F5 give them a route.
+ * The Tools landing: every card opens a REAL surface — never a chat
+ * questionnaire. Writing tools open the Coach with the job already in the
+ * composer (one conversation per launch); Thumbnail Studio and Intel are
+ * their own screens.
  */
 export interface ToolkitTool {
   slug: string;
   title: string;
   blurb: string;
   href: string;
-  /** Where the tool lives today, shown as a small hint on the card. */
+  /** Where the tool runs, shown as a small hint on the card. */
   opens: string;
 }
+
+const COACH = "Coach";
 
 export const TOOLKIT_TOOLS: readonly ToolkitTool[] = [
   {
     slug: "hooks",
     title: "Hook Generator",
     blurb: "Five openers in your style for any topic.",
-    href: "/coach",
-    opens: "Coach",
+    href: coachLaunchHref("Give me 5 hooks for a video about: "),
+    opens: COACH,
   },
   {
     slug: "titles",
     title: "Title Generator",
     blurb: "Click-worthy titles scored for curiosity and clarity.",
-    href: "/tools/title-generator",
-    opens: "Title tool",
+    href: coachLaunchHref("Give me 10 title options for a video about: "),
+    opens: COACH,
   },
   {
     slug: "thumbnails",
     title: "Thumbnail Studio",
-    blurb: "Preset-driven thumbnail concepts and image boards.",
-    href: "/projects",
-    opens: "Project → Packaging",
+    blurb: "Real 1280×720 thumbnails — star the keepers, export the winner.",
+    href: "/toolkit/thumbnails",
+    opens: "Studio",
+  },
+  {
+    slug: "ideas",
+    title: "Ideas",
+    blurb: "Fresh, evidence-backed video ideas for your channel.",
+    href: coachLaunchHref("Give me 5 fresh video ideas for my channel, with the angle for each."),
+    opens: COACH,
   },
   {
     slug: "research",
     title: "Research",
     blurb: "Sources, facts and citations that survive into the script.",
-    href: "/projects",
-    opens: "Project → Research",
+    href: coachLaunchHref("Research this topic and give me the key facts with sources: "),
+    opens: COACH,
   },
   {
-    slug: "train-voice",
-    title: "Train voice",
-    blurb: "Derive a StyleCard from your own channel's videos.",
-    href: "/projects",
-    opens: "Project → Style",
+    slug: "outline",
+    title: "Outline / Script",
+    blurb: "Topics → outline → hooks → full draft, in your style.",
+    href: coachLaunchHref("Outline a 10-minute video about: "),
+    opens: COACH,
+  },
+  {
+    slug: "metadata",
+    title: "Description / Tags",
+    blurb: "Descriptions, tags and chapters for the upload form.",
+    href: coachLaunchHref("Write the YouTube description, tags and chapters for a video about: "),
+    opens: COACH,
   },
   {
     slug: "intel",
@@ -54,19 +73,5 @@ export const TOOLKIT_TOOLS: readonly ToolkitTool[] = [
     blurb: "Videos beating their channel's baseline, by niche.",
     href: "/discover",
     opens: "Intel",
-  },
-  {
-    slug: "script",
-    title: "Outline / Script",
-    blurb: "Topics → outline → hooks → full draft, staged and metered.",
-    href: "/projects",
-    opens: "Project → Generate",
-  },
-  {
-    slug: "metadata",
-    title: "Description / Tags",
-    blurb: "Descriptions, tags and chapters for the upload form.",
-    href: "/tools/description-generator",
-    opens: "Description tool",
   },
 ];

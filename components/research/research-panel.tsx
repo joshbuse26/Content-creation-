@@ -86,10 +86,7 @@ export function ResearchPanel() {
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Agent search */}
         <Card>
-          <CardHeader
-            title="Research agent"
-            subtitle="Search the web, compile a cited brief. 1 credit."
-          />
+          <CardHeader title="Research agent" subtitle="Search the web, compile a cited brief." />
           <CardBody>
             <form
               className="space-y-2"

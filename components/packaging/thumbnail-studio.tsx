@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useProjectId } from "@/components/projects/project-frame";
 import { Tabs } from "@/components/ui/tabs";
 import { ThumbsPanel } from "@/components/packaging/thumbs-panel";
 import { ThumbnailBoard } from "@/components/packaging/thumbnail-board";
@@ -15,6 +16,7 @@ type StudioMode = "whiteboard" | "one_shot";
  */
 export function ThumbnailStudio() {
   const [mode, setMode] = useState<StudioMode>("whiteboard");
+  const projectId = useProjectId();
   return (
     <div className="space-y-4">
       <Tabs
@@ -25,7 +27,7 @@ export function ThumbnailStudio() {
         active={mode}
         onChange={setMode}
       />
-      {mode === "whiteboard" ? <ThumbnailBoard /> : <ThumbsPanel />}
+      {mode === "whiteboard" ? <ThumbnailBoard projectId={projectId} /> : <ThumbsPanel />}
     </div>
   );
 }

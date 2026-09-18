@@ -80,7 +80,7 @@ export function TitlesPanel() {
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
           {titleSet !== null
             ? `${titleSet.options.length} options across ${groups.size} pattern families, scored against your niche's outlier titles.`
-            : "Generate titles from the chosen frame and niche title patterns. 1 credit."}
+            : "Generate titles from the chosen frame and niche title patterns."}
         </p>
         <Button
           busy={generateMutation.isPending}

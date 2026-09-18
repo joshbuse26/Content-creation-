@@ -20,12 +20,9 @@ import { trainedTarget } from "./blend";
  *    (pacing, hooks, energy) — never a clone or copy of their words or name.
  *
  * Trained cards are selectable for generation, and rename/delete-manageable
- * here. Training costs credits (shown before the confirm). Self-contained: it
- * owns its trpc + selection wiring and reports the chosen target via onChange.
+ * here. Self-contained: it owns its trpc + selection wiring and reports the
+ * chosen target via onChange.
  */
-
-/** Mirrors CREDIT_COSTS.trainVoice (server/credits.ts) for the confirm copy. */
-const TRAIN_VOICE_COST = 5;
 
 export interface TrainVoicePanelProps {
   value: GenerationTarget | null;
@@ -181,7 +178,6 @@ export function TrainVoicePanel({ value, onChange, disabled = false }: TrainVoic
       <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
         <div className="mb-2 flex items-center justify-between gap-2">
           <h4 className="text-sm font-semibold">Train from your channel</h4>
-          <Badge tone="neutral">{TRAIN_VOICE_COST} credits</Badge>
         </div>
         <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
           Learns your own spoken voice from your recent uploads (transcripts only — never scraped).
@@ -219,10 +215,7 @@ export function TrainVoicePanel({ value, onChange, disabled = false }: TrainVoic
             busy={busy}
             disabled={disabled || noChannel}
             onClick={() => {
-              if (
-                window.confirm(`Train a voice from your channel for ${TRAIN_VOICE_COST} credits?`)
-              )
-                trainOwn();
+              if (window.confirm("Train a voice from your channel's recent videos?")) trainOwn();
             }}
           >
             Train voice
@@ -234,7 +227,6 @@ export function TrainVoicePanel({ value, onChange, disabled = false }: TrainVoic
       <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
         <div className="mb-2 flex items-center justify-between gap-2">
           <h4 className="text-sm font-semibold">Remix a competitor into an original card</h4>
-          <Badge tone="neutral">{TRAIN_VOICE_COST} credits</Badge>
         </div>
         <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
           Creates an <strong>original</strong> StyleCard inspired by a competitor&rsquo;s structure
@@ -275,7 +267,7 @@ export function TrainVoicePanel({ value, onChange, disabled = false }: TrainVoic
             onClick={() => {
               if (
                 window.confirm(
-                  `Create an original remixed card for ${TRAIN_VOICE_COST} credits? It is inspired by structure, not a clone.`,
+                  "Create an original remixed card? It is inspired by structure, not a clone.",
                 )
               )
                 trainRemix();

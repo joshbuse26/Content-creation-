@@ -82,7 +82,14 @@ function PrimaryCta({ cta }: { cta: SectionCta }) {
     // dead button.
     if (threads === null) return null;
     return (
-      <Button variant="primary" size="sm" onClick={threads.startThread} busy={threads.creating}>
+      <Button
+        variant="primary"
+        size="sm"
+        onClick={() => {
+          void threads.startThread();
+        }}
+        busy={threads.creating}
+      >
         <IconPlus size={13} /> {cta.label}
       </Button>
     );
