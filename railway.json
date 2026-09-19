@@ -5,12 +5,17 @@
     "buildCommand": "pnpm install --frozen-lockfile && pnpm build",
     "nixpacksPlan": {
       "phases": {
-        "setup": { "nixPkgs": ["nodejs_22", "pnpm"] }
+        "setup": {
+          "nixPkgs": [
+            "nodejs_22",
+            "pnpm"
+          ]
+        }
       }
     }
   },
   "deploy": {
-    "startCommand": "pnpm start",
+    "startCommand": "bash -lc 'if [ \"$RAILWAY_SERVICE_NAME\" = \"worker\" ]; then exec pnpm worker; else exec pnpm start; fi'",
     "healthcheckPath": "/api/health",
     "healthcheckTimeout": 120,
     "restartPolicyType": "ON_FAILURE",

@@ -1,3 +1,4 @@
+import { createServer } from "node:http";
 import { Worker, type Job } from "bullmq";
 import { getConfig, PRODUCT_NAME } from "@/lib/config";
 import { logger } from "@/lib/logger";
@@ -48,6 +49,25 @@ async function registerCreditReconciliationSchedule(): Promise<void> {
   );
 }
 
+
+/** Railway healthcheck hits /api/health on $PORT — worker is not Next, so serve a tiny probe. */
+function startHealthServer(): void {
+  const port = Number(process.env.PORT ?? "8080");
+  if (!Number.isFinite(port) || port <= 0) return;
+  const server = createServer((req, res) => {
+    if (req.url === "/api/health" || req.url === "/healthz" || req.url === "/") {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true, role: "worker" }));
+      return;
+    }
+    res.writeHead(404);
+    res.end();
+  });
+  server.listen(port, () => {
+    logger.info({ port }, "worker health server listening");
+  });
+}
+
 async function main(): Promise<void> {
   const config = getConfig();
   await initErrorReporting();
@@ -64,6 +84,7 @@ async function main(): Promise<void> {
   }
 
   const connection = getRedisConnection();
+  startHealthServer();
 
   const scriptWorker = new Worker(
     QUEUE_NAMES.script,
