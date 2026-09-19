@@ -18,6 +18,7 @@ import {
   runThumbnailBoard,
   setThumbnailConceptFavorited,
   THUMBNAIL_CREDIT_COST,
+  ThumbnailImageError,
   type GeneratedBoard,
   type ThumbnailBoard,
   type ThumbnailsJobData,
@@ -36,10 +37,17 @@ type FavoriteInput = z.output<typeof thumbnailsContracts.favorite.input>;
 type ChooseWinnerInput = z.output<typeof thumbnailsContracts.chooseWinner.input>;
 type ListBoardInput = z.output<typeof thumbnailsContracts.listBoard.input>;
 
-/** Overlay word-cap overflow → a clear BAD_REQUEST (never silent truncation). */
+/**
+ * Overlay word-cap overflow → a clear BAD_REQUEST (never silent truncation);
+ * an image provider/download failure → BAD_GATEWAY with its reason (the
+ * generic INTERNAL_SERVER_ERROR mask would hide it from the user).
+ */
 function asTRPCError(err: unknown): never {
   if (err instanceof OverlayTextTooLongError) {
     throw new TRPCError({ code: "BAD_REQUEST", message: err.message });
+  }
+  if (err instanceof ThumbnailImageError) {
+    throw new TRPCError({ code: "BAD_GATEWAY", message: err.message });
   }
   throw err;
 }
@@ -161,12 +169,7 @@ export const thumbnailsImpl = {
     } catch (err) {
       asTRPCError(err);
     }
-    if (updated === null) {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "thumbnail regeneration failed — no credits were charged",
-      });
-    }
+    if (updated === null) notFound("thumbnail concept");
     return updated;
   },
 

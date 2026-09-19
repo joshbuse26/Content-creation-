@@ -49,7 +49,6 @@ async function registerCreditReconciliationSchedule(): Promise<void> {
   );
 }
 
-
 /** Railway healthcheck hits /api/health on $PORT — worker is not Next, so serve a tiny probe. */
 function startHealthServer(): void {
   const port = Number(process.env.PORT ?? "8080");

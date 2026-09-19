@@ -60,6 +60,7 @@ export {
   deterministicBoardId,
   runConceptTweak,
   runThumbnailBoard,
+  ThumbnailImageError,
   type BoardConceptParams,
   type GenerateBoardParams,
   type GeneratedBoard,

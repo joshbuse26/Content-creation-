@@ -119,3 +119,25 @@ No other provider is wired; swapping models means editing the one fetch in `live
 3. Tools → Thumbnail Studio → pick/name a video → Generate 4 thumbnails → four 1280×720 images → ★
    one → Pick winner → Export.
 4. Intel → "New batch" / "Get concepts now" — no credit suffix.
+
+---
+
+# Wave H — Thumbnail Studio: images actually land (2026-09-19)
+
+Prod symptom: "Generate 4 thumbnails" → toast "Board generated." → empty board. Root cause: the
+board/tweak path (`pipelines/thumbnails/board.ts`) had no default downloader for provider-hosted
+URLs (fal.ai returns `{ url }` only) and the router never passed one, so every concept's image
+stage failed and `runThumbnailBoard` returned `{ concepts: [] }` as a success.
+
+Fix: `defaultFetchBytes` (bounded 10s / 10MB download) is exported from `pipeline.ts` and is the
+default for the board and tweak paths, exactly like the one-shot path. A board that produces zero
+images now throws `ThumbnailImageError` (with the provider/download reason, never a key), which the
+router maps to `BAD_GATEWAY` so the UI shows the real reason instead of a masked "Something went
+wrong"; a failing tweak throws the same way. The success toast reports the count ("4 thumbnails
+ready." / "3 of 4 … run again to fill the rest." — a partial board heals on the next identical run).
+`tests/h-thumbnail-board-live-urls.test.ts` pins: URL-only provider → N downloaded + persisted
+concepts, with and without an injected `fetchBytes`; provider/download failure → rejects; router →
+`BAD_GATEWAY`.
+
+Storage reminder: without `S3_*` on web+worker, images live in the web process's memory and vanish
+on restart/redeploy. Fine for a look; set the bucket before keeping winners.

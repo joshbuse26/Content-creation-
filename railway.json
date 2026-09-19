@@ -6,10 +6,7 @@
     "nixpacksPlan": {
       "phases": {
         "setup": {
-          "nixPkgs": [
-            "nodejs_22",
-            "pnpm"
-          ]
+          "nixPkgs": ["nodejs_22", "pnpm"]
         }
       }
     }

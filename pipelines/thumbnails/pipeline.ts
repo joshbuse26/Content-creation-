@@ -72,7 +72,12 @@ export function thumbnailInputHash(
   });
 }
 
-async function defaultFetchBytes(url: string): Promise<Uint8Array> {
+/**
+ * Download a provider-hosted image into memory (bounded, 10s, ≤10MB). The
+ * default for every thumbnail path — one-shot, board and tweak — so a live
+ * provider that returns URLs (fal.ai) always lands in OUR object storage.
+ */
+export async function defaultFetchBytes(url: string): Promise<Uint8Array> {
   const res = await fetch(url, { signal: AbortSignal.timeout(10_000), redirect: "follow" });
   if (!res.ok) {
     throw new Error(`image download failed with status ${res.status}`);

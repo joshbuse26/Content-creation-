@@ -23,7 +23,7 @@ import {
   resolveThumbnailPreset,
   type GenerationModeFields,
 } from "./presets";
-import type { ThumbnailPipelineDeps } from "./pipeline";
+import { defaultFetchBytes, type ThumbnailPipelineDeps } from "./pipeline";
 
 /**
  * Thumbnail Whiteboard board generation (WAVE-D / E2).
@@ -243,6 +243,20 @@ interface ConceptGenResult {
   status: PipelineResult["status"];
   imageKey: string | null;
   promptUsed: string;
+  /** Why the image stage failed (provider / download error), else null. */
+  error: string | null;
+}
+
+/**
+ * A board or tweak produced NO image. Surfaced to the user (the router maps
+ * it to a gateway error) instead of a silent empty board — the message
+ * carries the provider/download reason, never a key.
+ */
+export class ThumbnailImageError extends Error {
+  constructor(reason: string) {
+    super(`The image service couldn't produce a thumbnail (${reason}). Try again in a moment.`);
+    this.name = "ThumbnailImageError";
+  }
 }
 
 /**
@@ -264,7 +278,7 @@ async function generateConceptImage(
   },
 ): Promise<ConceptGenResult> {
   const loadContext = deps.loadContext ?? loadPackagingContext;
-  const fetchBytes = deps.fetchBytes ?? null;
+  const fetchBytes = deps.fetchBytes ?? defaultFetchBytes;
   const inputHash = conceptInputHash(args.workspaceId, args.projectId, args.params);
   const imageKey = thumbnailImageKey(args.workspaceId, args.projectId, inputHash, 0);
 
@@ -285,7 +299,8 @@ async function generateConceptImage(
         if (img.url === null) {
           throw new Error("image provider returned neither a URL nor inline data");
         }
-        if (fetchBytes === null) throw new Error("no fetchBytes for a hosted image URL");
+        // Live providers hand back short-lived hosted URLs — copy the bytes
+        // into OUR storage; the provider URL is never persisted (spec §5.10).
         bytes = await fetchBytes(img.url);
       }
       await deps.storage.put(imageKey, bytes, "image/png");
@@ -323,6 +338,7 @@ async function generateConceptImage(
     status: result.status,
     imageKey: result.status === "done" ? imageKey : null,
     promptUsed: prompt,
+    error: result.status === "failed" ? result.error : null,
   };
 }
 
@@ -372,6 +388,7 @@ export async function runThumbnailBoard(
   const presentSorts = new Set(existing.map((c) => c.sort));
 
   const toInsert: NewThumbnailConcept[] = [];
+  const failures: string[] = [];
   await Promise.all(
     patterns.map(async (compositionPattern, i) => {
       if (presentSorts.has(i)) return;
@@ -390,7 +407,10 @@ export async function runThumbnailBoard(
         actorUserId: params.actorUserId,
         creditExempt: params.creditExempt,
       });
-      if (gen.status !== "done") return;
+      if (gen.status !== "done") {
+        failures.push(gen.error ?? "unknown error");
+        return;
+      }
       toInsert.push({
         workspaceId: params.workspaceId,
         projectId: params.projectId,
@@ -414,6 +434,11 @@ export async function runThumbnailBoard(
   }
 
   const concepts = await listBoardConcepts(params.workspaceId, params.projectId, boardId);
+  // A board that produced nothing is an error, not an empty success. A
+  // partial board is returned as-is: the next identical run heals the gaps.
+  if (patterns.length > 0 && concepts.length === 0) {
+    throw new ThumbnailImageError(failures[0] ?? "no images were produced");
+  }
   return { boardId, concepts };
 }
 
@@ -448,7 +473,7 @@ export async function runConceptTweak(
     actorUserId: params.actorUserId,
     creditExempt: params.creditExempt,
   });
-  if (gen.status !== "done") return null;
+  if (gen.status !== "done") throw new ThumbnailImageError(gen.error ?? "unknown error");
 
   return applyThumbnailConceptTweak(params.workspaceId, concept.id, {
     imageKey: gen.imageKey,

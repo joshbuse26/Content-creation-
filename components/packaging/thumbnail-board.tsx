@@ -371,16 +371,25 @@ export function ThumbnailBoard({ projectId }: { projectId: ProjectId }) {
     toast(
       err.data?.code === "PRECONDITION_FAILED"
         ? "This workspace can't generate thumbnails right now."
-        : err.data?.code === "BAD_REQUEST"
+        : // Overlay-cap (BAD_REQUEST) and image-service (BAD_GATEWAY) errors
+          // carry a message written for the user.
+          err.data?.code === "BAD_REQUEST" || err.data?.code === "BAD_GATEWAY"
           ? err.message
           : fallback,
     );
   };
 
   const generateMutation = trpc.thumbnails.generateBoard.useMutation({
-    onSuccess: () => {
+    onSuccess: (board, variables) => {
       invalidate();
-      toast("Board generated.", "success");
+      const made = board.concepts.length;
+      // The server throws on zero images, so this is ≥1; say when it's partial.
+      toast(
+        made < variables.count
+          ? `${made} of ${variables.count} thumbnails ready — run again to fill the rest.`
+          : `${made} thumbnails ready.`,
+        "success",
+      );
     },
     onError: (err) => {
       errorToast(err, "Could not generate the board — try again.");
