@@ -192,3 +192,14 @@ match (FLUX img2img is not a face-ID model). Migration 0014 adds `brief` and `re
 to `thumbnail_concepts`.
 
 **Migrate: 0013 + 0014** (`pnpm db:migrate`), both additive.
+
+---
+
+# Wave J — marketing home, stripped (2026-09-20)
+
+`/` is now: hero (product name · one sentence · one CTA — "Enter the app" in fixture mode, "Sign
+in" otherwise) → the eight core features, name + ≤8 words each (Coach · Intel · Ideas · Scripts ·
+Styles · Packaging · Thumbnail Studio · Channels) → footer Terms / Privacy / Sign in. The
+four-step story, the archetype catalog and the pricing tiers are gone from the home page (there is
+no separate pricing page; billing lives in-app at `/settings/billing`). `tests/home-page.test.ts`
+pins the eight labels, the word cap, and the absence of pricing/steps/credit copy.

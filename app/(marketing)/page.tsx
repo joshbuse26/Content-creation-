@@ -2,292 +2,51 @@ import Link from "next/link";
 import { PRODUCT_NAME } from "@/lib/branding";
 import { APP_HOME } from "@/components/shell/nav";
 import { getConfig } from "@/lib/config";
-import { ARCHETYPE_SEEDS } from "@/lib/archetypes";
-import {
-  displayCopy,
-  energyLabel,
-  HOOK_STYLE_LABELS,
-  paceLabel,
-} from "@/components/archetypes/presentation";
 
-const steps = [
-  {
-    n: "01",
-    title: "Pick a style",
-    body: "Twelve original video styles — from calm explainer to high-stakes challenge — each a full style card: voice, pacing, hooks, CTA habits. Blend two if one isn't enough.",
-  },
-  {
-    n: "02",
-    title: "Choose the topic",
-    body: "Generated topic candidates ranked for your channel, or type your own. Research with receipts: every fact keeps its citation into the script.",
-  },
-  {
-    n: "03",
-    title: "Approve outline and hook",
-    body: "A per-section outline with target seconds, then three openers tagged by technique. You approve each stage — and only pay for the stages you run.",
-  },
-  {
-    n: "04",
-    title: "Watch the script assemble",
-    body: "The draft streams in section by section — retention beats, the style's voice, a fact-check pass, and style gates checked by machine at the end.",
-  },
-];
-
-const features = [
-  {
-    title: "Styles, not templates",
-    body: "Each archetype is a structured style card — point of view, sentence rhythm, energy, re-hook cadence — applied consistently across the whole script.",
-  },
-  {
-    title: "Crossover blends",
-    body: "Pick two styles and weight them. Calm authority with a shot of hype, storytelling with data-first rigor — the blend is deterministic, not vibes.",
-  },
-  {
-    title: "Pay per stage",
-    body: "Topics, outline, hooks, draft — each stage is metered separately. Type your own topic and skip the charge. One-click runs the whole chain.",
-  },
-  {
-    title: "Style gates, checked by code",
-    body: "Hook technique, CTA placement, reading level, and each style's banned-claims list are machine-checked on every script, with a per-gate report.",
-  },
-  {
-    title: "Section-level control",
-    body: "Regenerate one section with a steering note. Lock the parts you love. Line-level revision passes arrive as diffs you accept or reject.",
-  },
-  {
-    title: "Packaging in the same breath",
-    body: "25 scored titles, thumbnail concepts keyed to your style's preset, descriptions, tags, and chapters — generated from the finished script.",
-  },
-];
-
-const tiers = [
-  {
-    name: "Free",
-    price: "$0",
-    detail: "8 credits to try the full loop",
-    items: ["1 channel", "1 seat", "Every pipeline stage"],
-  },
-  {
-    name: "Starter",
-    price: "$49",
-    detail: "per month · 60 credits",
-    items: ["3 channels", "2 seats", "~10 full scripts / mo"],
-    featured: true,
-  },
-  {
-    name: "Team",
-    price: "$99",
-    detail: "per month · 200 credits",
-    items: ["10 channels", "5 seats", "Priority generation"],
-  },
-  {
-    name: "Agency",
-    price: "$249",
-    detail: "per month · 600 credits",
-    items: ["Unlimited channels", "15 seats", "Client workspaces"],
-  },
-];
-
-function EnergyBars({ energy }: { energy: number }) {
-  return (
-    <span
-      className="inline-flex items-end gap-0.5"
-      role="img"
-      aria-label={`Energy ${energy} of 5 — ${energyLabel(energy)}`}
-    >
-      {[1, 2, 3, 4, 5].map((level) => (
-        <span
-          key={level}
-          aria-hidden="true"
-          style={{ height: `${4 + level * 2}px` }}
-          className={`w-1 rounded-sm ${
-            level <= energy ? "bg-accent-600 dark:bg-accent-400" : "bg-zinc-200 dark:bg-zinc-700"
-          }`}
-        />
-      ))}
-    </span>
-  );
-}
+/** The eight things the product does — names first, one short line each. */
+export const CORE_FEATURES = [
+  { name: "Coach", line: "Chat script coach" },
+  { name: "Intel", line: "Your YouTube channel stats" },
+  { name: "Ideas", line: "Concepts for your niche" },
+  { name: "Scripts", line: "Outline → hooks → draft" },
+  { name: "Styles", line: "Train or pick a voice" },
+  { name: "Packaging", line: "Titles, description, tags" },
+  { name: "Thumbnail Studio", line: "Real YouTube thumbnails" },
+  { name: "Channels", line: "Connect & switch channels" },
+] as const;
 
 export default function LandingPage() {
   const fixtureMode = getConfig().PROVIDERS === "fixture";
   const enterHref = fixtureMode ? APP_HOME : "/login";
-  const enterLabel = fixtureMode ? "Enter the app" : "Write your first script free";
   return (
-    <div>
-      {/* Hero */}
-      <section className="mx-auto max-w-5xl px-6 pt-20 pb-16 sm:pt-28" data-testid="marketing-hero">
-        <p className="text-sm font-medium tracking-wide text-accent-700 uppercase dark:text-accent-400">
-          AI scriptwriting for YouTube
-        </p>
-        <h1 className="mt-3 max-w-3xl font-display text-4xl leading-tight font-semibold tracking-tight text-zinc-900 sm:text-6xl dark:text-zinc-50">
-          Pick a style. Get your next video.
+    <div className="mx-auto max-w-4xl px-6">
+      <section className="pt-24 pb-14 sm:pt-32" data-testid="marketing-hero">
+        <h1 className="font-display text-4xl font-semibold tracking-tight text-zinc-900 sm:text-6xl">
+          {PRODUCT_NAME}
         </h1>
-        <p className="mt-5 max-w-2xl text-lg text-zinc-600 dark:text-zinc-400">
-          {PRODUCT_NAME} ships with twelve original video styles — pick one (or blend two), and a
-          staged writing engine turns a topic into a fact-checked, retention-engineered script in
-          that style, with you approving every step.
-        </p>
-        <div className="mt-8 flex flex-wrap items-center gap-4">
-          <Link
-            href={enterHref}
-            className="rounded-md bg-accent-700 px-5 py-3 text-sm font-semibold text-white hover:bg-accent-600 dark:bg-accent-600 dark:hover:bg-accent-500"
-          >
-            {enterLabel}
-          </Link>
-          <span className="text-sm text-zinc-500 dark:text-zinc-400">
-            8 free credits · no card required
-          </span>
-        </div>
-      </section>
-
-      {/* Archetype showcase */}
-      <section className="border-y border-zinc-200 bg-white py-16 dark:border-zinc-800 dark:bg-zinc-900/40">
-        <div className="mx-auto max-w-5xl px-6">
-          <h2 className="font-display text-2xl font-semibold text-zinc-900 sm:text-3xl dark:text-zinc-50">
-            Twelve styles, one for every kind of video
-          </h2>
-          <p className="mt-2 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
-            Original archetypes built around how videos are made — pacing, hooks, energy — not
-            around any person. Blend any two with a weight slider.
-          </p>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {ARCHETYPE_SEEDS.map((a) => (
-              <div
-                key={a.id}
-                className="flex flex-col rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold">{a.displayName}</h3>
-                  <EnergyBars energy={a.styleCard.energy} />
-                </div>
-                <p className="mt-1.5 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
-                  {displayCopy(a.pitch)}
-                </p>
-                <div className="mt-3 flex flex-wrap gap-1 pt-1">
-                  <span className="rounded-full bg-zinc-200/70 px-2 py-0.5 text-[11px] font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-                    {paceLabel(a.styleCard.pacing.wpmTarget)} pace
-                  </span>
-                  {a.styleCard.hookPatterns.map((p) => (
-                    <span
-                      key={p.technique}
-                      className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-800 dark:bg-sky-950 dark:text-sky-300"
-                    >
-                      {HOOK_STYLE_LABELS[p.technique]}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* How it works */}
-      <section className="mx-auto max-w-5xl px-6 py-16">
-        <h2 className="font-display text-2xl font-semibold text-zinc-900 sm:text-3xl dark:text-zinc-50">
-          Idea to record-ready, one staged pipeline
-        </h2>
-        <div className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-          {steps.map((s) => (
-            <div key={s.n}>
-              <span className="font-mono text-xs text-accent-700 dark:text-accent-400">{s.n}</span>
-              <h3 className="mt-1 text-sm font-semibold">{s.title}</h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-                {s.body}
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Features */}
-      <section
-        className="border-t border-zinc-200 bg-white py-16 dark:border-zinc-800 dark:bg-zinc-900/40"
-        data-testid="marketing-features"
-      >
-        <div className="mx-auto max-w-5xl px-6">
-          <h2 className="font-display text-2xl font-semibold text-zinc-900 sm:text-3xl dark:text-zinc-50">
-            An editor built for talking, not typing
-          </h2>
-          <div className="mt-8 grid gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
-            {features.map((f) => (
-              <div key={f.title}>
-                <h3 className="text-sm font-semibold">{f.title}</h3>
-                <p className="mt-1.5 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-                  {f.body}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Pricing */}
-      <section className="border-t border-zinc-200 py-16 dark:border-zinc-800">
-        <div className="mx-auto max-w-5xl px-6">
-          <h2 className="font-display text-2xl font-semibold text-zinc-900 sm:text-3xl dark:text-zinc-50">
-            Pricing
-          </h2>
-          <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-            One credit system across everything: topics 1, outline 1, hooks 1, draft 4 — a full
-            script is 6 credits, a revision pass is 2. Each stage is charged only when you run it.
-          </p>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {tiers.map((t) => (
-              <div
-                key={t.name}
-                className={`rounded-lg border p-5 ${
-                  t.featured === true
-                    ? "border-accent-600 ring-1 ring-accent-600 dark:border-accent-500 dark:ring-accent-500"
-                    : "border-zinc-200 dark:border-zinc-800"
-                }`}
-              >
-                <h3 className="text-sm font-semibold">{t.name}</h3>
-                <p className="mt-2 text-3xl font-semibold tracking-tight">{t.price}</p>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">{t.detail}</p>
-                <ul className="mt-4 space-y-1.5 text-sm text-zinc-600 dark:text-zinc-400">
-                  {t.items.map((item) => (
-                    <li key={item} className="flex items-center gap-2">
-                      <span className="h-1 w-1 rounded-full bg-accent-600 dark:bg-accent-500" />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  href="/login"
-                  className={`mt-5 block rounded-md py-2 text-center text-sm font-medium ${
-                    t.featured === true
-                      ? "bg-accent-700 text-white hover:bg-accent-600 dark:bg-accent-600"
-                      : "border border-zinc-300 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
-                  }`}
-                >
-                  Get started
-                </Link>
-              </div>
-            ))}
-          </div>
-          <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
-            Alpha pricing — plans and limits may change before public launch.
-          </p>
-        </div>
-      </section>
-
-      {/* Closing CTA */}
-      <section className="mx-auto max-w-5xl px-6 py-20 text-center" data-testid="marketing-cta">
-        <h2 className="font-display text-3xl font-semibold text-zinc-900 dark:text-zinc-50">
-          Your next video, scripted this afternoon.
-        </h2>
-        <p className="mx-auto mt-3 max-w-xl text-sm text-zinc-500 dark:text-zinc-400">
-          Pick a style, approve the outline and hook, and record from a script your audience
-          actually finishes.
+        <p className="mt-4 max-w-2xl text-lg text-zinc-600">
+          Your YouTube script and packaging coach — from idea to thumbnail, in your voice.
         </p>
         <Link
           href={enterHref}
-          className="mt-6 inline-block rounded-md bg-accent-700 px-6 py-3 text-sm font-semibold text-white hover:bg-accent-600 dark:bg-accent-600 dark:hover:bg-accent-500"
+          className="mt-8 inline-block rounded-md bg-accent-600 px-5 py-3 text-sm font-semibold text-white hover:bg-accent-500"
         >
-          {fixtureMode ? "Enter the app" : "Start free"}
+          {fixtureMode ? "Enter the app" : "Sign in"}
         </Link>
+      </section>
+
+      <section className="border-t border-zinc-200 py-14" data-testid="marketing-features">
+        <ul className="grid gap-x-10 gap-y-6 sm:grid-cols-2" aria-label="Core features">
+          {CORE_FEATURES.map((f) => (
+            <li key={f.name} className="flex items-baseline gap-3">
+              <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-[3px] bg-accent-500" />
+              <span>
+                <span className="font-semibold text-zinc-900">{f.name}</span>
+                <span className="text-zinc-500"> — {f.line}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
       </section>
     </div>
   );

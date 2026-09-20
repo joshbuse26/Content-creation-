@@ -53,27 +53,18 @@ export function SiteNav() {
 
 export function SiteFooter() {
   return (
-    <footer className="border-t border-zinc-200 py-10 dark:border-zinc-800">
-      <div className="mx-auto flex max-w-5xl flex-col items-start justify-between gap-4 px-6 text-sm text-zinc-500 sm:flex-row dark:text-zinc-400">
-        <div>
-          <Wordmark className="text-base" />
-          <p className="mt-1 text-xs">Scripts your audience actually finishes.</p>
-        </div>
-        <nav className="flex gap-6">
-          <Link href="/tools" className="hover:text-zinc-900 dark:hover:text-zinc-100">
-            Free tools
-          </Link>
-          <Link href="/privacy" className="hover:text-zinc-900 dark:hover:text-zinc-100">
-            Privacy
-          </Link>
-          <Link href="/terms" className="hover:text-zinc-900 dark:hover:text-zinc-100">
-            Terms
-          </Link>
-          <Link href="/login" className="hover:text-zinc-900 dark:hover:text-zinc-100">
-            Sign in
-          </Link>
-        </nav>
-      </div>
+    <footer className="border-t border-zinc-200 py-8">
+      <nav className="mx-auto flex max-w-4xl gap-6 px-6 text-sm text-zinc-500">
+        <Link href="/terms" className="hover:text-zinc-900">
+          Terms
+        </Link>
+        <Link href="/privacy" className="hover:text-zinc-900">
+          Privacy
+        </Link>
+        <Link href="/login" className="hover:text-zinc-900">
+          Sign in
+        </Link>
+      </nav>
     </footer>
   );
 }
