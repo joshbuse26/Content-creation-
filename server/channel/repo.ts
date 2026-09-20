@@ -5,9 +5,11 @@ import {
   audienceAvatarSchema,
   channelSchema,
   channelStatsSnapshotSchema,
+  channelVideoSchema,
   type AudienceAvatar,
   type Channel,
   type ChannelStatsSnapshot,
+  type ChannelVideo,
 } from "@/lib/types/entities";
 import type { ChannelMode, Sophistication, SyncStatus } from "@/lib/types/enums";
 import {
@@ -66,6 +68,9 @@ export interface NewSnapshotData {
   medianViews90d: number;
 }
 
+/** A creator-owned upload as the sync pipeline sees it (Data API fields). */
+export type ChannelVideoUpsert = Omit<ChannelVideo, "workspaceId" | "channelId" | "capturedAt">;
+
 export interface ChannelRepo {
   list(workspaceId: WorkspaceId): Promise<Channel[]>;
   get(workspaceId: WorkspaceId, channelId: ChannelId): Promise<Channel | null>;
@@ -83,6 +88,21 @@ export interface ChannelRepo {
     channelId: ChannelId,
   ): Promise<ChannelStatsSnapshot | null>;
   insertSnapshot(data: NewSnapshotData): Promise<ChannelStatsSnapshot>;
+  /** Snapshots for a channel, newest first (bounded) — Intel's period deltas. */
+  listSnapshots(
+    workspaceId: WorkspaceId,
+    channelId: ChannelId,
+    limit: number,
+  ): Promise<ChannelStatsSnapshot[]>;
+  /** Replace-or-insert the channel's own uploads (keyed on channel + video). */
+  upsertChannelVideos(
+    workspaceId: WorkspaceId,
+    channelId: ChannelId,
+    videos: readonly ChannelVideoUpsert[],
+    capturedAt: Date,
+  ): Promise<void>;
+  /** The channel's own uploads, newest first. */
+  listChannelVideos(workspaceId: WorkspaceId, channelId: ChannelId): Promise<ChannelVideo[]>;
   /** All channels across workspaces — worker-only (nightly sweep fan-out). */
   listAllForSweep(): Promise<Channel[]>;
   /**
@@ -331,6 +351,94 @@ export class DrizzleChannelRepo implements ChannelRepo {
     return rowToSnapshot(row);
   }
 
+  async listSnapshots(
+    workspaceId: WorkspaceId,
+    channelId: ChannelId,
+    limit: number,
+  ): Promise<ChannelStatsSnapshot[]> {
+    const rows = await getDb()
+      .select()
+      .from(schema.channelStatsSnapshots)
+      .where(
+        and(
+          eq(schema.channelStatsSnapshots.workspaceId, workspaceId),
+          eq(schema.channelStatsSnapshots.channelId, channelId),
+        ),
+      )
+      .orderBy(desc(schema.channelStatsSnapshots.capturedAt))
+      .limit(limit);
+    return rows.map(rowToSnapshot);
+  }
+
+  async upsertChannelVideos(
+    workspaceId: WorkspaceId,
+    channelId: ChannelId,
+    videos: readonly ChannelVideoUpsert[],
+    capturedAt: Date,
+  ): Promise<void> {
+    if (videos.length === 0) return;
+    const db = getDb();
+    for (const v of videos) {
+      await db
+        .insert(schema.channelVideos)
+        .values({
+          workspaceId,
+          channelId,
+          youtubeVideoId: v.youtubeVideoId,
+          title: v.title,
+          thumbnailUrl: v.thumbnailUrl,
+          publishedAt: v.publishedAt,
+          durationSeconds: v.durationSeconds,
+          viewCount: v.viewCount,
+          likeCount: v.likeCount,
+          commentCount: v.commentCount,
+          capturedAt,
+        })
+        .onConflictDoUpdate({
+          target: [schema.channelVideos.channelId, schema.channelVideos.youtubeVideoId],
+          set: {
+            title: v.title,
+            thumbnailUrl: v.thumbnailUrl,
+            publishedAt: v.publishedAt,
+            durationSeconds: v.durationSeconds,
+            viewCount: v.viewCount,
+            likeCount: v.likeCount,
+            commentCount: v.commentCount,
+            capturedAt,
+            updatedAt: new Date(),
+          },
+        });
+    }
+  }
+
+  async listChannelVideos(workspaceId: WorkspaceId, channelId: ChannelId): Promise<ChannelVideo[]> {
+    const rows = await getDb()
+      .select()
+      .from(schema.channelVideos)
+      .where(
+        and(
+          eq(schema.channelVideos.workspaceId, workspaceId),
+          eq(schema.channelVideos.channelId, channelId),
+        ),
+      )
+      .orderBy(desc(schema.channelVideos.publishedAt));
+    return rows.map((row) =>
+      channelVideoSchema.parse({
+        workspaceId: row.workspaceId,
+        channelId: row.channelId,
+        youtubeVideoId: row.youtubeVideoId,
+        title: row.title,
+        thumbnailUrl: row.thumbnailUrl,
+        publishedAt: row.publishedAt,
+        durationSeconds: row.durationSeconds,
+        viewCount: row.viewCount,
+        likeCount: row.likeCount,
+        commentCount: row.commentCount,
+        capturedAt: row.capturedAt,
+      }),
+    );
+  }
+
   async listAllForSweep(): Promise<Channel[]> {
     const rows = await getDb().select().from(schema.channels).orderBy(schema.channels.createdAt);
     return rows.map(rowToChannel);
@@ -476,6 +584,8 @@ interface MemChannel {
 export class InMemoryChannelStore implements ChannelRepo, TrackingRepo {
   private channels = new Map<string, MemChannel>();
   private snapshots: ChannelStatsSnapshot[] = [];
+  /** Keyed `${channelId}:${youtubeVideoId}`. */
+  private videos = new Map<string, ChannelVideo>();
   private avatars = new Map<string, AudienceAvatar>();
   public publishedProjects: PublishedProjectRef[] = [];
   public trackedVideos = new Map<string, TrackedVideoStats>();
@@ -570,6 +680,9 @@ export class InMemoryChannelStore implements ChannelRepo, TrackingRepo {
     }
     this.channels.delete(channelId);
     this.snapshots = this.snapshots.filter((s) => s.channelId !== channelId);
+    for (const key of this.videos.keys()) {
+      if (key.startsWith(`${channelId}:`)) this.videos.delete(key);
+    }
     this.avatars.delete(channelId);
     return Promise.resolve(true);
   }
@@ -596,6 +709,42 @@ export class InMemoryChannelStore implements ChannelRepo, TrackingRepo {
     });
     this.snapshots.push(snapshot);
     return Promise.resolve(snapshot);
+  }
+
+  listSnapshots(
+    workspaceId: WorkspaceId,
+    channelId: ChannelId,
+    limit: number,
+  ): Promise<ChannelStatsSnapshot[]> {
+    return Promise.resolve(
+      [...this.snapshots]
+        .filter((s) => s.workspaceId === workspaceId && s.channelId === channelId)
+        .sort((a, b) => b.capturedAt.getTime() - a.capturedAt.getTime())
+        .slice(0, limit),
+    );
+  }
+
+  upsertChannelVideos(
+    workspaceId: WorkspaceId,
+    channelId: ChannelId,
+    videos: readonly ChannelVideoUpsert[],
+    capturedAt: Date,
+  ): Promise<void> {
+    for (const v of videos) {
+      this.videos.set(
+        `${channelId}:${v.youtubeVideoId}`,
+        channelVideoSchema.parse({ ...v, workspaceId, channelId, capturedAt }),
+      );
+    }
+    return Promise.resolve();
+  }
+
+  listChannelVideos(workspaceId: WorkspaceId, channelId: ChannelId): Promise<ChannelVideo[]> {
+    return Promise.resolve(
+      [...this.videos.values()]
+        .filter((v) => v.workspaceId === workspaceId && v.channelId === channelId)
+        .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime()),
+    );
   }
 
   listAllForSweep(): Promise<Channel[]> {

@@ -58,6 +58,8 @@ export {
   defaultColorMood,
   defaultSubjectMode,
   deterministicBoardId,
+  parseReferenceImage,
+  REFERENCE_STRENGTH,
   runConceptTweak,
   runThumbnailBoard,
   ThumbnailImageError,

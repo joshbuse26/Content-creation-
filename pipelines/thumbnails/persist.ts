@@ -29,6 +29,8 @@ export interface NewThumbnailConcept {
   presetId?: string | null;
   subjectMode?: string | null;
   colorMood?: string | null;
+  brief?: string | null;
+  referenceImageKey?: string | null;
   sort?: number;
 }
 
@@ -41,6 +43,9 @@ export interface ThumbnailConceptTweak {
   presetId: string | null;
   subjectMode: SubjectMode | null;
   colorMood: string | null;
+  /** Omitted = unchanged; null = cleared. */
+  brief?: string | null;
+  referenceImageKey?: string | null;
 }
 
 /** A board is a batch of sibling concepts sharing one board_id. */
@@ -78,6 +83,8 @@ function memoryInsert(args: NewThumbnailConcept): ThumbnailConcept {
     presetId: args.presetId ?? null,
     subjectMode: args.subjectMode ?? null,
     colorMood: args.colorMood ?? null,
+    brief: args.brief ?? null,
+    referenceImageKey: args.referenceImageKey ?? null,
     favorited: false,
     sort: args.sort ?? 0,
     createdAt: now,
@@ -113,6 +120,8 @@ export async function insertThumbnailConcepts(
         presetId: a.presetId ?? null,
         subjectMode: a.subjectMode ?? null,
         colorMood: a.colorMood ?? null,
+        brief: a.brief ?? null,
+        referenceImageKey: a.referenceImageKey ?? null,
         sort: a.sort ?? 0,
       })),
     )
@@ -351,6 +360,8 @@ export async function applyThumbnailConceptTweak(
     target.presetId = tweak.presetId;
     target.subjectMode = tweak.subjectMode;
     target.colorMood = tweak.colorMood;
+    if (tweak.brief !== undefined) target.brief = tweak.brief;
+    if (tweak.referenceImageKey !== undefined) target.referenceImageKey = tweak.referenceImageKey;
     target.updatedAt = new Date();
     return { ...target };
   }
@@ -365,6 +376,10 @@ export async function applyThumbnailConceptTweak(
       presetId: tweak.presetId,
       subjectMode: tweak.subjectMode,
       colorMood: tweak.colorMood,
+      ...(tweak.brief !== undefined ? { brief: tweak.brief } : {}),
+      ...(tweak.referenceImageKey !== undefined
+        ? { referenceImageKey: tweak.referenceImageKey }
+        : {}),
     })
     .where(
       and(

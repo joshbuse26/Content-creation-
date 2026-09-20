@@ -257,6 +257,39 @@ export const channelStatsSnapshots = pgTable(
   ],
 );
 
+/**
+ * The creator's OWN uploads with their public stats, refreshed by every
+ * channel sync (Data API v3 fields only — no Analytics-API fields here). Keyed
+ * per (channel, video) so a workspace-scoped read is one indexed scan.
+ */
+export const channelVideos = pgTable(
+  "channel_videos",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    channelId: uuid("channel_id")
+      .notNull()
+      .references(() => channels.id, { onDelete: "cascade" }),
+    youtubeVideoId: text("youtube_video_id").notNull(),
+    title: text("title").notNull(),
+    thumbnailUrl: text("thumbnail_url"),
+    publishedAt: timestamp("published_at", { withTimezone: true }).notNull(),
+    durationSeconds: integer("duration_seconds").notNull(),
+    viewCount: integer("view_count").notNull(),
+    likeCount: integer("like_count"),
+    commentCount: integer("comment_count"),
+    capturedAt: timestamp("captured_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("channel_videos_channel_video_uq").on(t.channelId, t.youtubeVideoId),
+    index("channel_videos_workspace_idx").on(t.workspaceId),
+  ],
+);
+
 export const audienceAvatars = pgTable(
   "audience_avatars",
   {
@@ -709,6 +742,10 @@ export const thumbnailConcepts = pgTable(
     subjectMode: text("subject_mode"),
     /** Color mood label (see COLOR_MOODS; stored as text). */
     colorMood: text("color_mood"),
+    /** Free-text creative brief folded into the prompt (Wave I). */
+    brief: text("brief"),
+    /** Object-storage key of the user's reference image (Wave I); never a URL. */
+    referenceImageKey: text("reference_image_key"),
     favorited: boolean("favorited").notNull().default(false),
     sort: integer("sort").notNull().default(0),
     createdAt: createdAt(),

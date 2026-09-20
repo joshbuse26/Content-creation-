@@ -214,6 +214,8 @@ describe("router mapping", () => {
             preset: null,
             subject: null,
             mood: null,
+            brief: null,
+            referenceImage: null,
           },
         }),
       ).rejects.toSatisfy(

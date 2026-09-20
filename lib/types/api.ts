@@ -77,6 +77,16 @@ import {
   qualityGateReportSchema,
   topicCandidateSchema,
 } from "./pipeline";
+import { intelOverviewSchema } from "@/lib/intel/stats";
+
+/**
+ * A thumbnail reference image: PNG/JPEG/WebP data URL, ≤ ~2.8MB encoded
+ * (2MB of pixels). The client sizes it to 1280×720 before sending.
+ */
+const thumbnailReferenceImageSchema = z
+  .string()
+  .max(2_800_000)
+  .regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/, "must be an image data URL");
 
 /**
  * Router input/output contracts — FROZEN LAYER.
@@ -156,6 +166,14 @@ export const channelContracts = {
   get: {
     input: workspaceScopedSchema.extend({ channelId: channelIdSchema }),
     output: channelSchema.extend({ latestSnapshot: channelStatsSnapshotSchema.nullable() }),
+  },
+  /**
+   * Intel: the creator's OWN channel stats in plain English, derived purely
+   * from synced uploads + snapshots (lib/intel/stats.ts). Never a niche feed.
+   */
+  stats: {
+    input: workspaceScopedSchema.extend({ channelId: channelIdSchema }),
+    output: intelOverviewSchema,
   },
   /** OAuth connect begins at /api/auth (Google); public mode connects by URL/handle. */
   connectPublic: {
@@ -754,6 +772,10 @@ export const thumbnailsContracts = {
       preset: z.string().min(1).max(60).nullable().default(null),
       subject: subjectModeSchema.nullable().default(null),
       mood: colorMoodSchema.nullable().default(null),
+      /** Free-text creative brief ("45 sec educational video, photo of him"). */
+      brief: z.string().max(300).nullable().default(null),
+      /** One reference image (face / example frame) as a bounded image data URL. */
+      referenceImage: thumbnailReferenceImageSchema.nullable().default(null),
     }),
     output: z.object({
       boardId: z.uuid(),
@@ -772,6 +794,9 @@ export const thumbnailsContracts = {
       preset: z.string().min(1).max(60).nullable().optional(),
       subject: subjectModeSchema.nullable().optional(),
       mood: colorMoodSchema.nullable().optional(),
+      brief: z.string().max(300).nullable().optional(),
+      /** Omitted = keep the concept's reference; null = drop it; string = replace. */
+      referenceImage: thumbnailReferenceImageSchema.nullable().optional(),
     }),
     output: thumbnailConceptSchema,
   },

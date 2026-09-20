@@ -1,4 +1,4 @@
-import type { AvatarFieldsPatch } from "@/server/channel/repo";
+import type { AvatarFieldsPatch, ChannelVideoUpsert } from "@/server/channel/repo";
 import type { UpsertNicheVideo } from "@/pipelines/ideation/store";
 import type { Sophistication } from "@/lib/types/enums";
 
@@ -224,41 +224,100 @@ export const DEMO_NICHE_VIDEOS: UpsertNicheVideo[] = DEMO_OUTLIER_SEEDS.map((see
  */
 interface DemoOwnVideo {
   youtubeVideoId: string;
+  title: string;
+  publishedDaysAgo: number;
+  durationSeconds: number;
+  viewCount: number;
+  likeCount: number;
+  commentCount: number;
   transcript: string;
 }
 
+/**
+ * Stats sit around the demo snapshot's 90-day median (24.5K) with two clear
+ * winners and one clear miss, so Intel's strong/weak calls have something
+ * honest to say. Like/comment rates are ordinary for a mid-size explainer.
+ */
 export const DEMO_OWN_VIDEOS: DemoOwnVideo[] = [
   {
     youtubeVideoId: "dmo_own_001",
+    title: "why your new phone feels fast (it is not the chip)",
+    publishedDaysAgo: 4,
+    durationSeconds: 9 * 60 + 40,
+    viewCount: 31_200,
+    likeCount: 1_480,
+    commentCount: 212,
     transcript:
       "here is the thing nobody says out loud about upgrading your phone. most of the speed you feel is not the chip, it is the software getting out of its own way. so today i want to show you what is actually happening when a device feels fast, and where your money really goes. same test, same apps, i run every one of them myself. and honestly, the first result already surprised me.",
   },
   {
     youtubeVideoId: "dmo_own_002",
+    title: "the one spec that does not matter (and the one that does)",
+    publishedDaysAgo: 11,
+    durationSeconds: 725,
+    viewCount: 58_900,
+    likeCount: 2_910,
+    commentCount: 388,
     transcript:
       "let me save you a bad purchase. the spec that gets the most marketing is almost never the one you notice day to day. i learned that the expensive way. so we are going to line these two up, keep everything else equal, and just watch what changes. no hype, no sponsor, just the numbers and my honest reaction when they came in.",
   },
   {
     youtubeVideoId: "dmo_own_003",
+    title: "the setting that doubles your battery life",
+    publishedDaysAgo: 19,
+    durationSeconds: 290,
+    viewCount: 86_400,
+    likeCount: 5_120,
+    commentCount: 641,
     transcript:
       "quick one today, but it might be the most useful thing i show you all month. there is a single setting buried three menus deep that quietly doubles how long your battery lasts. i will explain why it works, not just tell you to flip it, because once you understand the reason you will never forget it.",
   },
   {
     youtubeVideoId: "dmo_own_004",
+    title: "i spent more here and regretted it",
+    publishedDaysAgo: 33,
+    durationSeconds: 680,
+    viewCount: 17_300,
+    likeCount: 690,
+    commentCount: 97,
     transcript:
       "everyone told me to spend more here, so i did, and it was a mistake. today i want to walk you through why, because the story is more interesting than the price tag. we will start with the claim everyone repeats, then i will show you the test that quietly proves it backwards.",
   },
   {
     youtubeVideoId: "dmo_own_005",
+    title: "how a screen shows a billion colors with three",
+    publishedDaysAgo: 47,
+    durationSeconds: 850,
+    viewCount: 24_800,
+    likeCount: 1_130,
+    commentCount: 154,
     transcript:
       "so you asked for this one a lot. how does a screen actually show a billion colors when it only has three. the short answer is clever math and your own eyes doing half the work. the long answer is way more fun, so grab a coffee, and let me show you the part that finally made it click for me.",
   },
   {
     youtubeVideoId: "dmo_own_006",
+    title: "my whole desk setup under a strict budget",
+    publishedDaysAgo: 62,
+    durationSeconds: 990,
+    viewCount: 9_600,
+    likeCount: 410,
+    commentCount: 58,
     transcript:
       "budget builds live or die on one decision, and it is not the one the ads point at. i rebuilt my whole desk setup under a strict limit, and the thing that mattered most cost the least. let me show you where to spend, where to save, and the one corner you should never cut.",
   },
 ];
+
+/** The demo channel's own uploads as channel_videos rows (Intel own-stats). */
+export const DEMO_OWN_VIDEO_STATS: ChannelVideoUpsert[] = DEMO_OWN_VIDEOS.map((v) => ({
+  youtubeVideoId: v.youtubeVideoId,
+  title: v.title,
+  thumbnailUrl: `https://i.ytimg.com/vi/${v.youtubeVideoId}/hqdefault.jpg`,
+  publishedAt: daysAgo(v.publishedDaysAgo),
+  durationSeconds: v.durationSeconds,
+  viewCount: v.viewCount,
+  likeCount: v.likeCount,
+  commentCount: v.commentCount,
+}));
 
 /** Video ids of the demo channel's own uploads (train sampling order). */
 export const DEMO_OWN_VIDEO_IDS: string[] = DEMO_OWN_VIDEOS.map((v) => v.youtubeVideoId);

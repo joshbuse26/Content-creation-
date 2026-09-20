@@ -119,7 +119,7 @@ describe("A — no charge copy on product CTAs", () => {
 // ---------------------------------------------------------------------------
 
 describe("B — Ideas is a Tools card, not a section", () => {
-  it("the rail has no Ideas section; the Tools grid has an Ideas card that opens the Coach", () => {
+  it("the rail has no Ideas section; the Tools grid has an Ideas card with its own screen", () => {
     expect(APP_NAV.map((s) => s.label)).toEqual([
       "Coach",
       "Intel",
@@ -129,13 +129,14 @@ describe("B — Ideas is a Tools card, not a section", () => {
       "Settings",
     ]);
     const ideas = TOOLKIT_TOOLS.find((t) => t.slug === "ideas");
-    expect(ideas?.href.startsWith(`${APP_HOME}?${COACH_PROMPT_PARAM}=`)).toBe(true);
+    expect(ideas?.href).toBe("/toolkit/ideas");
   });
 
-  it("writing tools open the Coach with a starter; only Thumbnail Studio and Intel are their own screens", () => {
+  it("writing tools open the Coach with a starter; Ideas, Thumbnail Studio and Intel are their own screens", () => {
     const own = TOOLKIT_TOOLS.filter((t) => !t.href.startsWith(`${APP_HOME}?`));
-    expect(own.map((t) => t.slug).sort()).toEqual(["intel", "thumbnails"]);
+    expect(own.map((t) => t.slug).sort()).toEqual(["ideas", "intel", "thumbnails"]);
     expect(own.find((t) => t.slug === "thumbnails")?.href).toBe("/toolkit/thumbnails");
+    expect(own.find((t) => t.slug === "intel")?.href).toBe("/discover");
   });
 
   it("coachLaunchHref round-trips the prompt through the query string", () => {

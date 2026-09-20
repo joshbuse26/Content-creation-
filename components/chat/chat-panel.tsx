@@ -245,7 +245,7 @@ function CoachEmptyState({
           <IconPlus size={14} /> Start a conversation
         </Button>
         <Link
-          href="/discover"
+          href="/toolkit/ideas"
           className="inline-flex items-center gap-1 text-sm font-medium text-accent-700 hover:underline dark:text-accent-400"
         >
           <IconSearch size={13} /> Browse trending ideas
@@ -286,7 +286,7 @@ function ThreadSidebar({
         <IconPlus size={13} /> New chat
       </Button>
       <Link
-        href="/discover"
+        href="/toolkit/ideas"
         className="inline-flex w-full items-center gap-1.5 rounded-md px-2.5 py-2 text-sm font-medium text-accent-700 transition-colors hover:bg-accent-50 dark:text-accent-400 dark:hover:bg-accent-950/40"
       >
         <IconSearch size={13} /> Trending ideas

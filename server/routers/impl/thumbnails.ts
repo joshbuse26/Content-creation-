@@ -141,6 +141,8 @@ export const thumbnailsImpl = {
         presetId: input.preset,
         subjectMode: input.subject,
         colorMood: input.mood,
+        brief: input.brief,
+        referenceImage: input.referenceImage,
       });
     } catch (err) {
       asTRPCError(err);
@@ -165,6 +167,8 @@ export const thumbnailsImpl = {
         presetId: input.preset,
         subjectMode: input.subject,
         colorMood: input.mood,
+        brief: input.brief,
+        referenceImage: input.referenceImage,
       });
     } catch (err) {
       asTRPCError(err);

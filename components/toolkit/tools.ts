@@ -42,9 +42,9 @@ export const TOOLKIT_TOOLS: readonly ToolkitTool[] = [
   {
     slug: "ideas",
     title: "Ideas",
-    blurb: "Fresh, evidence-backed video ideas for your channel.",
-    href: coachLaunchHref("Give me 5 fresh video ideas for my channel, with the angle for each."),
-    opens: COACH,
+    blurb: "Concepts mined from your niche's outliers, with live demand.",
+    href: "/toolkit/ideas",
+    opens: "Ideas",
   },
   {
     slug: "research",
@@ -69,8 +69,8 @@ export const TOOLKIT_TOOLS: readonly ToolkitTool[] = [
   },
   {
     slug: "intel",
-    title: "Outlier Intel",
-    blurb: "Videos beating their channel's baseline, by niche.",
+    title: "My channel stats",
+    blurb: "Your uploads, subscribers and what's working — in plain English.",
     href: "/discover",
     opens: "Intel",
   },

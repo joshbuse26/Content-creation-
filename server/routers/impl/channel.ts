@@ -12,6 +12,7 @@ import {
   DEMO_CHANNEL,
   DEMO_NICHE_VIDEOS,
   DEMO_SNAPSHOT,
+  DEMO_OWN_VIDEO_STATS,
 } from "@/lib/fixtures/demo";
 import { assertChannelLimit, getBillingStore } from "@/server/billing";
 import { getChannelDomainDeps, type ChannelDomainDeps } from "@/server/channel/deps";
@@ -20,6 +21,7 @@ import { InvalidChannelRefError, parseChannelRef } from "@/server/channel/parse"
 import { getIdeationStore, type IdeationStore } from "@/pipelines/ideation/store";
 import { getEngineStore, InMemoryEngineStore } from "@/pipelines/script/store";
 import { QuotaExceededError } from "@/pipelines/sync/quota";
+import { buildIntelOverview, type IntelOverview } from "@/lib/intel/stats";
 
 /**
  * REAL channel router handlers (A1) — implement the frozen contracts in
@@ -44,6 +46,9 @@ export interface WorkspaceHandlerCtx {
 
 type In<K extends keyof typeof channelContracts> = z.output<(typeof channelContracts)[K]["input"]>;
 
+/** Enough snapshots for a 30-day delta at one sync per night, with slack. */
+const INTEL_SNAPSHOT_LIMIT = 60;
+
 export interface ChannelHandlerDeps {
   getDeps(): Promise<ChannelDomainDeps>;
   getEnqueuer(): SyncEnqueuer;
@@ -61,6 +66,8 @@ export interface ChannelHandlerDeps {
    * defaults to the shared engine store.
    */
   seedEngineAvatar?(avatar: AudienceAvatar): void;
+  /** Clock for Intel derivations (deterministic in tests). Defaults to Date. */
+  now?(): Date;
 }
 
 function defaultSeedEngineAvatar(avatar: AudienceAvatar): void {
@@ -99,6 +106,23 @@ export function createChannelHandlers(handlerDeps: ChannelHandlerDeps = defaultH
         opts.input.channelId,
       );
       return { ...channel, latestSnapshot };
+    },
+
+    async stats(opts: { ctx: WorkspaceHandlerCtx; input: In<"stats"> }): Promise<IntelOverview> {
+      const { channelRepo } = await handlerDeps.getDeps();
+      const ws = opts.ctx.workspaceId;
+      const channel = await channelRepo.get(ws, opts.input.channelId);
+      if (channel === null) throw notFound();
+      const [videos, snapshots] = await Promise.all([
+        channelRepo.listChannelVideos(ws, channel.id),
+        channelRepo.listSnapshots(ws, channel.id, INTEL_SNAPSHOT_LIMIT),
+      ]);
+      return buildIntelOverview({
+        channel,
+        videos,
+        snapshots,
+        now: handlerDeps.now?.() ?? new Date(),
+      });
     },
 
     async connectPublic(opts: {
@@ -230,6 +254,10 @@ export function createChannelHandlers(handlerDeps: ChannelHandlerDeps = defaultH
           medianViews90d: DEMO_SNAPSHOT.medianViews90d,
         });
       }
+
+      // The demo's own uploads with stats — Intel's own-channel dashboard.
+      // Upsert is idempotent on (channel, video).
+      await channelRepo.upsertChannelVideos(ws, channel.id, DEMO_OWN_VIDEO_STATS, new Date());
 
       // Audience avatar — upsert is idempotent on (workspace, channel).
       const avatar = await avatarRepo.upsert(ws, channel.id, DEMO_AVATAR_FIELDS, {

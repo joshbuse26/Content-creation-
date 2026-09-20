@@ -6,7 +6,7 @@ import type { ColorMood, SubjectMode } from "@/lib/types/enums";
 import type { ProjectId, WorkspaceId } from "@/lib/types/ids";
 import { loadPackagingContext, type PackagingContext } from "@/pipelines/packaging/context";
 import { hashInput, PipelineRunner, type PipelineResult } from "@/queue/pipeline-runner";
-import { thumbnailImageKey } from "@/server/storage";
+import { thumbnailImageKey, thumbnailReferenceKey } from "@/server/storage";
 import { COMPOSITION_PATTERN_IDS, compositionPatternNote } from "./patterns";
 import {
   applyThumbnailConceptTweak,
@@ -44,7 +44,16 @@ import { defaultFetchBytes, type ThumbnailPipelineDeps } from "./pipeline";
  * reference to, or reproduction of, any real video's or creator's thumbnail.
  */
 
-export const BOARD_PROMPT_VERSION = "tb-v1";
+export const BOARD_PROMPT_VERSION = "tb-v2";
+/**
+ * How far the prompt may depart from a user's reference image (image-to-
+ * image strength). 0.7 keeps the reference's framing and subject while the
+ * prompt restyles it into a thumbnail; lower = closer to the photo.
+ */
+export const REFERENCE_STRENGTH = 0.7;
+/** Reference images travel as data URLs; the client sizes them to 1280×720. */
+export const REFERENCE_MAX_BYTES = 2 * 1024 * 1024;
+export const REFERENCE_DATA_URL_RE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/;
 /** 1 credit per concept image — the existing per-image rate (spec §7). */
 export const BOARD_PER_IMAGE_CREDIT = 1;
 export const BOARD_MIN_COUNT = 3;
@@ -56,6 +65,40 @@ export interface BoardConceptParams {
   presetId: string | null;
   subjectMode: SubjectMode | null;
   colorMood: ColorMood | null;
+  /** Free-text creative brief ("45 sec educational video, photo of him"). */
+  brief: string | null;
+  /** Content hash of the reference image, so a new reference is new work. */
+  referenceHash: string | null;
+}
+
+const REFERENCE_CONTENT_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
+
+/** A user-supplied reference image, decoded once per request. */
+export interface ReferenceImage {
+  dataUrl: string;
+  bytes: Uint8Array;
+  contentType: (typeof REFERENCE_CONTENT_TYPES)[number];
+  hash: string;
+}
+
+/**
+ * Parse a reference data URL (bounded, image-only) into bytes + a content
+ * hash. Throws a plain Error on a malformed or oversized payload — the
+ * contract's zod schema rejects most of this earlier; this is the last line.
+ */
+export function parseReferenceImage(dataUrl: string): ReferenceImage {
+  const match = REFERENCE_DATA_URL_RE.exec(dataUrl);
+  if (match === null) throw new Error("reference image must be a PNG, JPEG or WebP data URL");
+  const contentType = `image/${match[1] ?? "png"}` as ReferenceImage["contentType"];
+  const bytes = Uint8Array.from(Buffer.from(dataUrl.slice(dataUrl.indexOf(",") + 1), "base64"));
+  if (bytes.byteLength === 0 || bytes.byteLength > REFERENCE_MAX_BYTES) {
+    throw new Error("reference image must be between 1 byte and 2MB");
+  }
+  return { dataUrl, bytes, contentType, hash: hashInput({ reference: dataUrl }) };
+}
+
+function referenceExt(contentType: ReferenceImage["contentType"]): "png" | "jpg" | "webp" {
+  return contentType === "image/png" ? "png" : contentType === "image/jpeg" ? "jpg" : "webp";
 }
 
 export interface GenerateBoardParams {
@@ -74,6 +117,10 @@ export interface GenerateBoardParams {
   subjectMode?: SubjectMode | null;
   /** Base color mood; null → derived from the resolved preset's palette. */
   colorMood?: ColorMood | null;
+  /** Creative brief shared by every concept on the board. */
+  brief?: string | null;
+  /** Reference image data URL shared by every concept on the board. */
+  referenceImage?: string | null;
 }
 
 export interface TweakConceptParams {
@@ -86,6 +133,12 @@ export interface TweakConceptParams {
   presetId?: string | null;
   subjectMode?: SubjectMode | null;
   colorMood?: ColorMood | null;
+  brief?: string | null;
+  /**
+   * A new reference data URL, `null` to drop the concept's reference, or
+   * undefined to keep using the one the concept was generated with.
+   */
+  referenceImage?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -200,13 +253,23 @@ export function buildBoardConceptPrompt(
           `- Faces: ${faceRequirementNote(preset.face)}`,
         ]),
     ...(overlayText === null ? [] : [`Overlay text (verbatim, nothing else): "${overlayText}"`]),
+    ...(params.brief === null || params.brief.trim() === ""
+      ? []
+      : [`Creator's brief: ${params.brief.trim()}`]),
+    ...(params.referenceHash === null
+      ? []
+      : [
+          "A reference image is provided: keep its subject, framing and the person in it; restyle it into the thumbnail described above.",
+        ]),
     "",
     "Production constraints:",
     "- One dominant focal point; crop tighter than feels comfortable.",
     "- High contrast, saturated but not neon; must stay legible at 168px wide.",
     `- At most ${String(maxOverlayWords)} word${maxOverlayWords === 1 ? "" : "s"} of overlay text, heavy sans-serif, strong contrast against the background.`,
     "- No logos, no watermarks, no brand marks, no channel names.",
-    "- No real people's likenesses and no reproduction of any real creator's thumbnail.",
+    params.referenceHash === null
+      ? "- No real people's likenesses and no reproduction of any real creator's thumbnail."
+      : "- No real people other than the one in the reference image; no reproduction of any real creator's thumbnail.",
     `[${BOARD_PROMPT_VERSION}]`,
   ];
   return lines.join("\n");
@@ -227,6 +290,8 @@ export function conceptInputHash(
     presetId: params.presetId ?? null,
     subjectMode: params.subjectMode ?? null,
     colorMood: params.colorMood ?? null,
+    brief: params.brief ?? null,
+    referenceHash: params.referenceHash ?? null,
   });
 }
 
@@ -275,6 +340,7 @@ async function generateConceptImage(
     preset: ThumbnailPreset | null;
     actorUserId: string | null;
     creditExempt?: boolean;
+    reference: ReferenceImage | null;
   },
 ): Promise<ConceptGenResult> {
   const loadContext = deps.loadContext ?? loadPackagingContext;
@@ -291,7 +357,15 @@ async function generateConceptImage(
   const stageBodies: Record<string, () => Promise<void>> = {
     build_prompt: () => Promise.resolve(),
     generate_images: async () => {
-      const images = await deps.image.generate({ prompt, width: 1280, height: 720, count: 1 });
+      const images = await deps.image.generate({
+        prompt,
+        width: 1280,
+        height: 720,
+        count: 1,
+        ...(args.reference === null
+          ? {}
+          : { reference: { dataUrl: args.reference.dataUrl, strength: REFERENCE_STRENGTH } }),
+      });
       const img = images[0];
       if (img === undefined) throw new Error("image provider returned no images");
       let bytes = conceptImageBytes(img);
@@ -369,6 +443,13 @@ export async function runThumbnailBoard(
   const overlayText = params.overlayText ?? null;
   const subjectMode = params.subjectMode ?? null;
   const colorMood = params.colorMood ?? null;
+  const brief = params.brief?.trim() === "" ? null : (params.brief ?? null);
+  const reference = await storeReference(
+    deps,
+    params.workspaceId,
+    params.projectId,
+    params.referenceImage ?? null,
+  );
 
   const boardId = deterministicBoardId(
     JSON.stringify({
@@ -380,6 +461,8 @@ export async function runThumbnailBoard(
       overlayText,
       subjectMode,
       colorMood,
+      brief,
+      referenceHash: reference?.image.hash ?? null,
     }),
   );
 
@@ -398,6 +481,8 @@ export async function runThumbnailBoard(
         presetId,
         subjectMode,
         colorMood,
+        brief,
+        referenceHash: reference?.image.hash ?? null,
       };
       const gen = await generateConceptImage(deps, {
         workspaceId: params.workspaceId,
@@ -406,6 +491,7 @@ export async function runThumbnailBoard(
         preset,
         actorUserId: params.actorUserId,
         creditExempt: params.creditExempt,
+        reference: reference?.image ?? null,
       });
       if (gen.status !== "done") {
         failures.push(gen.error ?? "unknown error");
@@ -422,6 +508,8 @@ export async function runThumbnailBoard(
         presetId,
         subjectMode,
         colorMood,
+        brief,
+        referenceImageKey: reference?.key ?? null,
         sort: i,
       });
     }),
@@ -456,6 +544,12 @@ export async function runConceptTweak(
   // Merge tweaks over the concept's current params.
   const presetKey = params.presetId !== undefined ? params.presetId : concept.presetId;
   const preset = presetKey !== null ? (getArchetypeSeed(presetKey)?.thumbnailPreset ?? null) : null;
+  // The reference: a new one, explicitly dropped, or the concept's own
+  // (re-read from storage so a regenerate keeps following the same photo).
+  const reference =
+    params.referenceImage !== undefined
+      ? await storeReference(deps, params.workspaceId, concept.projectId, params.referenceImage)
+      : await loadStoredReference(deps, concept.referenceImageKey);
   const merged: BoardConceptParams = {
     compositionPattern: params.compositionPattern ?? concept.compositionPattern,
     overlayText: params.overlayText !== undefined ? params.overlayText : concept.overlayText,
@@ -463,6 +557,8 @@ export async function runConceptTweak(
     subjectMode: params.subjectMode !== undefined ? params.subjectMode : concept.subjectMode,
     colorMood:
       params.colorMood !== undefined ? params.colorMood : (concept.colorMood as ColorMood | null),
+    brief: params.brief !== undefined ? params.brief : concept.brief,
+    referenceHash: reference?.image.hash ?? null,
   };
 
   const gen = await generateConceptImage(deps, {
@@ -472,6 +568,7 @@ export async function runConceptTweak(
     preset,
     actorUserId: params.actorUserId,
     creditExempt: params.creditExempt,
+    reference: reference?.image ?? null,
   });
   if (gen.status !== "done") throw new ThumbnailImageError(gen.error ?? "unknown error");
 
@@ -483,5 +580,49 @@ export async function runConceptTweak(
     presetId: merged.presetId,
     subjectMode: merged.subjectMode,
     colorMood: merged.colorMood,
+    brief: merged.brief,
+    referenceImageKey: reference?.key ?? null,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Reference image storage
+// ---------------------------------------------------------------------------
+
+interface StoredReference {
+  image: ReferenceImage;
+  key: string;
+}
+
+/** Persist a reference (content-addressed, idempotent) so tweaks can reuse it. */
+async function storeReference(
+  deps: ThumbnailPipelineDeps,
+  workspaceId: WorkspaceId,
+  projectId: ProjectId,
+  dataUrl: string | null,
+): Promise<StoredReference | null> {
+  if (dataUrl === null) return null;
+  const image = parseReferenceImage(dataUrl);
+  const key = thumbnailReferenceKey(
+    workspaceId,
+    projectId,
+    image.hash,
+    referenceExt(image.contentType),
+  );
+  await deps.storage.put(key, image.bytes, image.contentType);
+  return { image, key };
+}
+
+/** Re-read a concept's stored reference; null when it has none or it is gone. */
+async function loadStoredReference(
+  deps: ThumbnailPipelineDeps,
+  key: string | null,
+): Promise<StoredReference | null> {
+  if (key === null) return null;
+  const stored = await deps.storage.get(key);
+  if (stored === null) return null;
+  const contentType = REFERENCE_CONTENT_TYPES.find((t) => t === stored.contentType);
+  if (contentType === undefined) return null;
+  const dataUrl = `data:${contentType};base64,${Buffer.from(stored.data).toString("base64")}`;
+  return { image: parseReferenceImage(dataUrl), key };
 }

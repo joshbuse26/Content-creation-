@@ -387,6 +387,8 @@ describe("thumbnails impl — credit gate + tenancy (zero env)", () => {
           preset: null,
           subject: null,
           mood: null,
+          brief: null,
+          referenceImage: null,
         },
       }),
     ).rejects.toSatisfy(
@@ -432,6 +434,8 @@ describe("thumbnails impl — credit gate + tenancy (zero env)", () => {
           preset: null,
           subject: null,
           mood: null,
+          brief: null,
+          referenceImage: null,
         },
       }),
     ).rejects.toSatisfy((err: unknown) => err instanceof TRPCError && err.code === "NOT_FOUND");
@@ -451,6 +455,8 @@ describe("thumbnails impl — credit gate + tenancy (zero env)", () => {
         preset: null,
         subject: null,
         mood: null,
+        brief: null,
+        referenceImage: null,
       },
     });
     expect(board.concepts).toHaveLength(3);

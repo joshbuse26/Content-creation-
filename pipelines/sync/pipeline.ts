@@ -130,6 +130,29 @@ function buildSyncPipeline(deps: SyncDeps, ctx: SyncRunContext): PipelineDefinit
       const capturedAt = now();
       const medianViews90d = computeMedianViews90d(videos, capturedAt);
       ctx.snapshotMedian = medianViews90d;
+      // The creator's own uploads, for Intel (own-channel stats). Same fetch,
+      // now persisted; invalid publish dates are dropped rather than faked.
+      await deps.channelRepo.upsertChannelVideos(
+        input.workspaceId,
+        input.channelId,
+        videos.flatMap((v) => {
+          const publishedAt = new Date(v.publishedAt);
+          if (Number.isNaN(publishedAt.getTime())) return [];
+          return [
+            {
+              youtubeVideoId: v.youtubeVideoId,
+              title: v.title,
+              thumbnailUrl: v.thumbnailUrl,
+              publishedAt,
+              durationSeconds: v.durationSeconds,
+              viewCount: v.viewCount,
+              likeCount: v.likeCount,
+              commentCount: v.commentCount,
+            },
+          ];
+        }),
+        capturedAt,
+      );
       await deps.channelRepo.insertSnapshot({
         workspaceId: input.workspaceId,
         channelId: input.channelId,

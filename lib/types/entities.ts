@@ -130,6 +130,26 @@ export const channelStatsSnapshotSchema = z.object({
 });
 export type ChannelStatsSnapshot = z.infer<typeof channelStatsSnapshotSchema>;
 
+/**
+ * One of the creator's OWN uploads with its public stats (YouTube Data API v3
+ * `videos.list` fields). Analytics-API metrics (watch time, CTR, AVD) are
+ * deliberately NOT here — see lib/intel/stats.ts for what is derivable.
+ */
+export const channelVideoSchema = z.object({
+  workspaceId: workspaceIdSchema,
+  channelId: channelIdSchema,
+  youtubeVideoId: z.string().min(1),
+  title: z.string(),
+  thumbnailUrl: z.string().nullable(),
+  publishedAt: z.date(),
+  durationSeconds: z.number().int().nonnegative(),
+  viewCount: z.number().int().nonnegative(),
+  likeCount: z.number().int().nonnegative().nullable(),
+  commentCount: z.number().int().nonnegative().nullable(),
+  capturedAt: z.date(),
+});
+export type ChannelVideo = z.infer<typeof channelVideoSchema>;
+
 export const avatarPainSchema = z.object({ pain: z.string(), evidence: z.string() });
 export const avatarMotivationSchema = z.object({ motivation: z.string(), evidence: z.string() });
 
@@ -622,6 +642,10 @@ export const thumbnailConceptSchema = z.object({
   subjectMode: subjectModeSchema.nullable().default(null),
   /** Color mood label (see COLOR_MOODS); stored free-text, null for legacy. */
   colorMood: z.string().nullable().default(null),
+  /** Creative brief the user typed for this board ("45s educational, photo of him"). */
+  brief: z.string().nullable().default(null),
+  /** Object-storage key of the reference image that guided this concept. */
+  referenceImageKey: z.string().nullable().default(null),
   /** Starred by the user; never charged. */
   favorited: z.boolean().default(false),
   /** Explicit order within a board (ascending); 0 for legacy rows. */

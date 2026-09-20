@@ -196,8 +196,8 @@ export function DiscoveryScreen() {
 
   const header = (
     <PageHeader
-      title="Intel"
-      subtitle="High-performing concepts and live demand for your niche — one click to start writing."
+      title="Ideas"
+      subtitle="Concepts mined from what's working in your niche, with live demand — one click to start writing."
       actions={
         channelId !== null ? (
           <Button

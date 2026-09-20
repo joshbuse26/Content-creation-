@@ -141,3 +141,54 @@ concepts, with and without an injected `fetchBytes`; provider/download failure �
 
 Storage reminder: without `S3_*` on web+worker, images live in the web process's memory and vanish
 on restart/redeploy. Fine for a look; set the bucket before keeping winners.
+
+---
+
+# Wave I — Intel = your own channel · Thumbnail references (2026-09-20)
+
+## Intel (`/discover`) is strictly the creator's own channel
+
+Headline sentence → three hero stats (subscribers + delta · median views / video · uploads last
+30 days) → lifetime views, like rate, comment rate → **What's working / What's not** in plain
+English → by-period and by-length breakdowns → the upload table (views, ×median, views/day, like
+rate, Strong / Typical / Weak / Too early) → an honest **Needs YouTube Analytics access** block.
+No concept cards, batches, niche chips or competitor compare on Intel any more — those are the
+**Ideas** tool (`/toolkit/ideas`; `/ideas` redirects there). Not connected → "Connect YouTube".
+
+### Data, honestly
+
+| Source                                              | Fields we use                                                                                                                           |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| YouTube Data API v3 (public `@handle`, demo, OAuth) | per video: views, likes, comments, duration, publish date, thumbnail · per channel: subscribers, lifetime views (snapshot per sync)     |
+| Derived (`lib/intel/stats.ts`, pure, unit-tested)   | median / avg views, ×median per video, views per day, like & comment rate, upload cadence, length bands, subs & views delta (snapshots) |
+| YouTube Analytics API — **not wired**               | watch time, average view duration, impressions, impressions CTR, subscribers gained per video → shown as N/A with the reason            |
+| Monetary (RPM / CPM / "CPA")                        | needs the monetary scope on a monetized channel → **not available; never invented**                                                     |
+
+Unlocking Analytics later = adding `yt-analytics.readonly` to the OAuth scope + an Analytics fetch
+in the sync pipeline; the overview schema already carries the `analytics` block to fill.
+
+### Migration 0013 — `channel_videos`
+
+The sync pipeline already fetched per-video stats but only persisted the snapshot; it now upserts
+the creator's uploads (keyed on channel + video) after `fetch_videos`. `channel.stats` reads them
+with the last 60 snapshots. `connectDemo` seeds six uploads for the demo channel.
+
+## Thumbnail Studio — reference image + brief
+
+On `/toolkit/thumbnails` (and the packaging stage): a **Brief** field ("45 sec educational video,
+photo of him") and a **drag-and-drop reference** (one PNG/JPEG/WebP — a face photo or an example
+frame). The browser frames it to 1280×720 (cover-crop, JPEG) before upload, so a 12MB phone photo
+becomes ~200KB and the output size matches.
+
+Server: the reference is stored content-addressed (`thumbnails/<ws>/<project>/refs/<hash>.<ext>`),
+its hash joins the concept input hash (a new reference is new work), the brief and a "keep the
+subject, framing and the person in the reference" line join the prompt, and the live provider runs
+**image-to-image** (`fal-ai/flux/dev/image-to-image`, `strength` = `REFERENCE_STRENGTH` 0.7).
+Tweak/regenerate re-reads the concept's stored reference unless a new one (or `null`) is sent.
+Wave H's download path is unchanged and re-tested with a reference present.
+
+Honesty note in the UI: the reference guides framing, subject and colours — it is not an identity
+match (FLUX img2img is not a face-ID model). Migration 0014 adds `brief` and `reference_image_key`
+to `thumbnail_concepts`.
+
+**Migrate: 0013 + 0014** (`pnpm db:migrate`), both additive.

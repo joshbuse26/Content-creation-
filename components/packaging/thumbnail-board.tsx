@@ -16,6 +16,7 @@ import { Field, Select, TextArea } from "@/components/ui/field";
 import { IconCheck, IconDownload, IconPencil, IconSparkle } from "@/components/ui/icons";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
 import { useToast } from "@/components/ui/toast";
+import { ReferenceDropzone } from "./reference-dropzone";
 
 const COUNT_OPTIONS = [3, 4, 5, 6] as const;
 
@@ -38,6 +39,10 @@ export interface BoardBaseParams {
   preset: string | null;
   subject: SubjectMode | null;
   mood: ColorMood | null;
+  /** Free-text creative brief, e.g. "45 sec educational video, photo of him". */
+  brief: string;
+  /** Framed reference image data URL (see ReferenceDropzone), or null. */
+  referenceImage: string | null;
 }
 
 export interface TweakValues {
@@ -350,6 +355,8 @@ export function ThumbnailBoard({ projectId }: { projectId: ProjectId }) {
     preset: null,
     subject: null,
     mood: null,
+    brief: "",
+    referenceImage: null,
   });
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [openTweakId, setOpenTweakId] = useState<string | null>(null);
@@ -447,6 +454,8 @@ export function ThumbnailBoard({ projectId }: { projectId: ProjectId }) {
                 preset: base.preset,
                 subject: base.subject,
                 mood: base.mood,
+                brief: base.brief.trim() === "" ? null : base.brief.trim(),
+                referenceImage: base.referenceImage,
               });
             }}
           >
@@ -522,6 +531,33 @@ export function ThumbnailBoard({ projectId }: { projectId: ProjectId }) {
                     </option>
                   ))}
                 </Select>
+              </Field>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <Field label="Brief (optional)" htmlFor="board-brief">
+                <TextArea
+                  id="board-brief"
+                  className="min-h-10 resize-y"
+                  placeholder="e.g. 45 sec educational video, photo of him looking surprised"
+                  maxLength={300}
+                  value={base.brief}
+                  onChange={(e) => {
+                    setBase((b) => ({ ...b, brief: e.target.value }));
+                  }}
+                />
+              </Field>
+              <Field label="Reference image (optional)" htmlFor="board-reference">
+                <div id="board-reference">
+                  <ReferenceDropzone
+                    value={base.referenceImage}
+                    onChange={(referenceImage) => {
+                      setBase((b) => ({ ...b, referenceImage }));
+                    }}
+                    onError={(message) => {
+                      toast(message);
+                    }}
+                  />
+                </div>
               </Field>
             </div>
             <Field label="Overlay text (optional)" htmlFor="board-overlay">

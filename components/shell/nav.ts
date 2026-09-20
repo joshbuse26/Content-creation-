@@ -16,7 +16,7 @@ import {
  * Route notes: "Intel" keeps the `/discover` route (renaming the URL buys
  * nothing and breaks deep links); "Tools" lives at `/toolkit` because
  * `/tools` is the public free-tools marketing route; Ideas is a Tools card,
- * not a section (`/ideas` redirects to `/toolkit`).
+ * not a section (`/ideas` redirects to `/toolkit/ideas`).
  */
 
 export type NavIcon = ComponentType<SVGProps<SVGSVGElement> & { size?: number }>;

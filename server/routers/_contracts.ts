@@ -133,6 +133,11 @@ export const channelRouter = router({
     .input(channelContracts.get.input)
     .output(channelContracts.get.output)
     .query(({ ctx, input }) => channelHandlers.get({ ctx, input })),
+  stats: workspaceProcedure("channel", "read")
+    .use(general)
+    .input(channelContracts.stats.input)
+    .output(channelContracts.stats.output)
+    .query(({ ctx, input }) => channelHandlers.stats({ ctx, input })),
   connectPublic: workspaceProcedure("channel", "create")
     .use(general)
     .input(channelContracts.connectPublic.input)

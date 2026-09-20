@@ -92,6 +92,20 @@
       "when": 1789485112239,
       "tag": "0012_wave_demo_channel_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1789922029150,
+      "tag": "0013_wave_i_channel_videos",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1789922633206,
+      "tag": "0014_wave_i_thumbnail_brief_reference",
+      "breakpoints": true
     }
   ]
 }

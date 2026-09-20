@@ -56,6 +56,16 @@ export function setObjectStorageForTests(storage: ObjectStorage | undefined): vo
  * Canonical key for a generated thumbnail image. Scoped by workspace then
  * project so tenancy checks can be done on the key prefix alone.
  */
+/** Key for a user-supplied thumbnail reference image, content-addressed. */
+export function thumbnailReferenceKey(
+  workspaceId: string,
+  projectId: string,
+  contentHash: string,
+  ext: "png" | "jpg" | "webp",
+): string {
+  return `thumbnails/${workspaceId}/${projectId}/refs/${contentHash.slice(0, 24)}.${ext}`;
+}
+
 export function thumbnailImageKey(
   workspaceId: string,
   projectId: string,

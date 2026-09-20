@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
-import { DiscoveryScreen } from "@/components/discovery/discovery-screen";
+import { ChannelStatsScreen } from "@/components/intel/channel-stats-screen";
 
 export const metadata: Metadata = { title: "Intel" };
 
-export default function DiscoverPage() {
-  return <DiscoveryScreen />;
+/** Intel is the creator's own channel stats — idea mining lives under Tools. */
+export default function IntelPage() {
+  return <ChannelStatsScreen />;
 }

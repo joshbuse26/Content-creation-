@@ -124,6 +124,12 @@ export interface ImageRequest {
   width: number;
   height: number;
   count: number;
+  /**
+   * Optional user-supplied reference (a face photo or an example frame),
+   * already sized to width×height. Live providers run image-to-image with
+   * it; `strength` ∈ (0,1] is how far the prompt may depart from it.
+   */
+  reference?: { dataUrl: string; strength: number };
 }
 
 export interface GeneratedImage {
